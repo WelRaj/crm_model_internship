@@ -8,6 +8,7 @@ import {
   Wallet, 
   Speaker, 
   Bell, 
+  Camera,
   Search, 
   LogOut,
   ChevronRight,
@@ -28,12 +29,14 @@ import {
   Clock,
   SquareCheck,
   History,
-  CheckCircle2
+  CheckCircle2,
+  X
 } from "lucide-react";
 
 import { Button } from "@/components/ui/Button";
 
 // Existing Wizards
+import AdministrationHub from "@/components/dashboard/administration/AdministrationHub";
 import OnboardingWizard from "@/components/dashboard/onboarding/OnboardingWizard";
 import LeadWizard from "@/components/dashboard/leads/LeadWizard";
 import ClientsContacts from "@/components/dashboard/crm/ClientsContacts";
@@ -205,8 +208,11 @@ export default function Dashboard() {
   const [showNotif, setShowNotif] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
+  const [showSignOut, setShowSignOut] = useState(false);
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const headerRef = useRef<HTMLDivElement>(null);
   const navRef = useRef<HTMLElement>(null);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
   const [sidebarScroll, setSidebarScroll] = useState({ top: 0, height: 64, visible: false });
 
   const updateSidebarScroll = useCallback(() => {
@@ -240,6 +246,18 @@ export default function Dashboard() {
     [updateSidebarScroll]
   );
 
+  const handleAvatarChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || !file.type.startsWith("image/")) return;
+
+    const previewUrl = URL.createObjectURL(file);
+    setAvatarPreview((current) => {
+      if (current) URL.revokeObjectURL(current);
+      return previewUrl;
+    });
+    event.target.value = "";
+  }, []);
+
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
         if (headerRef.current && !headerRef.current.contains(event.target as Node)) {
@@ -257,6 +275,12 @@ export default function Dashboard() {
     window.addEventListener("resize", updateSidebarScroll);
     return () => window.removeEventListener("resize", updateSidebarScroll);
   }, [updateSidebarScroll]);
+
+  useEffect(() => {
+    return () => {
+      if (avatarPreview) URL.revokeObjectURL(avatarPreview);
+    };
+  }, [avatarPreview]);
 
   const menuGroups = [
     {
@@ -324,7 +348,7 @@ export default function Dashboard() {
   ];
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] flex" ref={headerRef}>
+    <div className="min-h-screen bg-[#F8FAFC] flex">
       <aside
         onWheel={handleSidebarWheel}
         className="w-[19rem] bg-[#0F172A] text-white flex flex-col fixed inset-y-0 left-0 z-50 shadow-2xl"
@@ -379,9 +403,22 @@ export default function Dashboard() {
         </div>
 
         <div className="p-8 border-t border-white/5">
-          <button className="w-full flex items-center gap-4 px-5 py-4 bg-red-500/5 text-red-400 hover:bg-red-500/10 rounded-2xl transition-all font-black text-xs uppercase tracking-widest border border-red-500/10">
-            <LogOut size={18} />
-            <span>Exit Session</span>
+          <button
+            onClick={() => setShowSignOut(true)}
+            className="group w-full overflow-hidden rounded-2xl border border-red-400/10 bg-gradient-to-br from-red-500/10 via-white/[0.03] to-transparent p-1 text-left transition-all hover:border-red-400/25 hover:shadow-[0_0_28px_rgba(239,68,68,0.12)]"
+          >
+            <div className="flex items-center justify-between gap-4 rounded-[0.85rem] px-4 py-3.5">
+              <span className="flex items-center gap-3">
+                <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-red-500/10 text-red-300 ring-1 ring-red-400/10 transition-all group-hover:bg-red-500 group-hover:text-white">
+                  <LogOut size={18} />
+                </span>
+                <span>
+                  <span className="block text-xs font-black uppercase tracking-widest text-red-300">Sign Out</span>
+                  <span className="mt-0.5 block text-[10px] font-bold uppercase tracking-widest text-slate-500">Secure logout</span>
+                </span>
+              </span>
+              <ChevronRight size={16} className="text-red-300/50 transition-all group-hover:translate-x-0.5 group-hover:text-red-300" />
+            </div>
           </button>
         </div>
       </aside>
@@ -397,7 +434,7 @@ export default function Dashboard() {
             />
           </div>
 
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-4" ref={headerRef}>
             <div className="relative">
                 <button onClick={() => setShowNotif(!showNotif)} className="relative p-3 bg-slate-50 text-slate-400 rounded-xl hover:text-primary transition-all hover:shadow-md">
                     <Bell size={22} />
@@ -435,28 +472,233 @@ export default function Dashboard() {
             </div>
 
             <div className="relative pl-6 border-l border-slate-100">
-              <div onClick={() => setShowProfile(!showProfile)} className="flex items-center gap-4 cursor-pointer">
+              <input
+                ref={avatarInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleAvatarChange}
+                aria-label="Upload profile photo"
+              />
+              <button
+                onClick={() => setShowProfile(!showProfile)}
+                className={`flex items-center gap-4 rounded-[1.6rem] p-2 pl-4 transition-all ${
+                  showProfile ? "bg-slate-50 shadow-sm" : "hover:bg-slate-50"
+                }`}
+                aria-label="Open profile menu"
+              >
                 <div className="text-right">
                     <p className="text-sm font-black text-[#1E293B] leading-none">Rajkumar Rathore</p>
                     <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">Super Admin</p>
                 </div>
                 <div className="relative">
-                    <div className="w-14 h-14 rounded-[1.25rem] bg-gradient-to-br from-primary to-blue-600 flex items-center justify-center text-white font-black text-xl shadow-xl">RR</div>
-                    <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-white rounded-full flex items-center justify-center shadow-md">
-                        <Shield size={12} className="text-accent" />
+                    <div className="group/avatar relative w-14 h-14 overflow-hidden rounded-[1.25rem] bg-gradient-to-br from-[#1D4ED8] via-primary to-[#0F172A] flex items-center justify-center text-white font-black text-xl shadow-xl shadow-blue-900/20 ring-1 ring-white/70">
+                      {avatarPreview ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={avatarPreview} alt="Rajkumar Rathore" className="h-full w-full object-cover" />
+                      ) : (
+                        "RR"
+                      )}
+                      <span className="absolute inset-0 flex items-center justify-center bg-slate-950/45 opacity-0 transition-all group-hover/avatar:opacity-100">
+                        <Camera size={18} className="text-white" />
+                      </span>
+                    </div>
+                    <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-white rounded-full flex items-center justify-center shadow-md ring-1 ring-emerald-100">
+                        <Shield size={12} className="text-emerald-500" />
                     </div>
                 </div>
-              </div>
+              </button>
               {showProfile && (
-                  <div className="absolute top-20 right-0 w-48 bg-white rounded-2xl shadow-xl border border-border p-2 z-50">
-                     <button className="w-full flex items-center gap-3 p-3 hover:bg-slate-50 rounded-xl text-sm font-bold text-primary"><User size={16} /> Profile</button>
-                     <button className="w-full flex items-center gap-3 p-3 hover:bg-slate-50 rounded-xl text-sm font-bold text-primary"><Settings size={16} /> Settings</button>
-                     <button className="w-full flex items-center gap-3 p-3 hover:bg-red-50 rounded-xl text-sm font-bold text-red-500"><LogOut size={16} /> Logout</button>
+                  <div className="absolute top-[4.75rem] right-0 w-80 overflow-hidden rounded-[1.75rem] border border-slate-200/80 bg-white shadow-2xl shadow-slate-900/10 ring-1 ring-white z-50 animate-in fade-in zoom-in-95 duration-150">
+                     <div className="bg-gradient-to-br from-slate-50 to-white p-5 border-b border-slate-100">
+                        <div className="flex items-center gap-4">
+                           <div className="relative">
+                              <div className="w-14 h-14 overflow-hidden rounded-2xl bg-gradient-to-br from-[#1D4ED8] via-primary to-[#0F172A] flex items-center justify-center text-white font-black text-xl shadow-lg shadow-blue-900/20">
+                                {avatarPreview ? (
+                                  // eslint-disable-next-line @next/next/no-img-element
+                                  <img src={avatarPreview} alt="Rajkumar Rathore" className="h-full w-full object-cover" />
+                                ) : (
+                                  "RR"
+                                )}
+                              </div>
+                              <span className="absolute -bottom-1 -right-1 h-5 w-5 rounded-full border-[3px] border-white bg-emerald-500 shadow-sm" />
+                           </div>
+                           <div className="min-w-0">
+                              <p className="truncate text-sm font-black text-[#1E293B]">Rajkumar Rathore</p>
+                              <p className="mt-1 truncate text-xs font-bold text-slate-500">rajkumar@crmpro.in</p>
+                              <div className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-emerald-100 bg-emerald-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-widest text-emerald-700">
+                                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                                 Super Admin
+                              </div>
+                           </div>
+                        </div>
+                     </div>
+
+                     <div className="p-3">
+                        <button
+                          onClick={() => avatarInputRef.current?.click()}
+                          className="group mb-1 w-full flex items-center justify-between rounded-2xl border border-blue-100 bg-blue-50/50 p-3 text-left transition-all hover:border-blue-200 hover:bg-blue-50"
+                        >
+                          <span className="flex items-center gap-3">
+                            <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-blue-100 bg-white text-blue-600 shadow-sm group-hover:bg-blue-600 group-hover:text-white transition-all">
+                              <Camera size={17} />
+                            </span>
+                            <span>
+                              <span className="block text-sm font-black text-primary">Change Photo</span>
+                              <span className="block text-[11px] font-bold text-slate-400">Upload your profile image</span>
+                            </span>
+                          </span>
+                          <ChevronRight size={16} className="text-slate-300 group-hover:text-primary" />
+                        </button>
+
+                        <button
+                          onClick={() => {
+                            setActiveTab("users");
+                            setShowProfile(false);
+                          }}
+                          className="group w-full flex items-center justify-between rounded-2xl p-3 text-left transition-all hover:bg-slate-50"
+                        >
+                          <span className="flex items-center gap-3">
+                            <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-primary shadow-sm group-hover:border-primary/20 group-hover:bg-primary group-hover:text-white transition-all">
+                              <User size={17} />
+                            </span>
+                            <span>
+                              <span className="block text-sm font-black text-primary">Profile</span>
+                              <span className="block text-[11px] font-bold text-slate-400">Account and access details</span>
+                            </span>
+                          </span>
+                          <ChevronRight size={16} className="text-slate-300 group-hover:text-primary" />
+                        </button>
+
+                        <button
+                          onClick={() => {
+                            setActiveTab("settings");
+                            setShowProfile(false);
+                          }}
+                          className="group mt-1 w-full flex items-center justify-between rounded-2xl p-3 text-left transition-all hover:bg-slate-50"
+                        >
+                          <span className="flex items-center gap-3">
+                            <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-primary shadow-sm group-hover:border-primary/20 group-hover:bg-primary group-hover:text-white transition-all">
+                              <Settings size={17} />
+                            </span>
+                            <span>
+                              <span className="block text-sm font-black text-primary">Settings</span>
+                              <span className="block text-[11px] font-bold text-slate-400">Security and company controls</span>
+                            </span>
+                          </span>
+                          <ChevronRight size={16} className="text-slate-300 group-hover:text-primary" />
+                        </button>
+
+                        <div className="my-3 h-px bg-slate-100" />
+
+                        <button
+                          onClick={() => {
+                            setShowProfile(false);
+                            setShowSignOut(true);
+                          }}
+                          className="group w-full flex items-center justify-between rounded-2xl border border-red-100/70 bg-gradient-to-r from-red-50 to-white p-3 text-left transition-all hover:border-red-200 hover:shadow-lg hover:shadow-red-100/70"
+                        >
+                          <span className="flex items-center gap-3">
+                            <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-red-100 bg-red-50 text-red-500 shadow-sm group-hover:bg-red-500 group-hover:text-white transition-all">
+                              <LogOut size={17} />
+                            </span>
+                            <span>
+                              <span className="block text-sm font-black text-red-500">Sign Out</span>
+                              <span className="block text-[11px] font-bold text-red-300">End current session</span>
+                            </span>
+                          </span>
+                          <ChevronRight size={16} className="text-red-200 group-hover:text-red-500" />
+                        </button>
+                     </div>
+
+                     <div className="flex items-center justify-between border-t border-slate-100 bg-slate-50 px-5 py-3">
+                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Session secure</span>
+                        <span className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-emerald-600">
+                          <CheckCircle2 size={13} /> Verified
+                        </span>
+                     </div>
                   </div>
               )}
             </div>
           </div>
         </header>
+
+        {showSignOut && (
+          <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/35 px-6 backdrop-blur-sm animate-in fade-in duration-150">
+            <div className="w-full max-w-md overflow-hidden rounded-[2rem] border border-white/80 bg-white shadow-2xl shadow-slate-950/20 animate-in zoom-in-95 duration-150">
+              <div className="relative bg-gradient-to-br from-slate-50 via-white to-red-50 p-6">
+                <button
+                  onClick={() => setShowSignOut(false)}
+                  className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-400 shadow-sm transition-all hover:text-primary"
+                  aria-label="Close sign out dialog"
+                >
+                  <X size={16} />
+                </button>
+
+                <div className="flex items-start gap-4">
+                  <div className="relative">
+                    <div className="flex h-16 w-16 overflow-hidden items-center justify-center rounded-2xl bg-gradient-to-br from-[#1D4ED8] via-primary to-[#0F172A] text-xl font-black text-white shadow-xl shadow-blue-950/20">
+                      {avatarPreview ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={avatarPreview} alt="Rajkumar Rathore" className="h-full w-full object-cover" />
+                      ) : (
+                        "RR"
+                      )}
+                    </div>
+                    <span className="absolute -bottom-1 -right-1 flex h-6 w-6 items-center justify-center rounded-full border-[3px] border-white bg-emerald-500">
+                      <Shield size={12} className="text-white" />
+                    </span>
+                  </div>
+                  <div className="min-w-0 pr-8">
+                    <p className="text-xl font-black tracking-tight text-[#1E293B]">Sign out securely?</p>
+                    <p className="mt-1 text-sm font-semibold leading-6 text-slate-500">
+                      Your current CRM session will close on this device.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-6 grid grid-cols-2 gap-3">
+                  <div className="rounded-2xl border border-slate-100 bg-white p-4">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">User</p>
+                    <p className="mt-1 truncate text-sm font-black text-primary">Rajkumar Rathore</p>
+                  </div>
+                  <div className="rounded-2xl border border-slate-100 bg-white p-4">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Role</p>
+                    <p className="mt-1 text-sm font-black text-primary">Super Admin</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-3 border-y border-slate-100 p-5">
+                {[
+                  ["Unsaved forms", "Draft data on this screen may be lost."],
+                  ["Active session", "Other browser sessions stay active unless revoked."],
+                  ["Security log", "This sign out action will be recorded in audit logs."],
+                ].map(([title, detail]) => (
+                  <div key={title} className="flex items-start gap-3 rounded-2xl bg-slate-50 p-3">
+                    <CheckCircle2 size={17} className="mt-0.5 shrink-0 text-emerald-500" />
+                    <div>
+                      <p className="text-sm font-black text-primary">{title}</p>
+                      <p className="mt-0.5 text-xs font-semibold text-slate-500">{detail}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex flex-col gap-3 bg-white p-5 sm:flex-row">
+                <button
+                  onClick={() => setShowSignOut(false)}
+                  className="h-12 flex-1 rounded-2xl border border-slate-200 bg-white px-5 text-xs font-black uppercase tracking-widest text-primary transition-all hover:bg-slate-50"
+                >
+                  Stay Logged In
+                </button>
+                <button className="h-12 flex-1 rounded-2xl border border-red-500 bg-red-500 px-5 text-xs font-black uppercase tracking-widest text-white shadow-lg shadow-red-500/20 transition-all hover:bg-red-600">
+                  Sign Out
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         <main className="p-12 flex-1">
           <div className="max-w-[1400px] mx-auto">
@@ -477,6 +719,11 @@ export default function Dashboard() {
             {activeTab === "tasks" && <ProjectHub activeView="tasks" />}
             {activeTab === "milestones" && <ProjectHub activeView="milestones" />}
             {activeTab === "deadlines" && <ProjectHub activeView="deadlines" />}
+            {activeTab === "users" && <AdministrationHub activeView="users" />}
+            {activeTab === "roles" && <AdministrationHub activeView="roles" />}
+            {activeTab === "logs" && <AdministrationHub activeView="logs" />}
+            {activeTab === "approvals" && <AdministrationHub activeView="approvals" />}
+            {activeTab === "settings" && <AdministrationHub activeView="settings" />}
             {activeTab === "accounting" && <AccountingWizard onSelectModule={setActiveTab} />}
             {ACCOUNTING_MODULES.some((module) => module.id === activeTab) && (
               <AccountingWizard activeModule={activeTab as AccountingModuleId} />
@@ -546,7 +793,7 @@ export default function Dashboard() {
                </div>
             )}
             
-            {(activeTab === "team" || activeTab === "settings") && (
+            {activeTab === "team" && (
                <div className="bg-white p-20 rounded-[3rem] text-center border border-slate-100 shadow-sm animate-in zoom-in-95">
                   <Shield size={64} className="mx-auto text-primary mb-6 opacity-20" />
                   <h3 className="text-2xl font-black text-primary uppercase tracking-widest">Admin Control Restricted</h3>
