@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useCallback, useState, useRef, useEffect } from "react";
 import { 
   LayoutDashboard, 
   UserPlus, 
@@ -36,6 +36,11 @@ import { Button } from "@/components/ui/Button";
 // Existing Wizards
 import OnboardingWizard from "@/components/dashboard/onboarding/OnboardingWizard";
 import LeadWizard from "@/components/dashboard/leads/LeadWizard";
+import ClientsContacts from "@/components/dashboard/crm/ClientsContacts";
+import FollowUps from "@/components/dashboard/crm/FollowUps";
+import HRMSHub from "@/components/dashboard/hrms/HRMSHub";
+import MarketingHub from "@/components/dashboard/marketing/MarketingHub";
+import ProjectHub from "@/components/dashboard/projects/ProjectHub";
 import AccountingWizard, {
   ACCOUNTING_MODULES,
   type AccountingModuleId,
@@ -201,6 +206,39 @@ export default function Dashboard() {
   const [showCreate, setShowCreate] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const headerRef = useRef<HTMLDivElement>(null);
+  const navRef = useRef<HTMLElement>(null);
+  const [sidebarScroll, setSidebarScroll] = useState({ top: 0, height: 64, visible: false });
+
+  const updateSidebarScroll = useCallback(() => {
+    const nav = navRef.current;
+    if (!nav) return;
+
+    const { scrollTop, scrollHeight, clientHeight } = nav;
+    const visible = scrollHeight > clientHeight + 1;
+
+    if (!visible) {
+      setSidebarScroll((current) => ({ ...current, visible: false }));
+      return;
+    }
+
+    const thumbHeight = Math.max((clientHeight / scrollHeight) * clientHeight, 52);
+    const maxTop = clientHeight - thumbHeight;
+    const top = (scrollTop / (scrollHeight - clientHeight)) * maxTop;
+
+    setSidebarScroll({ top, height: thumbHeight, visible: true });
+  }, []);
+
+  const handleSidebarWheel = useCallback(
+    (event: React.WheelEvent<HTMLDivElement>) => {
+      const nav = navRef.current;
+      if (!nav || nav.scrollHeight <= nav.clientHeight) return;
+
+      event.preventDefault();
+      nav.scrollTop += event.deltaY;
+      updateSidebarScroll();
+    },
+    [updateSidebarScroll]
+  );
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -214,6 +252,12 @@ export default function Dashboard() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  useEffect(() => {
+    updateSidebarScroll();
+    window.addEventListener("resize", updateSidebarScroll);
+    return () => window.removeEventListener("resize", updateSidebarScroll);
+  }, [updateSidebarScroll]);
+
   const menuGroups = [
     {
       label: "Main",
@@ -226,8 +270,7 @@ export default function Dashboard() {
       items: [
         { id: "leads", label: "Leads", icon: Target },
         { id: "followups", label: "Follow-ups", icon: Clock },
-        { id: "quotations", label: "Quotations", icon: FileText },
-        { id: "clients", label: "Clients", icon: Users },
+        { id: "clients", label: "Clients & Contacts", icon: Users },
       ]
     },
     {
@@ -282,7 +325,10 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] flex" ref={headerRef}>
-      <aside className="w-[19rem] bg-[#0F172A] text-white flex flex-col fixed inset-y-0 left-0 z-50 shadow-2xl">
+      <aside
+        onWheel={handleSidebarWheel}
+        className="w-[19rem] bg-[#0F172A] text-white flex flex-col fixed inset-y-0 left-0 z-50 shadow-2xl"
+      >
         <div className="p-10 flex items-center gap-4">
           <div className="w-12 h-12 bg-accent rounded-[1.25rem] flex items-center justify-center text-[#0F172A] font-black text-2xl shadow-lg shadow-accent/20">C</div>
           <div>
@@ -291,36 +337,46 @@ export default function Dashboard() {
           </div>
         </div>
 
-        <nav className="flex-1 px-6 space-y-10 overflow-y-auto custom-scrollbar pb-10">
-          {menuGroups.map((group, idx) => (
-            <div key={idx} className="space-y-4">
-              <p className="text-[10px] font-black text-slate-600 uppercase tracking-[0.25em] ml-4">{group.label}</p>
-              <div className="space-y-1">
-                {group.items.map((item) => {
-                  const Icon = item.icon;
-                  const isActive = activeTab === item.id;
-                  return (
-                    <button
-                      key={item.id}
-                      onClick={() => setActiveTab(item.id)}
-                      className={`w-full flex items-center justify-between px-5 py-4 rounded-2xl transition-all duration-300 group ${
-                        isActive 
-                          ? "bg-accent text-[#0F172A] font-black shadow-xl shadow-accent/10" 
-                          : "text-slate-400 hover:text-white hover:bg-white/5"
-                      }`}
-                    >
-                      <div className="flex items-center gap-4">
-                        <Icon size={20} strokeWidth={isActive ? 2.5 : 2} className={isActive ? "text-[#0F172A]" : "group-hover:scale-110 transition-transform duration-300"} />
-                        <span className="text-sm font-bold tracking-wide">{item.label}</span>
-                      </div>
-                      {isActive && <div className="w-1.5 h-1.5 rounded-full bg-[#0F172A]"></div>}
-                    </button>
-                  );
-                })}
+        <div className="relative flex-1 min-h-0">
+          <nav ref={navRef} onScroll={updateSidebarScroll} className="h-full px-6 space-y-10 overflow-y-auto custom-scrollbar pb-10">
+            {menuGroups.map((group, idx) => (
+              <div key={idx} className="space-y-4">
+                <p className="text-[10px] font-black text-slate-600 uppercase tracking-[0.25em] ml-4">{group.label}</p>
+                <div className="space-y-1">
+                  {group.items.map((item) => {
+                    const Icon = item.icon;
+                    const isActive = activeTab === item.id;
+                    return (
+                      <button
+                        key={item.id}
+                        onClick={() => setActiveTab(item.id)}
+                        className={`w-full flex items-center justify-between px-5 py-4 rounded-2xl transition-all duration-300 group ${
+                          isActive 
+                            ? "bg-accent text-[#0F172A] font-black shadow-xl shadow-accent/10" 
+                            : "text-slate-400 hover:text-white hover:bg-white/5"
+                        }`}
+                      >
+                        <div className="flex items-center gap-4">
+                          <Icon size={20} strokeWidth={isActive ? 2.5 : 2} className={isActive ? "text-[#0F172A]" : "group-hover:scale-110 transition-transform duration-300"} />
+                          <span className="text-sm font-bold tracking-wide">{item.label}</span>
+                        </div>
+                        {isActive && <div className="w-1.5 h-1.5 rounded-full bg-[#0F172A]"></div>}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
+            ))}
+          </nav>
+          {sidebarScroll.visible && (
+            <div className="pointer-events-none absolute right-2 top-0 bottom-0 w-[3px] rounded-full bg-white/[0.03]">
+              <div
+                className="absolute left-0 w-full rounded-full bg-gradient-to-b from-emerald-300 via-emerald-500 to-emerald-700 shadow-[0_0_18px_rgba(16,185,129,0.55)] transition-[top,height] duration-150"
+                style={{ top: sidebarScroll.top, height: sidebarScroll.height }}
+              />
             </div>
-          ))}
-        </nav>
+          )}
+        </div>
 
         <div className="p-8 border-t border-white/5">
           <button className="w-full flex items-center gap-4 px-5 py-4 bg-red-500/5 text-red-400 hover:bg-red-500/10 rounded-2xl transition-all font-black text-xs uppercase tracking-widest border border-red-500/10">
@@ -406,7 +462,21 @@ export default function Dashboard() {
           <div className="max-w-[1400px] mx-auto">
             {activeTab === "overview" && <DashboardOverview />}
             {activeTab === "onboarding" && <OnboardingWizard />}
+            {activeTab === "employees" && <HRMSHub activeView="employees" />}
+            {activeTab === "attendance" && <HRMSHub activeView="attendance" />}
+            {activeTab === "leave" && <HRMSHub activeView="leave" />}
+            {activeTab === "payroll" && <HRMSHub activeView="payroll" />}
+            {activeTab === "exit" && <HRMSHub activeView="exit" />}
             {activeTab === "leads" && <LeadWizard />}
+            {activeTab === "followups" && <FollowUps />}
+            {activeTab === "clients" && <ClientsContacts />}
+            {activeTab === "campaigns" && <MarketingHub activeView="campaigns" />}
+            {activeTab === "roi" && <MarketingHub activeView="roi" />}
+            {activeTab === "sources" && <MarketingHub activeView="sources" />}
+            {activeTab === "projects" && <ProjectHub activeView="projects" />}
+            {activeTab === "tasks" && <ProjectHub activeView="tasks" />}
+            {activeTab === "milestones" && <ProjectHub activeView="milestones" />}
+            {activeTab === "deadlines" && <ProjectHub activeView="deadlines" />}
             {activeTab === "accounting" && <AccountingWizard onSelectModule={setActiveTab} />}
             {ACCOUNTING_MODULES.some((module) => module.id === activeTab) && (
               <AccountingWizard activeModule={activeTab as AccountingModuleId} />
@@ -476,13 +546,6 @@ export default function Dashboard() {
                </div>
             )}
             
-            {activeTab === "marketing" && (
-               <div className="bg-white p-20 rounded-[3rem] text-center border border-slate-100 shadow-sm animate-in zoom-in-95">
-                  <Speaker size={64} className="mx-auto text-primary mb-6 opacity-20" />
-                  <h3 className="text-2xl font-black text-primary">Marketing Hub</h3>
-                  <p className="text-slate-400 mt-2">Integrating campaign data...</p>
-               </div>
-            )}
             {(activeTab === "team" || activeTab === "settings") && (
                <div className="bg-white p-20 rounded-[3rem] text-center border border-slate-100 shadow-sm animate-in zoom-in-95">
                   <Shield size={64} className="mx-auto text-primary mb-6 opacity-20" />
