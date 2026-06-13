@@ -1,15 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { 
-  CheckCircle, 
-  UserPlus, 
-  FileText, 
-  Clock, 
-  Send, 
-  ThumbsUp, 
-  Target 
-} from "lucide-react";
+import { Target, Users, Clock, TrendingUp } from "lucide-react";
+import { Button } from "@/components/ui/Button";
 import Step1LeadInfo from "./Step1LeadInfo";
 import Step2Requirements from "./Step2Requirements";
 import Step3FollowUp from "./Step3FollowUp";
@@ -18,52 +11,18 @@ import Step5Approval from "./Step5Approval";
 import Step6LeadStatus from "./Step6LeadStatus";
 
 const STEPS = [
-  { id: 1, title: "Lead Info", description: "Basic client details", icon: UserPlus },
-  { id: 2, title: "Requirements", description: "Project & Budget info", icon: FileText },
+  { id: 1, title: "Lead Info", description: "Basic client details", icon: Target },
+  { id: 2, title: "Requirements", description: "Project & Budget info", icon: Target },
   { id: 3, title: "Follow Up", description: "Communication logs", icon: Clock },
-  { id: 4, title: "Proposal", description: "Quotations & Files", icon: Send },
-  { id: 5, title: "Approval", description: "Management Review", icon: ThumbsUp },
+  { id: 4, title: "Proposal", description: "Quotations & Files", icon: TrendingUp },
+  { id: 5, title: "Approval", description: "Management Review", icon: Users },
   { id: 6, title: "Lead Status", description: "Final Deal Outcome", icon: Target },
 ];
 
 export default function LeadWizard() {
+  const [showWizard, setShowWizard] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
-  const [formData, setFormData] = useState({
-    // Step 1: Lead Basic Info
-    leadId: "LEAD-2024-001",
-    firstName: "",
-    lastName: "",
-    companyName: "",
-    designation: "",
-    personalEmail: "",
-    officialEmail: "",
-    mobile: "",
-    alternateMobile: "",
-    city: "",
-    state: "",
-    country: "India",
-    leadSource: "",
-    assignedTo: "",
-    leadDate: new Date().toISOString().split('T')[0],
-    
-    // Step 2: Requirement Details
-    serviceRequired: "",
-    projectType: "New Project",
-    platformRequired: "Web",
-    projectDescription: "",
-    technologyPreference: "",
-    referenceLink: "",
-    timeline: "3 Months",
-    startDate: "",
-    minBudget: "",
-    maxBudget: "",
-    currency: "INR",
-    paymentMode: "Milestone Based",
-    specialNotes: "",
-
-    // Common
-    tags: "Warm",
-  });
+  const [formData, setFormData] = useState({ leadId: "LEAD-2024-001", tags: "Warm" });
 
   const nextStep = () => setCurrentStep((prev) => Math.min(prev + 1, STEPS.length));
   const prevStep = () => setCurrentStep((prev) => Math.max(prev - 1, 1));
@@ -80,92 +39,115 @@ export default function LeadWizard() {
     }
   };
 
-  return (
-    <div className="flex flex-col lg:flex-row gap-8 animate-in fade-in duration-500">
-      {/* Vertical Sidebar for Steps */}
-      <aside className="w-full lg:w-80 shrink-0">
-        <div className="bg-white rounded-2xl border border-border shadow-sm overflow-hidden sticky top-24">
-          <div className="p-6 bg-primary text-white">
-            <h3 className="font-bold text-lg">Lead Generation</h3>
-            <p className="text-xs text-white/70 mt-1">Convert enquiries into deals</p>
-          </div>
-          <nav className="p-4 space-y-2">
-            {STEPS.map((step) => {
-              const isActive = currentStep === step.id;
-              const isCompleted = currentStep > step.id;
-              const Icon = step.icon;
+  if (showWizard) {
+    return (
+      <div className="space-y-6 animate-in zoom-in-95">
+        {/* Header */}
+        <div className="flex items-center gap-4">
+          <Button variant="outline" onClick={() => setShowWizard(false)} className="rounded-xl">
+            Back to Hub
+          </Button>
+          <h2 className="text-xl font-black text-primary">
+            Lead Generation Wizard (Step {currentStep})
+          </h2>
+        </div>
 
+        {/* Step Sidebar + Content */}
+        <div className="flex gap-6">
+          {/* Left Sidebar */}
+          <div className="w-64 bg-white rounded-2xl border border-border shadow-sm p-4 space-y-2 h-fit">
+            {STEPS.map((step) => {
+              const Icon = step.icon;
+              const isActive = currentStep === step.id;
+              const isDone = currentStep > step.id;
               return (
-                <button
+                <div
                   key={step.id}
-                  onClick={() => setCurrentStep(step.id)}
-                  className={`w-full text-left p-4 rounded-xl transition-all flex items-start gap-4 group ${
-                    isActive 
-                      ? "bg-accent text-primary shadow-lg ring-1 ring-accent" 
-                      : "hover:bg-slate-50"
+                  className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
+                    isActive
+                      ? "bg-accent text-primary font-black"
+                      : isDone
+                      ? "bg-green-50 text-green-600"
+                      : "text-slate-400"
                   }`}
                 >
-                  <div className={`mt-1 shrink-0 w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${
-                    isCompleted ? "bg-green-100 text-green-600" : isActive ? "bg-primary text-white" : "bg-slate-100 text-slate-400"
+                  <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-black border-2 ${
+                    isActive ? "border-primary bg-primary text-white" :
+                    isDone ? "border-green-500 bg-green-500 text-white" :
+                    "border-slate-200"
                   }`}>
-                    {isCompleted ? <CheckCircle size={18} /> : <Icon size={18} />}
+                    {isDone ? "✓" : step.id}
                   </div>
                   <div>
-                    <p className={`text-sm font-bold ${isActive ? "text-primary" : "text-primary"}`}>
-                      {step.title}
-                    </p>
-                    <p className={`text-[10px] mt-0.5 ${isActive ? "text-primary/70" : "text-secondary"}`}>
-                      {step.description}
-                    </p>
+                    <p className="text-sm font-bold leading-none">{step.title}</p>
+                    <p className="text-[10px] mt-0.5 opacity-70">{step.description}</p>
                   </div>
-                </button>
+                </div>
               );
             })}
-          </nav>
-          
-          <div className="p-6 bg-slate-50 border-t border-border mt-2">
-             <div className="flex justify-between items-center text-[10px] font-black mb-2">
-                <span className="text-secondary uppercase tracking-widest">Pipeline Stage</span>
-                <span className="text-primary">{Math.round(((currentStep - 1) / STEPS.length) * 100)}%</span>
-             </div>
-             <div className="w-full h-2 bg-slate-200 rounded-full overflow-hidden">
-                <div 
-                  className="h-full bg-accent transition-all duration-700 ease-in-out" 
-                  style={{ width: `${((currentStep - 1) / STEPS.length) * 100}%` }}
-                />
-             </div>
           </div>
-        </div>
-      </aside>
 
-      {/* Main Content Area */}
-      <div className="flex-1 min-w-0">
-        <div className="bg-white rounded-2xl border border-border shadow-sm overflow-hidden min-h-[600px] flex flex-col">
-          <div className="p-8 border-b border-slate-50 flex justify-between items-center bg-slate-50/30">
-            <div>
-              <h2 className="text-2xl font-black text-primary flex items-center gap-3">
-                <span className="w-8 h-8 bg-primary text-white rounded-lg flex items-center justify-center text-sm">{currentStep}</span>
-                {STEPS[currentStep - 1].title}
-              </h2>
-              <p className="text-secondary text-sm mt-1 ml-11">
-                {STEPS[currentStep - 1].description}
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-               <span className="px-3 py-1 bg-amber-100 text-amber-700 rounded-full text-[10px] font-bold uppercase tracking-wider border border-amber-200">
-                  {formData.tags} Lead
-               </span>
-               <span className="px-3 py-1 bg-slate-100 text-slate-700 rounded-full text-[10px] font-bold uppercase tracking-wider border border-slate-200">
-                  {formData.leadId}
-               </span>
-            </div>
-          </div>
-          <div className="p-8 flex-1">
+          {/* Main Content */}
+          <div className="flex-1 bg-white rounded-2xl border border-border p-8 shadow-sm">
             {renderStep()}
           </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-10 animate-in fade-in duration-700">
+      {/* Header */}
+      <div className="flex justify-between items-end">
+        <div>
+          <h2 className="text-3xl font-black text-primary tracking-tight">Leads Management</h2>
+          <p className="text-secondary font-medium mt-1">Monitor and convert your sales pipeline.</p>
+        </div>
+        <div className="flex gap-3">
+          <button className="px-6 py-3 bg-white border border-border rounded-2xl text-xs font-black text-secondary">
+            Filter
+          </button>
+          <button
+            onClick={() => setShowWizard(true)}
+            className="px-6 py-3 bg-accent text-primary rounded-2xl text-xs font-black shadow-lg shadow-accent/10"
+          >
+            + Create New Lead
+          </button>
+        </div>
+      </div>
+
+      {/* Stats */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        {[
+          { l: "Total Leads", v: "482" },
+          { l: "Warm Leads", v: "124" },
+          { l: "Converted", v: "64" },
+          { l: "Lost", v: "12" }
+        ].map((s, i) => (
+          <div key={i} className="bg-white p-6 rounded-[2rem] border border-border shadow-sm">
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{s.l}</p>
+            <p className="text-2xl font-black text-primary mt-1">{s.v}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Lead Table */}
+      <div className="bg-white rounded-[2.5rem] border border-border shadow-sm overflow-hidden">
+        <div className="p-8 border-b border-slate-50 flex justify-between items-center">
+          <h3 className="font-black text-primary">Lead Pipeline</h3>
+          <div className="relative">
+            <input
+              type="text"
+              placeholder="Search leads..."
+              className="pl-4 pr-4 py-2 bg-slate-50 rounded-xl text-xs outline-none"
+            />
+          </div>
+        </div>
+        <div className="p-8 text-center text-slate-400 font-bold italic">
+          Lead list is ready and synced with the hub.
         </div>
       </div>
     </div>
   );
 }
-

@@ -65,9 +65,9 @@ export default function OnboardingWizard() {
       case 1: return <Step1Registration data={formData} updateData={setFormData} onNext={nextStep} />;
       case 2: return <Step2Employment data={formData} updateData={setFormData} onNext={nextStep} onPrev={prevStep} />;
       case 3: return <Step3Documents category={formData.category} onNext={nextStep} onPrev={prevStep} />;
-      case 4: return <Step4Verification onNext={nextStep} onPrev={prevStep} />;
-      case 5: return <Step5Training onNext={nextStep} onPrev={prevStep} />;
-      case 6: return <Step6Approval onPrev={prevStep} />;
+      case 4: return <Step4Verification data={formData} onNext={nextStep} onPrev={prevStep} />;
+      case 5: return <Step5Training data={formData} onNext={nextStep} onPrev={prevStep} />;
+      case 6: return <Step6Approval data={formData} onPrev={prevStep} />;
       default: return null;
     }
   };
@@ -92,8 +92,8 @@ export default function OnboardingWizard() {
                   key={step.id}
                   onClick={() => setCurrentStep(step.id)}
                   className={`w-full text-left p-4 rounded-xl transition-all flex items-start gap-4 group ${
-                    isActive 
-                      ? "bg-accent text-primary shadow-lg ring-1 ring-accent" 
+                    isActive
+                      ? "bg-accent text-primary shadow-lg ring-1 ring-accent"
                       : "hover:bg-slate-50"
                   }`}
                 >
@@ -114,15 +114,15 @@ export default function OnboardingWizard() {
               );
             })}
           </nav>
-          
+
           <div className="p-6 bg-slate-50 border-t border-border mt-2">
              <div className="flex justify-between items-center text-[10px] font-black mb-2">
                 <span className="text-secondary uppercase tracking-widest">Overall Progress</span>
                 <span className="text-primary">{Math.round(((currentStep - 1) / STEPS.length) * 100)}%</span>
              </div>
              <div className="w-full h-2 bg-slate-200 rounded-full overflow-hidden">
-                <div 
-                  className="h-full bg-accent transition-all duration-700 ease-in-out" 
+                <div
+                  className="h-full bg-accent transition-all duration-700 ease-in-out"
                   style={{ width: `${((currentStep - 1) / STEPS.length) * 100}%` }}
                 />
              </div>
@@ -160,4 +160,3 @@ export default function OnboardingWizard() {
     </div>
   );
 }
-

@@ -1,5 +1,7 @@
 "use client";
 
+import EmployeePerformance from "@/components/dashboard/projects/performance/EmployeePerformance";
+
 import { useCallback, useState, useRef, useEffect } from "react";
 import { 
   LayoutDashboard, 
@@ -311,7 +313,7 @@ export default function Dashboard() {
         { id: "projects", label: "Projects", icon: Briefcase },
         { id: "tasks", label: "Tasks", icon: SquareCheck },
         { id: "milestones", label: "Milestones", icon: Shield },
-        { id: "deadlines", label: "Deadlines", icon: Calendar },
+        { id: "deadlines", label: "Deadlines", icon: Calendar }, { id: "performance", label: "Employee Performance", icon: TrendingUp },
       ]
     },
     {
@@ -459,11 +461,15 @@ export default function Dashboard() {
                 {showCreate && (
                     <div className="absolute top-16 right-0 w-56 bg-white rounded-2xl shadow-xl border border-border p-2 z-50">
                         {[
-                            { label: "New Lead", icon: Target },
-                            { label: "New Invoice", icon: FileText },
-                            { label: "Onboard Emp", icon: UserPlus }
+                            { label: "New Lead", icon: Target, onClick: () => { setActiveTab('leads'); setShowCreate(false); } },
+                            { label: "New Invoice", icon: FileText, onClick: () => { setActiveTab('accounting'); setShowCreate(false); } },
+                            { label: "Onboard Emp", icon: UserPlus, onClick: () => { setActiveTab('onboarding'); setShowCreate(false); } }
                         ].map(item => (
-                            <button key={item.label} className="w-full flex items-center gap-3 p-3 hover:bg-slate-50 rounded-xl text-sm font-bold text-primary">
+                            <button 
+                                key={item.label} 
+                                onClick={item.onClick}
+                                className="w-full flex items-center gap-3 p-3 hover:bg-slate-50 rounded-xl text-sm font-bold text-primary"
+                            >
                                 <item.icon size={16} /> {item.label}
                             </button>
                         ))}
@@ -719,6 +725,7 @@ export default function Dashboard() {
             {activeTab === "tasks" && <ProjectHub activeView="tasks" />}
             {activeTab === "milestones" && <ProjectHub activeView="milestones" />}
             {activeTab === "deadlines" && <ProjectHub activeView="deadlines" />}
+            {activeTab === "performance" && <EmployeePerformance />}
             {activeTab === "users" && <AdministrationHub activeView="users" />}
             {activeTab === "roles" && <AdministrationHub activeView="roles" />}
             {activeTab === "logs" && <AdministrationHub activeView="logs" />}
@@ -806,3 +813,5 @@ export default function Dashboard() {
     </div>
   );
 }
+
+
