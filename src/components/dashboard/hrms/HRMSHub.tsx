@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import {
   AlertTriangle,
@@ -32,7 +32,7 @@ import {
   UserMinus,
   Users,
 } from "lucide-react";
-import React, { useState, type ComponentType, type ReactNode } from "react";
+import React, { useState, useEffect, type ComponentType, type ReactNode } from "react";  import { Field, Panel } from "../accounting/AccountingComponents";
 
 type HRMSView = "employees" | "attendance" | "leave" | "payroll" | "exit";
 type Tone = "blue" | "green" | "amber" | "red" | "purple" | "slate" | "cyan";
@@ -154,11 +154,13 @@ function MetricCard({
 function ActionButton({
   icon: Icon,
   children,
+  label,
   variant = "outline",
   onClick,
 }: {
-  icon: ComponentType<{ size?: number }>;
-  children: ReactNode;
+  icon?: ComponentType<{ size?: number }>;
+  children?: ReactNode;
+  label?: string;
   variant?: "primary" | "outline" | "accent";
   onClick?: () => void;
 }) {
@@ -170,8 +172,8 @@ function ActionButton({
 
   return (
     <button onClick={onClick} className={`inline-flex h-11 items-center justify-center gap-2 rounded-xl border px-4 text-xs font-black uppercase tracking-widest shadow-sm transition-all ${styles[variant]}`}>
-      <Icon size={16} />
-      {children}
+      {Icon && <Icon size={16} />}
+      {children || label}
     </button>
   );
 }
@@ -201,7 +203,7 @@ function EmployeeProfile({ employee, initialTab = 'overview', onBack }: { employ
               <h2 className="text-2xl font-black text-primary">{employee.name}</h2>
               <Badge tone={statusTone(employee.status)}>{employee.status}</Badge>
             </div>
-            <p className="mt-1 text-sm font-bold text-slate-500">{employee.role} • {employee.id}</p>
+            <p className="mt-1 text-sm font-bold text-slate-500">{employee.role} â€¢ {employee.id}</p>
             <div className="mt-4 flex flex-wrap gap-4">
               <div className="flex items-center gap-2 text-xs font-bold text-slate-600">
                 <Mail size={14} className="text-slate-400" /> {employee.email}
@@ -633,38 +635,117 @@ function LeaveView() {
 }
 
 function PayrollView() {
+  const [payroll, setPayroll] = useState( [
+  { 
+    id: "SAL-2026-061", 
+    employee: "Rahul Verma", 
+    empId: "EMP-102", 
+    mobile: "9876543210", 
+    month: "June 2026", 
+    basic: 50000, hra: 20000, allowance: 15000, conveyance: 5000, bonus: 2000,
+    pf: 6000, pt: 200, tds: 3600, advance: 0,
+    gross: "INR 92,000", deductions: "INR 9,800", net: "INR 82,200", 
+    status: "Approved" 
+  },
+  { 
+    id: "SAL-2026-062", 
+    employee: "Swati Joshi", 
+    empId: "EMP-118", 
+    mobile: "9876543211", 
+    month: "June 2026", 
+    basic: 65000, hra: 25000, allowance: 18000, conveyance: 5000, bonus: 5000,
+    pf: 9000, pt: 200, tds: 6200, advance: 0,
+    gross: "INR 1,18,000", deductions: "INR 15,400", net: "INR 1,02,600", 
+    status: "Pending Finance" 
+  },
+  { 
+    id: "SAL-2026-063", 
+    employee: "Amir Khan", 
+    empId: "EMP-124", 
+    mobile: "9876543212", 
+    month: "June 2026", 
+    basic: 45000, hra: 15000, allowance: 10000, conveyance: 3000, bonus: 3000,
+    pf: 4500, pt: 200, tds: 2000, advance: 0,
+    gross: "INR 76,000", deductions: "INR 6,700", net: "INR 69,300", 
+    status: "HR Review" 
+  },
+]);
+
+  // --- Sync with LocalStorage ---
+  useEffect(() => {
+    const savedPayroll = localStorage.getItem("crm_payroll_data");
+    if (savedPayroll) {
+      setPayroll(JSON.parse(savedPayroll));
+    }
+    
+    // Event listener for cross-tab or same-page sync
+    const handleStorage = () => {
+      const updated = localStorage.getItem("crm_payroll_data");
+      if (updated) setPayroll(JSON.parse(updated));
+    };
+    window.addEventListener("storage", handleStorage);
+    return () => window.removeEventListener("storage", handleStorage);
+  }, []);
+
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-4">
-        <MetricCard label="Monthly Payroll" value="INR 2.84Cr" helper="248 employees" icon={BadgeIndianRupee} tone="green" />
-        <MetricCard label="Payroll Ready" value="231" helper="Payslip generation" icon={FileCheck2} tone="blue" />
-        <MetricCard label="On Hold" value="09" helper="Attendance or exit lock" icon={AlertTriangle} tone="red" />
-        <MetricCard label="Variable Payout" value="INR 18.6L" helper="Bonus + incentives" icon={TrendingUp} tone="purple" />
+      <div className="flex flex-col gap-4 p-6 bg-amber-50 rounded-2xl border border-amber-100 mb-4">
+        <div className="flex items-center gap-3 text-amber-800">
+           <ShieldCheck size={20} />
+           <p className="text-sm font-black uppercase tracking-widest">Management Restricted</p>
+        </div>
+        <p className="text-xs font-bold text-amber-700 leading-5">Payroll calculations, edits and deletions are managed exclusively within the <span className="font-black underline cursor-pointer">Accounting Module</span>. This view provides a read-only register for HR records.</p>
+      </div>
+
+      <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-4 w-full">
+        <MetricCard label="Monthly Payroll" value={`₹${payroll.reduce((acc, curr) => acc + (typeof curr.net === "string" ? Number(curr.net.replace(/[^0-9.-]+/g,"")) : (curr.net || 0)), 0).toLocaleString()}`} helper={`${payroll.length} records`} icon={BadgeIndianRupee} tone="green" />
+        <MetricCard label="Approved" value={payroll.filter(p => p.status === "Approved").length.toString()} helper="Bank ready" icon={CheckCircle2} tone="blue" />
+        <MetricCard label="Processing" value={payroll.filter(p => p.status !== "Approved").length.toString()} helper="Pending Finance" icon={Clock} tone="amber" />
       </div>
 
       <section className="rounded-2xl border border-border bg-white p-6 shadow-sm">
-        <div className="mb-5">
-          <h3 className="text-lg font-black text-primary">Payroll Run</h3>
-          <p className="mt-1 text-xs font-semibold text-slate-500">CTC, gross salary, statutory deductions, net pay and payroll release status.</p>
-        </div>
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[940px] text-left">
+          <table className="w-full min-w-[2000px] text-left">
             <thead>
-              <tr className="border-b border-slate-100">
-                {["Employee", "CTC", "Gross", "Deductions", "Net Pay", "Status"].map((head) => (
-                  <th key={head} className="pb-4 text-[10px] font-black uppercase tracking-widest text-slate-400">{head}</th>
-                ))}
+              <tr className="border-b border-slate-100 text-[10px] font-black uppercase tracking-widest text-slate-400">
+                <th className="pb-4">Emp ID</th>
+                <th className="pb-4">Name</th>
+                <th className="pb-4">Mobile</th>
+                <th className="pb-4">Basic</th>
+                <th className="pb-4">HRA</th>
+                <th className="pb-4">Spl. All.</th>
+                <th className="pb-4">Conv.</th>
+                <th className="pb-4">Bonus</th>
+                <th className="pb-4">Gross</th>
+                <th className="pb-4">EPF</th>
+                <th className="pb-4">PT</th>
+                <th className="pb-4">TDS</th>
+                <th className="pb-4">Adv.</th>
+                <th className="pb-4">Total Ded.</th>
+                <th className="pb-4">Net</th>
+                <th className="pb-4">Status</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
-              {payrollRows.map((row) => (
-                <tr key={row.name} className="hover:bg-slate-50/60">
-                  <td className="py-5 font-black text-primary">{row.name}</td>
-                  <td className="py-5 text-sm font-bold text-slate-500">{row.ctc}</td>
-                  <td className="py-5 text-sm font-bold text-slate-500">{row.gross}</td>
-                  <td className="py-5 text-sm font-bold text-slate-500">{row.deductions}</td>
-                  <td className="py-5 text-sm font-black text-primary">{row.net}</td>
-                  <td className="py-5"><Badge tone={statusTone(row.status)}>{row.status}</Badge></td>
+
+            <tbody className="divide-y divide-slate-100 text-xs font-bold text-slate-700">
+              {payroll.map((row) => (
+                <tr key={row.id} className="hover:bg-slate-50/60 transition-colors">
+                  <td className="py-4">{row.empId}</td>
+                  <td className="py-4 font-black text-primary">{row.name}</td>
+                  <td className="py-4">{row.mobile}</td>
+                  <td className="py-4">₹{(row.basic || 0).toLocaleString()}</td>
+                  <td className="py-4">₹{(row.hra || 0).toLocaleString()}</td>
+                  <td className="py-4">₹{(row.allowance || 0).toLocaleString()}</td>
+                  <td className="py-4">₹{(row.conveyance || 0).toLocaleString()}</td>
+                  <td className="py-4">₹{(row.bonus || 0).toLocaleString()}</td>
+                  <td className="py-4 font-black text-primary">₹{row.gross.toLocaleString()}</td>
+                  <td className="py-4">₹{(row.pf || 0).toLocaleString()}</td>
+                  <td className="py-4">₹{(row.pt || 0).toLocaleString()}</td>
+                  <td className="py-4">₹{(row.tds || 0).toLocaleString()}</td>
+                  <td className="py-4">₹{(row.advance || 0).toLocaleString()}</td>
+                  <td className="py-4 font-black text-red-600">₹{row.deductions.toLocaleString()}</td>
+                  <td className="py-4 font-black text-emerald-600">₹{row.net.toLocaleString()}</td>
+                  <td className="py-4"><Badge tone={statusTone(row.status)}>{row.status}</Badge></td>
                 </tr>
               ))}
             </tbody>
@@ -722,6 +803,7 @@ function ExitView() {
 }
 
 export default function HRMSHub({ activeView }: { activeView: HRMSView }) {
+  
   const title =
     activeView === "employees"
       ? "Employees"
@@ -762,8 +844,8 @@ export default function HRMSHub({ activeView }: { activeView: HRMSView }) {
         <div className="flex flex-wrap gap-3">
           <ActionButton icon={Download}>Export</ActionButton>
           <ActionButton icon={Filter}>Filter</ActionButton>
-          <ActionButton icon={Plus} variant="accent">
-            {activeView === "employees" ? "Add Employee" : activeView === "attendance" ? "Regularize" : activeView === "leave" ? "Apply Leave" : activeView === "payroll" ? "Run Payroll" : "Start Exit"}
+          <ActionButton icon={activeView === "payroll" ? undefined : Plus} variant="accent" >
+            {activeView === "employees" ? "Add Employee" : activeView === "attendance" ? "Regularize" : activeView === "leave" ? "Apply Leave" : activeView === "payroll" ? "Payroll Register" : "Start Exit"}
           </ActionButton>
         </div>
       </div>
@@ -796,3 +878,6 @@ export default function HRMSHub({ activeView }: { activeView: HRMSView }) {
     </div>
   );
 }
+
+
+

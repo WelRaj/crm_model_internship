@@ -329,7 +329,10 @@ export default function Dashboard() {
     },
     {
       label: "Accounting",
-      items: ACCOUNTING_MODULES
+      items: [
+        { id: "accounting", label: "Accounting Overview", icon: LayoutDashboard },
+        ...ACCOUNTING_MODULES
+      ]
     },
     {
       label: "Administration",

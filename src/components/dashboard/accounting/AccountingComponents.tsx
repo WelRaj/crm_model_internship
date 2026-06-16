@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import type { ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
@@ -26,19 +26,9 @@ const iconToneStyles: Record<Tone, string> = {
 };
 
 export function AccountingPage({
-  title,
-  description,
-  icon: Icon,
-  badge,
-  actions,
-  children,
+  title, description, icon: Icon, badge, actions, children,
 }: {
-  title: string;
-  description: string;
-  icon: LucideIcon;
-  badge?: string;
-  actions?: ReactNode;
-  children: ReactNode;
+  title: string; description: string; icon: LucideIcon; badge?: string; actions?: ReactNode; children: ReactNode;
 }) {
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
@@ -64,46 +54,45 @@ export function AccountingPage({
 
 export function ActionButton({
   icon: Icon,
+  children,
   label,
   variant = "primary",
+  onClick,
+  type = "button",
 }: {
   icon?: LucideIcon;
-  label: string;
+  children?: ReactNode;
+  label?: string;
   variant?: "primary" | "outline" | "accent";
+  onClick?: () => void;
+  type?: "button" | "submit" | "reset";
 }) {
   const styles = {
     primary: "bg-primary text-white hover:bg-primary/90 border-primary",
-    outline: "bg-white text-primary hover:bg-slate-50 border-border",
-    accent: "bg-accent text-primary hover:bg-accent/90 border-accent",
+    outline: "bg-white text-primary border-border hover:bg-slate-50",
+    accent: "bg-accent text-primary border-accent hover:bg-accent/90",
   };
 
   return (
     <button
-      type="button"
+      type={type}
+      onClick={onClick}
       className={`inline-flex h-11 items-center justify-center gap-2 rounded-xl border px-4 text-xs font-black uppercase tracking-widest shadow-sm transition-all ${styles[variant]}`}
     >
       {Icon ? <Icon size={16} /> : null}
-      {label}
+      {children || label}
     </button>
   );
 }
 
 export function MetricCard({
-  label,
-  value,
-  helper,
-  icon: Icon,
-  tone = "slate",
+  label, value, helper, icon: Icon, tone = "slate",
 }: {
-  label: string;
-  value: string;
-  helper?: string;
-  icon: LucideIcon;
-  tone?: Tone;
+  label: string; value: string; helper?: string; icon: LucideIcon; tone?: Tone;
 }) {
   return (
     <div className="flex items-center gap-4 rounded-2xl border border-border bg-white p-5 shadow-sm">
-      <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ${iconToneStyles[tone]}`}>
+      <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-slate-100`}>
         <Icon size={21} />
       </div>
       <div className="min-w-0">
@@ -116,15 +105,9 @@ export function MetricCard({
 }
 
 export function Panel({
-  title,
-  description,
-  children,
-  actions,
+  title, description, children, actions,
 }: {
-  title: string;
-  description?: string;
-  children: ReactNode;
-  actions?: ReactNode;
+  title: string; description?: string; children: ReactNode; actions?: ReactNode;
 }) {
   return (
     <section className="rounded-2xl border border-border bg-white p-6 shadow-sm">
@@ -149,52 +132,54 @@ export function StatusBadge({ children, tone = "slate" }: { children: ReactNode;
 }
 
 export function Field({
-  label,
-  value,
-  placeholder,
-  required,
-  type = "text",
-  options,
-  multiline,
+  label, placeholder, required, type = "text", options, multiline, error, register, onChange, defaultValue, ...rest
 }: {
-  label: string;
-  value?: string;
-  placeholder?: string;
-  required?: boolean;
-  type?: string;
-  options?: string[];
-  multiline?: boolean;
+  label: string; placeholder?: string; required?: boolean; type?: string; options?: string[]; multiline?: boolean; error?: string; register?: any; onChange?: (e: any) => void; defaultValue?: any; [key: string]: any;
 }) {
+  const listId = `list-${label.replace(/\s+/g, '-').toLowerCase()}`;
+
   return (
     <label className="block space-y-1.5">
       <span className="text-xs font-black uppercase tracking-widest text-slate-500">
         {label}
         {required ? <span className="ml-1 text-red-500">*</span> : null}
       </span>
-      {options ? (
-        <select
-          defaultValue={value}
-          className="h-11 w-full rounded-xl border border-border bg-white px-3 text-sm font-semibold text-primary outline-none transition-all focus:border-primary focus:ring-4 focus:ring-primary/10"
-        >
-          {options.map((option) => (
-            <option key={option}>{option}</option>
-          ))}
-        </select>
-      ) : multiline ? (
+      {multiline ? (
         <textarea
-          defaultValue={value}
+          {...register}
+          defaultValue={defaultValue}
+          onChange={onChange || register?.onChange}
           placeholder={placeholder}
           rows={3}
-          className="w-full rounded-xl border border-border bg-white px-3 py-3 text-sm font-semibold text-primary outline-none transition-all placeholder:text-slate-300 focus:border-primary focus:ring-4 focus:ring-primary/10"
+          {...rest}
+          className={`w-full rounded-xl border bg-white px-3 py-3 text-sm font-semibold text-primary outline-none transition-all placeholder:text-slate-300 focus:ring-4 focus:ring-primary/10 ${        
+            error ? "border-red-500 focus:border-red-500 focus:ring-red-500/10" : "border-border focus:border-primary"
+          }`}
         />
       ) : (
-        <input
-          type={type}
-          defaultValue={value}
-          placeholder={placeholder}
-          className="h-11 w-full rounded-xl border border-border bg-white px-3 text-sm font-semibold text-primary outline-none transition-all placeholder:text-slate-300 focus:border-primary focus:ring-4 focus:ring-primary/10"
-        />
+        <div className="relative">
+          <input
+            type={type}
+            {...register}
+            defaultValue={defaultValue}
+            onChange={onChange || register?.onChange}
+            list={options ? listId : undefined}
+            placeholder={placeholder || (options ? `Select or type ${label}...` : "")}
+            {...rest}
+            className={`h-11 w-full rounded-xl border bg-white px-3 text-sm font-semibold text-primary outline-none transition-all placeholder:text-slate-300 focus:ring-4 focus:ring-primary/10 ${      
+              error ? "border-red-500 focus:border-red-500 focus:ring-red-500/10" : "border-border focus:border-primary"
+            }`}
+          />
+          {options && (
+            <datalist id={listId}>
+              {options.map((option: string) => (
+                <option key={option} value={option} />
+              ))}
+            </datalist>
+          )}
+        </div>
       )}
+      {error && <p className="text-[10px] font-black uppercase tracking-widest text-red-500">{error}</p>}
     </label>
   );
 }
@@ -218,12 +203,13 @@ export function DataTable({ columns, children }: { columns: string[]; children: 
   );
 }
 
-export function ProgressBar({ value, tone = "green" }: { value: number; tone?: "green" | "amber" | "red" | "blue" }) {
+export function ProgressBar({ value, tone = "green" }: { value: number; tone?: "green" | "blue" | "amber" | "red" | "purple" }) {
   const colors = {
     green: "bg-green-500",
+    blue: "bg-blue-500",
     amber: "bg-amber-500",
     red: "bg-red-500",
-    blue: "bg-blue-500",
+    purple: "bg-purple-500",
   };
 
   return (
