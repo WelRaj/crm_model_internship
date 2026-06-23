@@ -1,79 +1,100 @@
 "use client";
-/* eslint-disable @typescript-eslint/no-explicit-any */
 
-import { Button } from "@/components/ui/Button";
-import { CheckCircle, Clock, XCircle, Shield, UserCheck, ArrowLeft, ArrowRight } from "lucide-react";
 import { useState } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
+import { ArrowLeft, Shield, ThumbsDown, ThumbsUp, UserCheck } from "lucide-react";
+import { ActionButton, Field, Panel, StatusBadge } from "../accounting/AccountingComponents";
+import type { LeadStepProps } from "./leadTypes";
 
-export default function Step5Approval({ onNext, onPrev }: any) {
-  const [approvals] = useState([
-    { role: "Sales Manager", status: "Approved", name: "Vikram Rathore", date: "2024-03-16", remarks: "Deal looks solid, proceed with negotiation." },
-    { role: "Senior Manager / Director", status: "Pending", name: "-", date: "-", remarks: "" },
-  ]);
+const approvalSchema = z.object({
+  decision: z.string().optional(),
+  reviewerRole: z.string().optional(),
+  comments: z.string().optional(),
+});
 
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case "Approved": return <CheckCircle className="text-green-500" size={24} />;
-      case "Rejected": return <XCircle className="text-red-500" size={24} />;
-      default: return <Clock className="text-amber-500" size={24} />;
-    }
+type ApprovalFormData = z.infer<typeof approvalSchema>;
+
+type ApprovalCard = {
+  role: string;
+  status: "Approved" | "Pending";
+  name: string;
+  date: string;
+  remarks: string;
+};
+
+const approvals: ApprovalCard[] = [
+  { role: "Sales Manager", status: "Approved", name: "Vikram Rathore", date: "2024-03-16", remarks: "Deal looks solid, proceed with negotiation." },
+  { role: "Senior Manager / Director", status: "Pending", name: "-", date: "-", remarks: "" },
+];
+
+type Step5Props = Pick<LeadStepProps, "data" | "updateData" | "onNext" | "onPrev">;
+
+export default function Step5Approval({ updateData, onNext, onPrev }: Step5Props) {
+  const [decision, setDecision] = useState<"Approve" | "Reject">("Approve");
+
+  const { register, handleSubmit } = useForm<ApprovalFormData>({
+    resolver: zodResolver(approvalSchema),
+    defaultValues: {
+      reviewerRole: "Finance Manager",
+      decision: "Approve",
+    },
+  });
+
+  const onSubmit = (values: ApprovalFormData) => {
+    updateData({ ...values, decision });
+    onNext();
   };
 
   return (
-    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4">
+    <form onSubmit={handleSubmit(onSubmit)} className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {approvals.map((app, i) => (
-          <div key={i} className="p-6 border border-border rounded-2xl bg-white shadow-sm relative group overflow-hidden">
-            <div className={`absolute top-0 left-0 w-1 h-full ${app.status === "Approved" ? "bg-green-500" : "bg-amber-500"}`}></div>
-            <div className="flex justify-between items-start mb-6">
-              <div className="flex items-center gap-3">
-                <div className={`p-2 rounded-lg ${app.status === "Approved" ? "bg-green-50" : "bg-amber-50"}`}>
-                   {i === 0 ? <UserCheck className="text-primary" size={20} /> : <Shield className="text-primary" size={20} />}
+        {approvals.map((app) => (
+          <div key={app.role} className="relative overflow-hidden rounded-[2rem] border border-border bg-white p-6 shadow-sm group">
+            <div className={`absolute left-0 top-0 h-full w-1.5 ${app.status === "Approved" ? "bg-emerald-500" : "bg-amber-500"}`} />
+            <div className="mb-6 flex items-start justify-between">
+              <div className="flex items-center gap-4">
+                <div className={`flex h-11 w-11 items-center justify-center rounded-2xl ${app.status === "Approved" ? "bg-emerald-50 text-emerald-600" : "bg-amber-50 text-amber-600"}`}>
+                  {app.status === "Approved" ? <UserCheck size={22} /> : <Shield size={22} />}
                 </div>
                 <div>
-                   <h4 className="text-[10px] font-black text-secondary uppercase tracking-widest">{app.role}</h4>
-                   <p className="text-sm font-bold text-primary mt-0.5">{app.name !== "-" ? app.name : "Awaiting Review"}</p>
+                  <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">{app.role}</h4>
+                  <p className="mt-1 text-sm font-black text-primary">{app.name !== "-" ? app.name : "Awaiting Review"}</p>
                 </div>
               </div>
-              {getStatusIcon(app.status)}
+              <StatusBadge tone={app.status === "Approved" ? "green" : "amber"}>{app.status}</StatusBadge>
             </div>
 
-            {app.remarks && (
-              <div className="bg-slate-50 p-3 rounded-lg border border-slate-100 mb-4">
-                <p className="text-xs text-secondary italic">&ldquo;{app.remarks}&rdquo;</p>
+            {app.remarks ? (
+              <div className="mb-2 rounded-2xl border border-slate-100 bg-slate-50 p-4">
+                <p className="text-xs font-bold italic text-slate-500">&quot;{app.remarks}&quot;</p>
               </div>
-            )}
-
-            <div className="flex justify-between items-center pt-4 border-t border-slate-100">
-               <span className={`text-[10px] font-black uppercase ${app.status === "Approved" ? "text-green-600" : "text-amber-600"}`}>
-                  {app.status}
-               </span>
-               <span className="text-[10px] text-secondary">{app.date}</span>
-            </div>
+            ) : null}
+            <p className="mt-4 text-right text-[10px] font-black text-slate-400">{app.date}</p>
           </div>
         ))}
       </div>
 
-      <div className="p-8 bg-primary rounded-2xl text-white flex items-center justify-between">
-         <div>
-            <h4 className="text-xl font-bold">Final Approval Decision</h4>
-            <p className="text-sm text-white/70 mt-1">Management team will review the proposal and follow-ups.</p>
-         </div>
-         <div className="flex gap-3">
-            <Button variant="outline" className="bg-transparent border-white text-white hover:bg-white/10 h-10 px-6">Reject Deal</Button>
-            <Button className="bg-accent text-primary h-10 px-6 font-black">Approve Deal</Button>
-         </div>
-      </div>
+      <Panel title="Management Review & Authorization" description="Review proposal financials and previous follow-ups to approve this deal.">
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+            <Field label="Reviewer Designation" options={["Finance Manager", "Director", "Managing Partner"]} register={register("reviewerRole")} />
+            <Field label="Final Decision" options={["Approve", "Reject", "Need Revision"]} register={register("decision")} onChange={(e) => setDecision(e.target.value as "Approve" | "Reject")} />
+          </div>
+            <Field label="Review Audit Comments" multiline placeholder="Describe the reason for your decision..." register={register("comments")} />
+        </div>
+      </Panel>
 
-      <div className="flex justify-between pt-8 border-t border-border">
-        <Button variant="outline" onClick={onPrev}>
-          <ArrowLeft className="mr-2 h-4 w-4" /> Back
-        </Button>
-        <Button onClick={onNext} className="bg-primary">
-          Save & Next <ArrowRight className="ml-2 h-4 w-4" />
-        </Button>
+      <div className="flex justify-between border-t border-slate-50 pt-8">
+        <ActionButton label="Back" variant="outline" icon={ArrowLeft} onClick={onPrev} />
+        <div className="flex gap-3">
+          <button type="submit" onClick={() => setDecision("Reject")} className="flex h-11 items-center gap-2 rounded-xl border border-red-100 bg-red-50 px-6 text-xs font-black uppercase tracking-widest text-red-600 transition-all hover:bg-red-100">
+            <ThumbsDown size={16} /> Reject
+          </button>
+          <ActionButton type="submit" label="Approve & Next" icon={ThumbsUp} variant="accent" />
+        </div>
       </div>
-    </div>
+    </form>
   );
 }
-

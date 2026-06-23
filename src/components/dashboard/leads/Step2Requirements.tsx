@@ -1,104 +1,72 @@
-"use client";
-/* eslint-disable @typescript-eslint/no-explicit-any */
+﻿"use client";
 
-import { Input } from "@/components/ui/Input";
-import { Button } from "@/components/ui/Button";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
 import { ArrowRight, ArrowLeft } from "lucide-react";
+import { ActionButton, Field } from "../accounting/AccountingComponents";
+import type { LeadStepProps } from "./leadTypes";
 
-export default function Step2Requirements({ data, updateData, onNext, onPrev }: any) {
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target;
-    updateData({ ...data, [name]: value });
+// --- Validation Schema (Simplified mandatory fields) ---
+const requirementsSchema = z.object({
+  serviceRequired: z.string().optional(),
+  projectType: z.string().optional(),
+  platformRequired: z.string().optional(),
+  timeline: z.string().optional(),
+  projectDescription: z.string().min(5, "Provide a brief description"),
+  technologyPreference: z.string().optional(),
+  referenceLink: z.string().url("Invalid URL").or(z.literal("")),
+  currency: z.string().default("INR"),
+  minBudget: z.coerce.number().optional(),
+  maxBudget: z.coerce.number().optional(),
+  paymentMode: z.string().optional(),
+});
+
+type RequirementsFormData = z.infer<typeof requirementsSchema>;
+
+export default function Step2Requirements({ data, updateData, onNext, onPrev }: LeadStepProps) {
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+  } = useForm<RequirementsFormData>({
+    resolver: zodResolver(requirementsSchema),
+    defaultValues: data
+  });
+
+  const onSubmit = (values: RequirementsFormData) => {
+    updateData(values);
+    onNext();
   };
 
-  const services = [
-    "Website Development", "Web App", "Mobile App", "UI-UX", 
-    "Digital Marketing", "SEO", "CRM", "ERP", "E-Commerce", "Custom Software"
-  ];
-
-  const projectTypes = ["New Project", "Existing Project Upgrade", "Maintenance"];
-  const platforms = ["Web", "Android", "iOS", "Both", "All"];
-  const timelines = ["1 Month", "3 Months", "6 Months", "1 Year", "Custom"];
-  const currencies = ["INR", "USD", "AED", "GBP"];
-  const paymentModes = ["One Time", "Monthly", "Milestone Based"];
-
   return (
-    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4">
+    <form onSubmit={handleSubmit(onSubmit)} className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="space-y-1.5">
-          <label className="text-sm font-medium text-secondary">Service Required <span className="text-red-500">*</span></label>
-          <select name="serviceRequired" value={data.serviceRequired} onChange={handleChange} required className="flex h-11 w-full rounded-md border border-border bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary">
-            <option value="">Select Service</option>
-            {services.map(s => <option key={s} value={s}>{s}</option>)}
-          </select>
-        </div>
-
-        <div className="space-y-1.5">
-          <label className="text-sm font-medium text-secondary">Project Type <span className="text-red-500">*</span></label>
-          <select name="projectType" value={data.projectType} onChange={handleChange} required className="flex h-11 w-full rounded-md border border-border bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary">
-            {projectTypes.map(t => <option key={t} value={t}>{t}</option>)}
-          </select>
-        </div>
-
-        <div className="space-y-1.5">
-          <label className="text-sm font-medium text-secondary">Platform Required <span className="text-red-500">*</span></label>
-          <select name="platformRequired" value={data.platformRequired} onChange={handleChange} required className="flex h-11 w-full rounded-md border border-border bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary">
-            {platforms.map(p => <option key={p} value={p}>{p}</option>)}
-          </select>
-        </div>
-
-        <div className="space-y-1.5">
-          <label className="text-sm font-medium text-secondary">Timeline <span className="text-red-500">*</span></label>
-          <select name="timeline" value={data.timeline} onChange={handleChange} required className="flex h-11 w-full rounded-md border border-border bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary">
-            {timelines.map(t => <option key={t} value={t}>{t}</option>)}
-          </select>
-        </div>
+        <Field label="Service Required" options={["Website Development", "Web App", "Mobile App", "UI-UX", "Digital Marketing", "CRM/ERP"]} register={register("serviceRequired")} />
+        <Field label="Project Type" options={["New Project", "Upgrade", "Maintenance"]} register={register("projectType")} />
+        <Field label="Platform" options={["Web", "Android", "iOS", "Hybrid"]} register={register("platformRequired")} />
+        <Field label="Target Timeline" options={["1 Month", "3 Months", "6 Months", "1 Year"]} register={register("timeline")} />
       </div>
 
-      <div className="space-y-1.5">
-        <label className="text-sm font-medium text-secondary">Project Description <span className="text-red-500">*</span></label>
-        <textarea 
-          name="projectDescription" 
-          value={data.projectDescription} 
-          onChange={handleChange} 
-          required 
-          rows={4}
-          className="flex w-full rounded-md border border-border bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-          placeholder="Detailed requirements..."
-        />
-      </div>
+      <Field label="Project Description" multiline placeholder="Describe features, goals and scope..." required register={register("projectDescription")} error={errors.projectDescription?.message} />
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <Input label="Technology Preference" name="technologyPreference" value={data.technologyPreference} onChange={handleChange} placeholder="e.g. Next.js, Flutter, etc." />
-        <Input label="Reference Website / App Link" name="referenceLink" value={data.referenceLink} onChange={handleChange} placeholder="https://..." />
+        <Field label="Technology Preference" placeholder="e.g. Next.js, React, Node.js" register={register("technologyPreference")} />
+        <Field label="Reference Link" placeholder="https://..." register={register("referenceLink")} error={errors.referenceLink?.message} />
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6 pt-6 border-t border-slate-100">
-        <div className="md:col-span-1">
-          <label className="text-sm font-medium text-secondary">Currency</label>
-          <select name="currency" value={data.currency} onChange={handleChange} className="flex h-11 w-full rounded-md border border-border bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary">
-            {currencies.map(c => <option key={c} value={c}>{c}</option>)}
-          </select>
-        </div>
-        <Input label="Min Budget" name="minBudget" value={data.minBudget} onChange={handleChange} type="number" required />
-        <Input label="Max Budget" name="maxBudget" value={data.maxBudget} onChange={handleChange} type="number" required />
-        <div className="md:col-span-1">
-          <label className="text-sm font-medium text-secondary">Payment Mode</label>
-          <select name="paymentMode" value={data.paymentMode} onChange={handleChange} className="flex h-11 w-full rounded-md border border-border bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary">
-            {paymentModes.map(m => <option key={m} value={m}>{m}</option>)}
-          </select>
-        </div>
+        <Field label="Currency" options={["INR", "USD", "AED", "GBP"]} register={register("currency")} />
+        <Field label="Min Budget" type="number" register={register("minBudget")} />
+        <Field label="Max Budget" type="number" register={register("maxBudget")} />
+        <Field label="Payment Mode" options={["One Time", "Milestone Based", "Monthly"]} register={register("paymentMode")} />
       </div>
 
-      <div className="flex justify-between pt-8">
-        <Button variant="outline" onClick={onPrev}>
-          <ArrowLeft className="mr-2 h-4 w-4" /> Back
-        </Button>
-        <Button onClick={onNext} className="bg-primary">
-          Save & Next <ArrowRight className="ml-2 h-4 w-4" />
-        </Button>
+      <div className="flex justify-between pt-8 border-t border-slate-50">
+        <ActionButton label="Back" variant="outline" icon={ArrowLeft} onClick={onPrev} />
+        <ActionButton type="submit" label="Save & Continue" icon={ArrowRight} variant="accent" />
       </div>
-    </div>
+    </form>
   );
 }
 

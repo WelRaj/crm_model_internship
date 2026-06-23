@@ -41,7 +41,23 @@ type FollowUp = {
   leadStage: string;
 };
 
-const followUps: FollowUp[] = [
+type ActivityItem = {
+  time: string;
+  owner: string;
+  action: string;
+  result: string;
+  client: string;
+};
+
+type QuickLogState = {
+  followUpId: string;
+  outcome: string;
+  notes: string;
+  nextDate: string;
+  nextTime: string;
+};
+
+const initialFollowUps: FollowUp[] = [
   {
     id: "FU-24091",
     client: "Bluebird Logistics",
@@ -129,12 +145,29 @@ const calendarDays = [
   { day: "Sun", date: "15", count: 1, active: false },
 ];
 
-const activityLog = [
+const initialActivityLog: ActivityItem[] = [
   { time: "11:20 AM", owner: "Rajesh", action: "Call attempted", result: "No answer", client: "Bluebird Logistics" },
   { time: "10:45 AM", owner: "Vikram", action: "WhatsApp sent", result: "Proposal reminder delivered", client: "Apex Finserve" },
   { time: "09:30 AM", owner: "Sunita", action: "Meeting completed", result: "Demo scheduled", client: "Nexa Retail Cloud" },
   { time: "Yesterday", owner: "Anjali", action: "Email sent", result: "Requirements checklist shared", client: "Orbit HR Tech" },
 ];
+
+const statusFilters = ["All", "Overdue", "Due Today", "Upcoming", "No Response", "Completed"] as const;
+
+const blankFollowUp: Omit<FollowUp, "id"> = {
+  client: "",
+  contact: "",
+  phone: "",
+  owner: "Rajkumar Rathore",
+  mode: "Call",
+  status: "Upcoming",
+  priority: "Medium",
+  dueDate: "12 Jun",
+  dueTime: "10:00 AM",
+  purpose: "",
+  lastNote: "",
+  leadStage: "Discovery",
+};
 
 function modeIcon(mode: FollowUpMode) {
   if (mode === "Call") return Phone;
@@ -196,15 +229,143 @@ function MetricCard({
 }
 
 export default function FollowUps() {
+  const [followUpItems, setFollowUpItems] = useState<FollowUp[]>(initialFollowUps);
+  const [activityItems, setActivityItems] = useState<ActivityItem[]>(initialActivityLog);
   const [selectedStatus, setSelectedStatus] = useState<"All" | FollowUpStatus>("All");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [showNewForm, setShowNewForm] = useState(false);
+  const [newFollowUp, setNewFollowUp] = useState<Omit<FollowUp, "id">>(blankFollowUp);
+  const [quickLog, setQuickLog] = useState<QuickLogState>({
+    followUpId: initialFollowUps[0]?.id ?? "",
+    outcome: "Interested",
+    notes: "",
+    nextDate: "",
+    nextTime: "",
+  });
+
   const filteredFollowUps = useMemo(
-    () => (selectedStatus === "All" ? followUps : followUps.filter((followUp) => followUp.status === selectedStatus)),
-    [selectedStatus]
+    () => {
+      const normalizedSearch = searchTerm.trim().toLowerCase();
+      return followUpItems.filter((followUp) => {
+        const matchesStatus = selectedStatus === "All" || followUp.status === selectedStatus;
+        const matchesSearch =
+          !normalizedSearch ||
+          [followUp.client, followUp.contact, followUp.phone, followUp.owner, followUp.purpose, followUp.leadStage]
+            .join(" ")
+            .toLowerCase()
+            .includes(normalizedSearch);
+        return matchesStatus && matchesSearch;
+      });
+    },
+    [followUpItems, searchTerm, selectedStatus]
   );
 
-  const overdueCount = followUps.filter((followUp) => followUp.status === "Overdue").length;
-  const todayCount = followUps.filter((followUp) => followUp.status === "Due Today").length;
-  const upcomingCount = followUps.filter((followUp) => followUp.status === "Upcoming").length;
+  const overdueCount = followUpItems.filter((followUp) => followUp.status === "Overdue").length;
+  const todayCount = followUpItems.filter((followUp) => followUp.status === "Due Today").length;
+  const upcomingCount = followUpItems.filter((followUp) => followUp.status === "Upcoming").length;
+  const completedCount = followUpItems.filter((followUp) => followUp.status === "Completed").length;
+  const completionRate = followUpItems.length ? Math.round((completedCount / followUpItems.length) * 100) : 0;
+
+  const addActivity = (activity: Omit<ActivityItem, "time">) => {
+    setActivityItems((current) => [
+      {
+        time: new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }),
+        ...activity,
+      },
+      ...current,
+    ]);
+  };
+
+  const handleMarkDone = (followUp: FollowUp, result = "Marked completed") => {
+    setFollowUpItems((current) =>
+      current.map((item) =>
+        item.id === followUp.id
+          ? {
+              ...item,
+              status: "Completed",
+              lastNote: result,
+            }
+          : item
+      )
+    );
+    addActivity({
+      owner: followUp.owner,
+      action: `${followUp.mode} completed`,
+      result,
+      client: followUp.client,
+    });
+  };
+
+  const handleSaveQuickLog = () => {
+    const selectedFollowUp = followUpItems.find((item) => item.id === quickLog.followUpId) ?? followUpItems[0];
+    if (!selectedFollowUp) return;
+
+    const result = quickLog.notes.trim() || quickLog.outcome;
+    handleMarkDone(selectedFollowUp, result);
+
+    if (quickLog.nextDate) {
+      const nextFollowUp: FollowUp = {
+        ...selectedFollowUp,
+        id: `FU-${Date.now().toString().slice(-5)}`,
+        status: "Upcoming",
+        dueDate: new Date(quickLog.nextDate).toLocaleDateString("en-GB", { day: "2-digit", month: "short" }),
+        dueTime: quickLog.nextTime || "10:00 AM",
+        purpose: `Next action after ${quickLog.outcome}`,
+        lastNote: result,
+      };
+      setFollowUpItems((current) => [nextFollowUp, ...current]);
+    }
+
+    setQuickLog({ followUpId: selectedFollowUp.id, outcome: "Interested", notes: "", nextDate: "", nextTime: "" });
+  };
+
+  const handleCreateFollowUp = () => {
+    if (!newFollowUp.client.trim() || !newFollowUp.contact.trim() || !newFollowUp.purpose.trim()) return;
+
+    const followUp: FollowUp = {
+      ...newFollowUp,
+      id: `FU-${Date.now().toString().slice(-5)}`,
+      lastNote: newFollowUp.lastNote || "Created manually from follow-ups page.",
+    };
+
+    setFollowUpItems((current) => [followUp, ...current]);
+    setQuickLog((current) => ({ ...current, followUpId: followUp.id }));
+    addActivity({
+      owner: followUp.owner,
+      action: "Follow-up created",
+      result: followUp.purpose,
+      client: followUp.client,
+    });
+    setNewFollowUp(blankFollowUp);
+    setShowNewForm(false);
+  };
+
+  const handleExport = () => {
+    const csvRows = [
+      ["ID", "Client", "Contact", "Phone", "Owner", "Mode", "Status", "Priority", "Due Date", "Due Time", "Purpose"],
+      ...filteredFollowUps.map((item) => [
+        item.id,
+        item.client,
+        item.contact,
+        item.phone,
+        item.owner,
+        item.mode,
+        item.status,
+        item.priority,
+        item.dueDate,
+        item.dueTime,
+        item.purpose,
+      ]),
+    ];
+    const csv = csvRows.map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "follow-ups.csv";
+    link.click();
+    URL.revokeObjectURL(url);
+  };
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
@@ -221,13 +382,13 @@ export default function FollowUps() {
           </div>
         </div>
         <div className="flex flex-wrap gap-3">
-          <button className="inline-flex h-11 items-center gap-2 rounded-xl border border-border bg-white px-4 text-xs font-black uppercase tracking-widest text-primary shadow-sm hover:bg-slate-50">
+          <button onClick={handleExport} className="inline-flex h-11 items-center gap-2 rounded-xl border border-border bg-white px-4 text-xs font-black uppercase tracking-widest text-primary shadow-sm hover:bg-slate-50">
             <Download size={16} /> Export
           </button>
-          <button className="inline-flex h-11 items-center gap-2 rounded-xl border border-border bg-white px-4 text-xs font-black uppercase tracking-widest text-primary shadow-sm hover:bg-slate-50">
+          <button onClick={() => setSelectedStatus("Overdue")} className="inline-flex h-11 items-center gap-2 rounded-xl border border-border bg-white px-4 text-xs font-black uppercase tracking-widest text-primary shadow-sm hover:bg-slate-50">
             <Filter size={16} /> Filter
           </button>
-          <button className="inline-flex h-11 items-center gap-2 rounded-xl bg-accent px-4 text-xs font-black uppercase tracking-widest text-primary shadow-lg hover:bg-accent/90">
+          <button onClick={() => setShowNewForm((current) => !current)} className="inline-flex h-11 items-center gap-2 rounded-xl bg-accent px-4 text-xs font-black uppercase tracking-widest text-primary shadow-lg hover:bg-accent/90">
             <Plus size={16} /> New Follow-up
           </button>
         </div>
@@ -237,8 +398,43 @@ export default function FollowUps() {
         <MetricCard label="Due Today" value={String(todayCount)} helper="Needs action before EOD" icon={Clock} tone="bg-amber-100 text-amber-700" />
         <MetricCard label="Overdue" value={String(overdueCount)} helper="Escalate high priority" icon={AlertTriangle} tone="bg-red-100 text-red-700" />
         <MetricCard label="Upcoming" value={String(upcomingCount)} helper="Next 48 hours" icon={Calendar} tone="bg-blue-100 text-blue-700" />
-        <MetricCard label="Completion Rate" value="78%" helper="This week" icon={CheckCircle2} tone="bg-green-100 text-green-700" />
+        <MetricCard label="Completion Rate" value={`${completionRate}%`} helper="This week" icon={CheckCircle2} tone="bg-green-100 text-green-700" />
       </div>
+
+      {showNewForm ? (
+        <section className="rounded-2xl border border-border bg-white p-6 shadow-sm">
+          <div className="mb-5 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+            <div>
+              <h3 className="text-lg font-black text-primary">Create Follow-up</h3>
+              <p className="mt-1 text-xs font-semibold text-slate-500">Add a sales action with owner, mode, priority, and due time.</p>
+            </div>
+            <button onClick={() => setShowNewForm(false)} className="h-9 rounded-xl bg-slate-50 px-4 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:bg-slate-100">
+              Close
+            </button>
+          </div>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+            <input value={newFollowUp.client} onChange={(e) => setNewFollowUp((current) => ({ ...current, client: e.target.value }))} placeholder="Client / Company" className="h-11 rounded-xl border border-border px-3 text-sm font-semibold text-primary outline-none focus:ring-4 focus:ring-primary/10" />
+            <input value={newFollowUp.contact} onChange={(e) => setNewFollowUp((current) => ({ ...current, contact: e.target.value }))} placeholder="Contact person" className="h-11 rounded-xl border border-border px-3 text-sm font-semibold text-primary outline-none focus:ring-4 focus:ring-primary/10" />
+            <input value={newFollowUp.phone} onChange={(e) => setNewFollowUp((current) => ({ ...current, phone: e.target.value }))} placeholder="Phone" className="h-11 rounded-xl border border-border px-3 text-sm font-semibold text-primary outline-none focus:ring-4 focus:ring-primary/10" />
+            <select value={newFollowUp.mode} onChange={(e) => setNewFollowUp((current) => ({ ...current, mode: e.target.value as FollowUpMode }))} className="h-11 rounded-xl border border-border px-3 text-sm font-semibold text-primary outline-none focus:ring-4 focus:ring-primary/10">
+              {(["Call", "WhatsApp", "Email", "Meeting", "Video Call"] as const).map((mode) => <option key={mode}>{mode}</option>)}
+            </select>
+            <select value={newFollowUp.priority} onChange={(e) => setNewFollowUp((current) => ({ ...current, priority: e.target.value as FollowUpPriority }))} className="h-11 rounded-xl border border-border px-3 text-sm font-semibold text-primary outline-none focus:ring-4 focus:ring-primary/10">
+              {(["High", "Medium", "Low"] as const).map((priority) => <option key={priority}>{priority}</option>)}
+            </select>
+            <input value={newFollowUp.dueTime} onChange={(e) => setNewFollowUp((current) => ({ ...current, dueTime: e.target.value }))} placeholder="Due time" className="h-11 rounded-xl border border-border px-3 text-sm font-semibold text-primary outline-none focus:ring-4 focus:ring-primary/10" />
+            <input value={newFollowUp.owner} onChange={(e) => setNewFollowUp((current) => ({ ...current, owner: e.target.value }))} placeholder="Owner" className="h-11 rounded-xl border border-border px-3 text-sm font-semibold text-primary outline-none focus:ring-4 focus:ring-primary/10" />
+            <input value={newFollowUp.leadStage} onChange={(e) => setNewFollowUp((current) => ({ ...current, leadStage: e.target.value }))} placeholder="Stage" className="h-11 rounded-xl border border-border px-3 text-sm font-semibold text-primary outline-none focus:ring-4 focus:ring-primary/10" />
+            <input value={newFollowUp.dueDate} onChange={(e) => setNewFollowUp((current) => ({ ...current, dueDate: e.target.value }))} placeholder="Due date e.g. 12 Jun" className="h-11 rounded-xl border border-border px-3 text-sm font-semibold text-primary outline-none focus:ring-4 focus:ring-primary/10" />
+          </div>
+          <textarea value={newFollowUp.purpose} onChange={(e) => setNewFollowUp((current) => ({ ...current, purpose: e.target.value }))} placeholder="Purpose / next action" rows={3} className="mt-4 w-full rounded-xl border border-border px-3 py-3 text-sm font-semibold text-primary outline-none focus:ring-4 focus:ring-primary/10" />
+          <div className="mt-4 flex justify-end">
+            <button onClick={handleCreateFollowUp} className="h-11 rounded-xl bg-accent px-5 text-xs font-black uppercase tracking-widest text-primary shadow-lg">
+              Save Follow-up
+            </button>
+          </div>
+        </section>
+      ) : null}
 
       <section className="rounded-2xl border border-border bg-white p-5 shadow-sm">
         <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
@@ -284,8 +480,18 @@ export default function FollowUps() {
               <h3 className="text-lg font-black text-primary">Follow-up Queue</h3>
               <p className="mt-1 text-xs font-semibold text-slate-500">Prioritized list for sales owners. Every item should end with next action.</p>
             </div>
-            <div className="flex flex-wrap gap-2">
-              {(["All", "Overdue", "Due Today", "Upcoming", "No Response"] as const).map((status) => (
+            <div className="flex flex-col gap-2">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300" size={15} />
+                <input
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  placeholder="Search client, owner, phone..."
+                  className="h-10 w-full rounded-xl border border-border bg-white pl-9 pr-3 text-xs font-bold text-primary outline-none focus:ring-4 focus:ring-primary/10 lg:w-72"
+                />
+              </div>
+              <div className="flex flex-wrap gap-2">
+              {statusFilters.map((status) => (
                 <button
                   key={status}
                   type="button"
@@ -297,6 +503,7 @@ export default function FollowUps() {
                   {status}
                 </button>
               ))}
+              </div>
             </div>
           </div>
 
@@ -338,16 +545,16 @@ export default function FollowUps() {
                   </div>
 
                   <div className="mt-4 grid grid-cols-2 gap-2 md:flex">
-                    <button className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-primary px-4 text-xs font-black uppercase tracking-widest text-white">
+                    <a href={`tel:${followUp.phone.replace(/\s/g, "")}`} className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-primary px-4 text-xs font-black uppercase tracking-widest text-white">
                       <Phone size={14} /> Call
-                    </button>
-                    <button className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-white px-4 text-xs font-black uppercase tracking-widest text-primary shadow-sm">
+                    </a>
+                    <button onClick={() => setQuickLog((current) => ({ ...current, followUpId: followUp.id, outcome: "Call Back" }))} className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-white px-4 text-xs font-black uppercase tracking-widest text-primary shadow-sm">
                       <MessageCircle size={14} /> WhatsApp
                     </button>
-                    <button className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-white px-4 text-xs font-black uppercase tracking-widest text-primary shadow-sm">
+                    <a href={`mailto:${followUp.contact.toLowerCase().replace(/\s/g, ".")}@example.com`} className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-white px-4 text-xs font-black uppercase tracking-widest text-primary shadow-sm">
                       <Mail size={14} /> Email
-                    </button>
-                    <button className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-accent px-4 text-xs font-black uppercase tracking-widest text-primary">
+                    </a>
+                    <button onClick={() => handleMarkDone(followUp)} className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-accent px-4 text-xs font-black uppercase tracking-widest text-primary">
                       <CheckCircle2 size={14} /> Mark Done
                     </button>
                   </div>
@@ -368,8 +575,16 @@ export default function FollowUps() {
             </div>
             <div className="space-y-4">
               <label className="block space-y-1.5">
+                <span className="text-xs font-black uppercase tracking-widest text-slate-500">Follow-up</span>
+                <select value={quickLog.followUpId} onChange={(e) => setQuickLog((current) => ({ ...current, followUpId: e.target.value }))} className="h-11 w-full rounded-xl border border-border bg-white px-3 text-sm font-bold text-primary outline-none focus:ring-4 focus:ring-primary/10">
+                  {followUpItems.map((item) => (
+                    <option key={item.id} value={item.id}>{item.client} - {item.contact}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="block space-y-1.5">
                 <span className="text-xs font-black uppercase tracking-widest text-slate-500">Outcome</span>
-                <select className="h-11 w-full rounded-xl border border-border bg-white px-3 text-sm font-bold text-primary outline-none focus:ring-4 focus:ring-primary/10">
+                <select value={quickLog.outcome} onChange={(e) => setQuickLog((current) => ({ ...current, outcome: e.target.value }))} className="h-11 w-full rounded-xl border border-border bg-white px-3 text-sm font-bold text-primary outline-none focus:ring-4 focus:ring-primary/10">
                   <option>Interested</option>
                   <option>Call Back</option>
                   <option>No Response</option>
@@ -379,19 +594,19 @@ export default function FollowUps() {
               </label>
               <label className="block space-y-1.5">
                 <span className="text-xs font-black uppercase tracking-widest text-slate-500">Notes</span>
-                <textarea className="w-full rounded-xl border border-border px-3 py-3 text-sm font-semibold text-primary outline-none focus:ring-4 focus:ring-primary/10" rows={4} placeholder="Write call summary..." />
+                <textarea value={quickLog.notes} onChange={(e) => setQuickLog((current) => ({ ...current, notes: e.target.value }))} className="w-full rounded-xl border border-border px-3 py-3 text-sm font-semibold text-primary outline-none focus:ring-4 focus:ring-primary/10" rows={4} placeholder="Write call summary..." />
               </label>
               <div className="grid grid-cols-2 gap-3">
                 <label className="block space-y-1.5">
                   <span className="text-xs font-black uppercase tracking-widest text-slate-500">Next Date</span>
-                  <input type="date" className="h-11 w-full rounded-xl border border-border px-3 text-sm font-bold text-primary outline-none focus:ring-4 focus:ring-primary/10" />
+                  <input value={quickLog.nextDate} onChange={(e) => setQuickLog((current) => ({ ...current, nextDate: e.target.value }))} type="date" className="h-11 w-full rounded-xl border border-border px-3 text-sm font-bold text-primary outline-none focus:ring-4 focus:ring-primary/10" />
                 </label>
                 <label className="block space-y-1.5">
                   <span className="text-xs font-black uppercase tracking-widest text-slate-500">Time</span>
-                  <input type="time" className="h-11 w-full rounded-xl border border-border px-3 text-sm font-bold text-primary outline-none focus:ring-4 focus:ring-primary/10" />
+                  <input value={quickLog.nextTime} onChange={(e) => setQuickLog((current) => ({ ...current, nextTime: e.target.value }))} type="time" className="h-11 w-full rounded-xl border border-border px-3 text-sm font-bold text-primary outline-none focus:ring-4 focus:ring-primary/10" />
                 </label>
               </div>
-              <button className="h-11 w-full rounded-xl bg-accent text-xs font-black uppercase tracking-widest text-primary shadow-lg">
+              <button onClick={handleSaveQuickLog} className="h-11 w-full rounded-xl bg-accent text-xs font-black uppercase tracking-widest text-primary shadow-lg">
                 Save Follow-up
               </button>
             </div>
@@ -438,7 +653,7 @@ export default function FollowUps() {
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {activityLog.map((item) => (
+              {activityItems.map((item) => (
                 <tr key={`${item.time}-${item.client}`} className="text-sm">
                   <td className="px-4 py-4 font-black text-primary">{item.time}</td>
                   <td className="px-4 py-4 font-semibold text-slate-600">{item.owner}</td>

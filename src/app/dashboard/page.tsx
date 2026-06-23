@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import EmployeePerformance from "@/components/dashboard/projects/performance/EmployeePerformance";
 
@@ -8,10 +8,10 @@ import {
   UserPlus, 
   Target, 
   Wallet, 
-  Speaker, 
-  Bell, 
+  Speaker,
+  Bell,
   Camera,
-  Search, 
+  Search,
   LogOut,
   ChevronRight,
   TrendingUp,
@@ -19,6 +19,7 @@ import {
   Briefcase,
   Settings,
   Shield,
+  ShieldCheck,
   MoreVertical,
   Calendar,
   Filter,
@@ -32,7 +33,9 @@ import {
   SquareCheck,
   History,
   CheckCircle2,
-  X
+  X,
+  Menu,
+  ChevronLeft
 } from "lucide-react";
 
 import { Button } from "@/components/ui/Button";
@@ -43,6 +46,7 @@ import OnboardingWizard from "@/components/dashboard/onboarding/OnboardingWizard
 import LeadWizard from "@/components/dashboard/leads/LeadWizard";
 import ClientsContacts from "@/components/dashboard/crm/ClientsContacts";
 import FollowUps from "@/components/dashboard/crm/FollowUps";
+import ProjectAgreement from "@/components/dashboard/crm/ProjectAgreement";
 import HRMSHub from "@/components/dashboard/hrms/HRMSHub";
 import MarketingHub from "@/components/dashboard/marketing/MarketingHub";
 import ProjectHub from "@/components/dashboard/projects/ProjectHub";
@@ -53,158 +57,249 @@ import AccountingWizard, {
 
 // Overview Component
 function DashboardOverview() {
-  const stats = [
-    { title: "Total Onboarding", value: "24", icon: UserPlus, color: "bg-[#3B82F6]", shadow: "shadow-blue-200" },
-    { title: "Active Leads", value: "156", icon: Target, color: "bg-[#F97316]", shadow: "shadow-orange-200" },
-    { title: "Total Revenue", value: "₹45.2L", icon: Wallet, color: "bg-[#10B981]", shadow: "shadow-green-200" },
-    { title: "Marketing ROI", value: "3.2x", icon: Speaker, color: "bg-[#8B5CF6]", shadow: "shadow-purple-200" },
+  const INR = "\u20b9";
+  const executiveStats = [
+    { title: "Monthly Revenue", value: `${INR}45.2L`, detail: "+12.4% vs last month", icon: Wallet, tone: "bg-emerald-50 text-emerald-600" },
+    { title: "Open Deals", value: "156", detail: "32 hot, 18 proposal stage", icon: Target, tone: "bg-orange-50 text-orange-600" },
+    { title: "Active Projects", value: "28", detail: "5 at risk, 3 due this week", icon: Briefcase, tone: "bg-blue-50 text-blue-600" },
+    { title: "Team Attendance", value: "92%", detail: "11 leave requests pending", icon: Users, tone: "bg-violet-50 text-violet-600" },
+  ];
+
+  const companyHealth = [
+    { label: "Cashflow", value: 82, status: "Healthy", color: "bg-emerald-500" },
+    { label: "Sales Pipeline", value: 74, status: "Strong", color: "bg-blue-500" },
+    { label: "Delivery", value: 68, status: "Watch", color: "bg-amber-500" },
+    { label: "Compliance", value: 91, status: "Clean", color: "bg-cyan-500" },
+  ];
+
+  const priorityAlerts = [
+    { title: "Invoices overdue", detail: `${INR}3.8L pending beyond 15 days`, icon: FileText, tone: "bg-red-50 text-red-600" },
+    { title: "Approvals waiting", detail: "7 requests need manager decision", icon: CheckCircle2, tone: "bg-amber-50 text-amber-600" },
+    { title: "Project deadline", detail: "Website revamp due in 2 days", icon: Clock, tone: "bg-blue-50 text-blue-600" },
+  ];
+
+  const pipeline = [
+    { stage: "New Leads", count: 42, value: `${INR}18.4L`, color: "bg-slate-300" },
+    { stage: "Qualified", count: 27, value: `${INR}26.8L`, color: "bg-blue-500" },
+    { stage: "Proposal", count: 18, value: `${INR}33.1L`, color: "bg-amber-500" },
+    { stage: "Won", count: 9, value: `${INR}12.6L`, color: "bg-emerald-500" },
+  ];
+
+  const departmentStatus = [
+    { team: "Sales", owner: "Amit", metric: "18 follow-ups due", status: "Needs action", tone: "bg-amber-50 text-amber-600" },
+    { team: "Projects", owner: "Priya", metric: "3 milestones delayed", status: "At risk", tone: "bg-red-50 text-red-600" },
+    { team: "Accounting", owner: "Neha", metric: `${INR}4.2L receivable`, status: "Review", tone: "bg-blue-50 text-blue-600" },
+    { team: "HRMS", owner: "Karan", metric: "6 onboarding active", status: "On track", tone: "bg-emerald-50 text-emerald-600" },
   ];
 
   const recentActivities = [
-    { id: 1, user: "Vikram Rathore", action: "Approved Lead", target: "Acme Corp", time: "2 mins ago", status: "Completed" },
-    { id: 2, user: "Sunita Sharma", action: "Uploaded KYC", target: "Employee #102", time: "15 mins ago", status: "Pending" },
-    { id: 3, user: "Rajesh Kumar", action: "Generated Invoice", target: "INV-9921", time: "1 hour ago", status: "Completed" },
-    { id: 4, user: "Anjali Singh", action: "New Lead Created", target: "Global Tech", time: "3 hours ago", status: "In Review" },
+    { id: 1, user: "Vikram Rathore", action: "Approved lead proposal", target: "Acme Corp", time: "2 mins ago", status: "Done" },
+    { id: 2, user: "Sunita Sharma", action: "Uploaded KYC documents", target: "Employee #102", time: "15 mins ago", status: "Pending" },
+    { id: 3, user: "Rajesh Kumar", action: "Generated invoice", target: "INV-9921", time: "1 hour ago", status: "Done" },
+    { id: 4, user: "Anjali Singh", action: "Created high-value lead", target: "Global Tech", time: "3 hours ago", status: "Review" },
   ];
 
   return (
-    <div className="space-y-10 animate-in fade-in duration-700">
-      <div className="flex justify-between items-end">
+    <div className="min-w-0 space-y-8 animate-in fade-in duration-700">
+      <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
         <div>
-          <h2 className="text-3xl font-black text-[#1E293B] tracking-tight">Dashboard Overview</h2>
-          <p className="text-slate-500 font-medium mt-1">Real-time performance and system status.</p>
+          <p className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-400">Company Command Center</p>
+          <h2 className="mt-2 text-3xl font-black tracking-tight text-[#1E293B]">What is happening today</h2>
+          <p className="mt-1 max-w-3xl text-sm font-semibold leading-6 text-slate-500">
+            Live business snapshot across sales, projects, accounting, HR, approvals, and operational risk.
+          </p>
         </div>
-        <div className="flex gap-3">
-           <button className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-50 transition-all">
-              <Calendar size={14} /> June 2024
-           </button>
-           <button className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-xl text-xs font-bold shadow-lg hover:shadow-primary/20 transition-all">
-              <Filter size={14} /> Filter
-           </button>
+        <div className="flex flex-wrap gap-3">
+          <button className="flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-xs font-black uppercase tracking-widest text-slate-600 transition-all hover:bg-slate-50">
+            <Calendar size={14} /> Today
+          </button>
+          <button className="flex h-11 items-center gap-2 rounded-xl bg-primary px-4 text-xs font-black uppercase tracking-widest text-white shadow-lg transition-all hover:shadow-primary/20">
+            <Filter size={14} /> Filter View
+          </button>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {stats.map((stat, i) => (
-          <div key={i} className="bg-white p-7 rounded-[2rem] border border-slate-100 shadow-sm flex items-center gap-6 hover:shadow-xl hover:-translate-y-1 transition-all duration-300">
-            <div className={`w-16 h-16 ${stat.color} rounded-2xl flex items-center justify-center text-white shadow-2xl ${stat.shadow}`}>
-              <stat.icon size={32} strokeWidth={2.5} />
-            </div>
-            <div>
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">{stat.title}</p>
-              <p className="text-3xl font-black text-[#1E293B] mt-1">{stat.value}</p>
+      <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-4">
+        {executiveStats.map((stat) => (
+          <div key={stat.title} className="min-w-0 rounded-2xl border border-slate-100 bg-white p-6 shadow-sm">
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0">
+                <p className="truncate text-[10px] font-black uppercase tracking-widest text-slate-400">{stat.title}</p>
+                <p className="mt-2 text-3xl font-black text-[#1E293B]">{stat.value}</p>
+                <p className="mt-1 text-xs font-semibold text-slate-500">{stat.detail}</p>
+              </div>
+              <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ${stat.tone}`}>
+                <stat.icon size={22} />
+              </div>
             </div>
           </div>
         ))}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2 bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
-           <div className="flex justify-between items-center mb-10">
-              <div>
-                <h3 className="font-black text-[#1E293B] text-xl">Revenue Analytics</h3>
-                <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mt-1">Income vs Projections</p>
-              </div>
-              <div className="flex gap-2">
-                 <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-50 rounded-lg">
-                    <div className="w-2 h-2 rounded-full bg-primary"></div>
-                    <span className="text-[10px] font-bold text-slate-500">Actual</span>
-                 </div>
-                 <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-50 rounded-lg">
-                    <div className="w-2 h-2 rounded-full bg-accent"></div>
-                    <span className="text-[10px] font-bold text-slate-500">Target</span>
-                 </div>
-              </div>
-           </div>
-           <div className="w-full h-72 bg-slate-50 rounded-[2rem] border border-dashed border-slate-200 flex items-center justify-center overflow-hidden relative group">
-              <div className="text-center z-10">
-                 <TrendingUp className="mx-auto text-primary/20 mb-4" size={64} />
-                 <p className="text-slate-400 font-bold uppercase tracking-tighter">Performance Graph</p>
-              </div>
-              <div className="absolute inset-0 opacity-5 flex items-end">
-                 {[40, 60, 45, 80, 50, 90, 70, 55, 65, 40, 50, 75, 85, 30, 40, 60, 70, 80, 50, 40].map((h, i) => (
-                    <div key={i} className="flex-1 bg-primary rounded-t-lg mx-1" style={{ height: `${h}%` }}></div>
-                 ))}
-              </div>
-           </div>
-        </div>
-
-        <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm flex flex-col">
-           <div className="flex justify-between items-center mb-10">
-              <h3 className="font-black text-[#1E293B] text-xl">System Health</h3>
-              <button className="text-slate-300 hover:text-primary"><MoreVertical size={20} /></button>
-           </div>
-           <div className="space-y-8 flex-1">
-              {[
-                { label: "Data Accuracy", value: 98, color: "bg-[#10B981]" },
-                { label: "Server Uptime", value: 99.9, color: "bg-[#3B82F6]" },
-                { label: "Pending Tasks", value: 12, color: "bg-[#F97316]" }
-              ].map((item, i) => (
-                <div key={i} className="space-y-3">
-                   <div className="flex justify-between items-end">
-                      <span className="text-xs font-black text-slate-500 uppercase tracking-widest">{item.label}</span>
-                      <span className="text-lg font-black text-[#1E293B]">{item.value}%</span>
-                   </div>
-                   <div className="w-full h-3 bg-slate-100 rounded-full overflow-hidden p-0.5 border border-slate-50">
-                      <div className={`h-full ${item.color} rounded-full transition-all duration-1000 shadow-sm`} style={{ width: `${item.value}%` }}></div>
-                   </div>
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-12">
+        <section className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm xl:col-span-8">
+          <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+            <div>
+              <h3 className="text-lg font-black text-[#1E293B]">Business Health</h3>
+              <p className="mt-1 text-xs font-semibold text-slate-500">One glance view of operational pressure.</p>
+            </div>
+            <span className="inline-flex w-fit rounded-full bg-emerald-50 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-emerald-600">
+              Overall stable
+            </span>
+          </div>
+          <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+            {companyHealth.map((item) => (
+              <div key={item.label} className="rounded-xl border border-slate-100 bg-slate-50 p-4">
+                <div className="mb-3 flex items-center justify-between">
+                  <span className="text-sm font-black text-[#1E293B]">{item.label}</span>
+                  <span className="text-xs font-bold text-slate-500">{item.status}</span>
                 </div>
-              ))}
-           </div>
-           <div className="mt-10 p-6 bg-[#F8FAFC] rounded-[2rem] border border-slate-100 text-center">
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">Total Efficiency</p>
-              <p className="text-4xl font-black text-primary mt-2">92.4<span className="text-xl">%</span></p>
-           </div>
-        </div>
+                <div className="h-2 overflow-hidden rounded-full bg-white">
+                  <div className={`h-full rounded-full ${item.color}`} style={{ width: `${item.value}%` }} />
+                </div>
+                <p className="mt-2 text-right text-xs font-black text-slate-500">{item.value}%</p>
+              </div>
+            ))}
+          </div>
+        </section>
 
-        <div className="lg:col-span-3 bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
-           <div className="flex justify-between items-center mb-8">
-              <h3 className="font-black text-[#1E293B] text-xl">Recent Activity</h3>
-              <button className="text-xs font-black text-primary uppercase hover:underline tracking-widest">View All Logs</button>
-           </div>
-           <div className="overflow-x-auto">
-              <table className="w-full text-left">
-                <thead>
-                  <tr className="border-b border-slate-50">
-                    <th className="pb-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">User</th>
-                    <th className="pb-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Action</th>
-                    <th className="pb-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Reference</th>
-                    <th className="pb-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Time</th>
-                    <th className="pb-4 text-right text-[10px] font-black text-slate-400 uppercase tracking-widest">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-50">
-                  {recentActivities.map((act) => (
-                    <tr key={act.id} className="group hover:bg-slate-50/50 transition-colors">
-                      <td className="py-5">
-                         <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-xs font-bold text-primary">
-                               {act.user.charAt(0)}
-                            </div>
-                            <span className="text-sm font-bold text-[#1E293B]">{act.user}</span>
-                         </div>
-                      </td>
-                      <td className="py-5 text-sm font-medium text-slate-600">{act.action}</td>
-                      <td className="py-5 text-sm font-black text-primary">{act.target}</td>
-                      <td className="py-5 text-xs font-bold text-slate-400">{act.time}</td>
-                      <td className="py-5 text-right">
-                         <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border ${
-                           act.status === "Completed" ? "bg-green-50 text-green-600 border-green-100" : "bg-orange-50 text-orange-600 border-orange-100"
-                         }`}>
-                           {act.status}
-                         </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-           </div>
-        </div>
+        <section className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm xl:col-span-4">
+          <div className="mb-5">
+            <h3 className="text-lg font-black text-[#1E293B]">Priority Alerts</h3>
+            <p className="mt-1 text-xs font-semibold text-slate-500">Needs attention before EOD.</p>
+          </div>
+          <div className="space-y-3">
+            {priorityAlerts.map((alert) => (
+              <div key={alert.title} className="flex gap-3 rounded-xl border border-slate-100 p-3">
+                <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${alert.tone}`}>
+                  <alert.icon size={18} />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-black text-[#1E293B]">{alert.title}</p>
+                  <p className="mt-0.5 text-xs font-semibold leading-5 text-slate-500">{alert.detail}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
       </div>
+
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-12">
+        <section className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm xl:col-span-5">
+          <div className="mb-5 flex items-center justify-between">
+            <div>
+              <h3 className="text-lg font-black text-[#1E293B]">Sales Pipeline</h3>
+              <p className="mt-1 text-xs font-semibold text-slate-500">Deal count and expected value by stage.</p>
+            </div>
+            <Target className="text-slate-300" size={22} />
+          </div>
+          <div className="space-y-4">
+            {pipeline.map((item) => (
+              <div key={item.stage}>
+                <div className="mb-2 flex items-end justify-between gap-4">
+                  <div>
+                    <p className="text-sm font-black text-[#1E293B]">{item.stage}</p>
+                    <p className="text-xs font-semibold text-slate-500">{item.count} records</p>
+                  </div>
+                  <p className="text-sm font-black text-primary">{item.value}</p>
+                </div>
+                <div className="h-2 rounded-full bg-slate-100">
+                  <div className={`h-full rounded-full ${item.color}`} style={{ width: `${Math.min(item.count * 2, 100)}%` }} />
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm xl:col-span-7">
+          <div className="mb-5 flex items-center justify-between">
+            <div>
+              <h3 className="text-lg font-black text-[#1E293B]">Department Watchlist</h3>
+              <p className="mt-1 text-xs font-semibold text-slate-500">Owners and operational pressure by team.</p>
+            </div>
+            <Briefcase className="text-slate-300" size={22} />
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[720px] text-left">
+              <thead>
+                <tr className="border-b border-slate-100">
+                  {["Team", "Owner", "Current Signal", "Status"].map((label) => (
+                    <th key={label} className="pb-3 text-[10px] font-black uppercase tracking-widest text-slate-400">{label}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {departmentStatus.map((row) => (
+                  <tr key={row.team}>
+                    <td className="py-4 text-sm font-black text-[#1E293B]">{row.team}</td>
+                    <td className="py-4 text-sm font-semibold text-slate-500">{row.owner}</td>
+                    <td className="py-4 text-sm font-semibold text-slate-600">{row.metric}</td>
+                    <td className="py-4">
+                      <span className={`inline-flex rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-widest ${row.tone}`}>
+                        {row.status}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+
+      <section className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm">
+        <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div>
+            <h3 className="text-lg font-black text-[#1E293B]">Live Activity Feed</h3>
+            <p className="mt-1 text-xs font-semibold text-slate-500">Recent movement across CRM, HRMS, Projects, and Accounting.</p>
+          </div>
+          <button className="text-xs font-black uppercase tracking-widest text-primary hover:underline">View all logs</button>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[860px] text-left">
+            <thead>
+              <tr className="border-b border-slate-100">
+                <th className="pb-4 text-[10px] font-black uppercase tracking-widest text-slate-400">User</th>
+                <th className="pb-4 text-[10px] font-black uppercase tracking-widest text-slate-400">Action</th>
+                <th className="pb-4 text-[10px] font-black uppercase tracking-widest text-slate-400">Reference</th>
+                <th className="pb-4 text-[10px] font-black uppercase tracking-widest text-slate-400">Time</th>
+                <th className="pb-4 text-right text-[10px] font-black uppercase tracking-widest text-slate-400">Status</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-50">
+              {recentActivities.map((act) => (
+                <tr key={act.id} className="transition-colors hover:bg-slate-50/50">
+                  <td className="py-4">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 text-xs font-black text-primary">
+                        {act.user.charAt(0)}
+                      </div>
+                      <span className="text-sm font-bold text-[#1E293B]">{act.user}</span>
+                    </div>
+                  </td>
+                  <td className="py-4 text-sm font-semibold text-slate-600">{act.action}</td>
+                  <td className="py-4 text-sm font-black text-primary">{act.target}</td>
+                  <td className="py-4 text-xs font-bold text-slate-400">{act.time}</td>
+                  <td className="py-4 text-right">
+                    <span className={`rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-widest ${
+                      act.status === "Done"
+                        ? "border-emerald-100 bg-emerald-50 text-emerald-600"
+                        : act.status === "Pending"
+                          ? "border-amber-100 bg-amber-50 text-amber-600"
+                          : "border-blue-100 bg-blue-50 text-blue-600"
+                    }`}>
+                      {act.status}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
     </div>
   );
 }
-
 export default function Dashboard() {
   const [activeTab, setActiveTab] = useState("overview");
   const [showNotif, setShowNotif] = useState(false);
@@ -212,27 +307,34 @@ export default function Dashboard() {
   const [showProfile, setShowProfile] = useState(false);
   const [showSignOut, setShowSignOut] = useState(false);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+    const [isSidebarVisible, setIsSidebarVisible] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('isSidebarVisible');
+      return saved !== null ? JSON.parse(saved) : true;
+    }
+    return true;
+  });
+  
   const headerRef = useRef<HTMLDivElement>(null);
   const navRef = useRef<HTMLElement>(null);
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const [sidebarScroll, setSidebarScroll] = useState({ top: 0, height: 64, visible: false });
+  useEffect(() => {
+    localStorage.setItem('isSidebarVisible', JSON.stringify(isSidebarVisible));
+  }, [isSidebarVisible]);
 
   const updateSidebarScroll = useCallback(() => {
     const nav = navRef.current;
     if (!nav) return;
-
     const { scrollTop, scrollHeight, clientHeight } = nav;
     const visible = scrollHeight > clientHeight + 1;
-
     if (!visible) {
       setSidebarScroll((current) => ({ ...current, visible: false }));
       return;
     }
-
     const thumbHeight = Math.max((clientHeight / scrollHeight) * clientHeight, 52);
     const maxTop = clientHeight - thumbHeight;
     const top = (scrollTop / (scrollHeight - clientHeight)) * maxTop;
-
     setSidebarScroll({ top, height: thumbHeight, visible: true });
   }, []);
 
@@ -240,7 +342,6 @@ export default function Dashboard() {
     (event: React.WheelEvent<HTMLDivElement>) => {
       const nav = navRef.current;
       if (!nav || nav.scrollHeight <= nav.clientHeight) return;
-
       event.preventDefault();
       nav.scrollTop += event.deltaY;
       updateSidebarScroll();
@@ -251,7 +352,6 @@ export default function Dashboard() {
   const handleAvatarChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file || !file.type.startsWith("image/")) return;
-
     const previewUrl = URL.createObjectURL(file);
     setAvatarPreview((current) => {
       if (current) URL.revokeObjectURL(current);
@@ -297,6 +397,7 @@ export default function Dashboard() {
         { id: "leads", label: "Leads", icon: Target },
         { id: "followups", label: "Follow-ups", icon: Clock },
         { id: "clients", label: "Clients & Contacts", icon: Users },
+        { id: "agreements", label: "Project Agreements", icon: ShieldCheck },
       ]
     },
     {
@@ -311,9 +412,11 @@ export default function Dashboard() {
       label: "Projects",
       items: [
         { id: "projects", label: "Projects", icon: Briefcase },
+        { id: "team-tracking", label: "Team Tracking", icon: Users },
         { id: "tasks", label: "Tasks", icon: SquareCheck },
         { id: "milestones", label: "Milestones", icon: Shield },
-        { id: "deadlines", label: "Deadlines", icon: Calendar }, { id: "performance", label: "Employee Performance", icon: TrendingUp },
+        { id: "deadlines", label: "Deadlines", icon: Calendar }, 
+        { id: "performance", label: "Employee Performance", icon: TrendingUp },
       ]
     },
     {
@@ -353,12 +456,13 @@ export default function Dashboard() {
   ];
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] flex">
+    <div className="min-h-screen bg-[#F8FAFC] flex relative">
+      {/* --- COLLAPSIBLE SIDEBAR --- */}
       <aside
         onWheel={handleSidebarWheel}
-        className="w-[19rem] bg-[#0F172A] text-white flex flex-col fixed inset-y-0 left-0 z-50 shadow-2xl"
+        className={`bg-[#0F172A] text-white flex flex-col fixed inset-y-0 left-0 z-50 shadow-2xl transition-all duration-500 ease-in-out ${isSidebarVisible ? "w-[19rem] translate-x-0" : "w-0 -translate-x-full overflow-hidden"}`}
       >
-        <div className="p-10 flex items-center gap-4">
+        <div className="p-10 flex items-center gap-4 whitespace-nowrap min-w-[19rem]">
           <div className="w-12 h-12 bg-accent rounded-[1.25rem] flex items-center justify-center text-[#0F172A] font-black text-2xl shadow-lg shadow-accent/20">C</div>
           <div>
             <div className="text-2xl font-black tracking-tighter leading-none">CRM<span className="text-accent">PRO</span></div>
@@ -366,7 +470,7 @@ export default function Dashboard() {
           </div>
         </div>
 
-        <div className="relative flex-1 min-h-0">
+        <div className="relative flex-1 min-h-0 min-w-[19rem]">
           <nav ref={navRef} onScroll={updateSidebarScroll} className="h-full px-6 space-y-10 overflow-y-auto custom-scrollbar pb-10">
             {menuGroups.map((group, idx) => (
               <div key={idx} className="space-y-4">
@@ -407,7 +511,7 @@ export default function Dashboard() {
           )}
         </div>
 
-        <div className="p-8 border-t border-white/5">
+        <div className="p-8 border-t border-white/5 min-w-[19rem]">
           <button
             onClick={() => setShowSignOut(true)}
             className="group w-full overflow-hidden rounded-2xl border border-red-400/10 bg-gradient-to-br from-red-500/10 via-white/[0.03] to-transparent p-1 text-left transition-all hover:border-red-400/25 hover:shadow-[0_0_28px_rgba(239,68,68,0.12)]"
@@ -419,38 +523,42 @@ export default function Dashboard() {
                 </span>
                 <span>
                   <span className="block text-xs font-black uppercase tracking-widest text-red-300">Sign Out</span>
-                  <span className="mt-0.5 block text-[10px] font-bold uppercase tracking-widest text-slate-500">Secure logout</span>
                 </span>
               </span>
-              <ChevronRight size={16} className="text-red-300/50 transition-all group-hover:translate-x-0.5 group-hover:text-red-300" />
             </div>
           </button>
         </div>
       </aside>
 
-      <div className="flex-1 ml-[19rem] flex flex-col">
-        <header className="h-24 bg-white/80 backdrop-blur-md border-b border-slate-100 flex items-center justify-between px-12 sticky top-0 z-40 shadow-sm">
-          <div className="relative w-[32rem]">
-            <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-300" size={20} />
-            <input 
-              type="text" 
-              placeholder="Search leads, employees or invoices..." 
-              className="w-full pl-14 pr-6 py-4 bg-slate-50/50 border border-slate-100 rounded-[1.5rem] text-sm font-medium outline-none focus:ring-4 focus:ring-accent/10 focus:bg-white transition-all" 
-            />
+      {/* --- MAIN CONTENT AREA --- */}
+      <div className={`min-w-0 flex-1 transition-all duration-500 ease-in-out ${isSidebarVisible ? "ml-[19rem]" : "ml-0"} flex flex-col`}>
+        <header className="h-24 w-full bg-white/80 backdrop-blur-md border-b border-slate-100 flex items-center justify-between gap-6 px-12 sticky top-0 z-40 shadow-sm">
+          <div className="flex items-center gap-6">
+            {/* TOGGLE BUTTON - PERMANENTLY VISIBLE */}
+            <button 
+              onClick={() => setIsSidebarVisible(!isSidebarVisible)}
+              className="p-3 bg-slate-50 text-slate-500 hover:text-primary hover:bg-slate-100 rounded-2xl transition-all shadow-sm flex items-center justify-center"
+              title={isSidebarVisible ? "Collapse Sidebar" : "Expand Sidebar"}
+            >
+              {isSidebarVisible ? <ChevronLeft size={24} /> : <Menu size={24} />}
+            </button>
+            
+            <div className="relative w-[32rem]">
+              <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-300" size={20} />
+              <input 
+                type="text" 
+                placeholder="Search leads, projects or accounting..." 
+                className="w-full pl-14 pr-6 py-4 bg-slate-50/50 border border-slate-100 rounded-[1.5rem] text-sm font-medium outline-none focus:ring-4 focus:ring-accent/10 focus:bg-white transition-all" 
+              />
+            </div>
           </div>
 
-          <div className="flex items-center gap-4" ref={headerRef}>
+          <div className="flex shrink-0 items-center gap-4" ref={headerRef}>
             <div className="relative">
                 <button onClick={() => setShowNotif(!showNotif)} className="relative p-3 bg-slate-50 text-slate-400 rounded-xl hover:text-primary transition-all hover:shadow-md">
                     <Bell size={22} />
                     <span className="absolute top-2.5 right-2.5 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white"></span>
                 </button>
-                {showNotif && (
-                    <div className="absolute top-16 right-0 w-80 bg-white rounded-2xl shadow-xl border border-border p-4 z-50">
-                        <h4 className="font-bold text-primary mb-3">Notifications</h4>
-                        <div className="text-xs text-secondary">No new notifications</div>
-                    </div>
-                )}
             </div>
 
             <button className="flex items-center gap-2 px-5 py-3 bg-slate-50 rounded-2xl text-xs font-black text-slate-600 hover:bg-slate-100 transition-all uppercase tracking-widest">
@@ -461,270 +569,47 @@ export default function Dashboard() {
                 <button onClick={() => setShowCreate(!showCreate)} className="flex items-center gap-2 px-5 py-3 bg-accent text-primary rounded-2xl text-xs font-black hover:shadow-lg transition-all uppercase tracking-widest">
                    <Plus size={16} /> Create New <ChevronDown size={14}/>
                 </button>
-                {showCreate && (
-                    <div className="absolute top-16 right-0 w-56 bg-white rounded-2xl shadow-xl border border-border p-2 z-50">
-                        {[
-                            { label: "New Lead", icon: Target, onClick: () => { setActiveTab('leads'); setShowCreate(false); } },
-                            { label: "New Invoice", icon: FileText, onClick: () => { setActiveTab('accounting'); setShowCreate(false); } },
-                            { label: "Onboard Emp", icon: UserPlus, onClick: () => { setActiveTab('onboarding'); setShowCreate(false); } }
-                        ].map(item => (
-                            <button 
-                                key={item.label} 
-                                onClick={item.onClick}
-                                className="w-full flex items-center gap-3 p-3 hover:bg-slate-50 rounded-xl text-sm font-bold text-primary"
-                            >
-                                <item.icon size={16} /> {item.label}
-                            </button>
-                        ))}
-                    </div>
-                )}
             </div>
 
             <div className="relative pl-6 border-l border-slate-100">
-              <input
-                ref={avatarInputRef}
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={handleAvatarChange}
-                aria-label="Upload profile photo"
-              />
               <button
                 onClick={() => setShowProfile(!showProfile)}
                 className={`flex items-center gap-4 rounded-[1.6rem] p-2 pl-4 transition-all ${
                   showProfile ? "bg-slate-50 shadow-sm" : "hover:bg-slate-50"
                 }`}
-                aria-label="Open profile menu"
               >
                 <div className="text-right">
                     <p className="text-sm font-black text-[#1E293B] leading-none">Rajkumar Rathore</p>
                     <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">Super Admin</p>
                 </div>
                 <div className="relative">
-                    <div className="group/avatar relative w-14 h-14 overflow-hidden rounded-[1.25rem] bg-gradient-to-br from-[#1D4ED8] via-primary to-[#0F172A] flex items-center justify-center text-white font-black text-xl shadow-xl shadow-blue-900/20 ring-1 ring-white/70">
-                      {avatarPreview ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={avatarPreview} alt="Rajkumar Rathore" className="h-full w-full object-cover" />
-                      ) : (
-                        "RR"
-                      )}
-                      <span className="absolute inset-0 flex items-center justify-center bg-slate-950/45 opacity-0 transition-all group-hover/avatar:opacity-100">
-                        <Camera size={18} className="text-white" />
-                      </span>
-                    </div>
-                    <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-white rounded-full flex items-center justify-center shadow-md ring-1 ring-emerald-100">
-                        <Shield size={12} className="text-emerald-500" />
+                    <div className="w-14 h-14 rounded-[1.25rem] bg-gradient-to-br from-[#1D4ED8] via-primary to-[#0F172A] flex items-center justify-center text-white font-black text-xl shadow-xl">
+                      RR
                     </div>
                 </div>
               </button>
-              {showProfile && (
-                  <div className="absolute top-[4.75rem] right-0 w-80 overflow-hidden rounded-[1.75rem] border border-slate-200/80 bg-white shadow-2xl shadow-slate-900/10 ring-1 ring-white z-50 animate-in fade-in zoom-in-95 duration-150">
-                     <div className="bg-gradient-to-br from-slate-50 to-white p-5 border-b border-slate-100">
-                        <div className="flex items-center gap-4">
-                           <div className="relative">
-                              <div className="w-14 h-14 overflow-hidden rounded-2xl bg-gradient-to-br from-[#1D4ED8] via-primary to-[#0F172A] flex items-center justify-center text-white font-black text-xl shadow-lg shadow-blue-900/20">
-                                {avatarPreview ? (
-                                  // eslint-disable-next-line @next/next/no-img-element
-                                  <img src={avatarPreview} alt="Rajkumar Rathore" className="h-full w-full object-cover" />
-                                ) : (
-                                  "RR"
-                                )}
-                              </div>
-                              <span className="absolute -bottom-1 -right-1 h-5 w-5 rounded-full border-[3px] border-white bg-emerald-500 shadow-sm" />
-                           </div>
-                           <div className="min-w-0">
-                              <p className="truncate text-sm font-black text-[#1E293B]">Rajkumar Rathore</p>
-                              <p className="mt-1 truncate text-xs font-bold text-slate-500">rajkumar@crmpro.in</p>
-                              <div className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-emerald-100 bg-emerald-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-widest text-emerald-700">
-                                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                                 Super Admin
-                              </div>
-                           </div>
-                        </div>
-                     </div>
-
-                     <div className="p-3">
-                        <button
-                          onClick={() => avatarInputRef.current?.click()}
-                          className="group mb-1 w-full flex items-center justify-between rounded-2xl border border-blue-100 bg-blue-50/50 p-3 text-left transition-all hover:border-blue-200 hover:bg-blue-50"
-                        >
-                          <span className="flex items-center gap-3">
-                            <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-blue-100 bg-white text-blue-600 shadow-sm group-hover:bg-blue-600 group-hover:text-white transition-all">
-                              <Camera size={17} />
-                            </span>
-                            <span>
-                              <span className="block text-sm font-black text-primary">Change Photo</span>
-                              <span className="block text-[11px] font-bold text-slate-400">Upload your profile image</span>
-                            </span>
-                          </span>
-                          <ChevronRight size={16} className="text-slate-300 group-hover:text-primary" />
-                        </button>
-
-                        <button
-                          onClick={() => {
-                            setActiveTab("users");
-                            setShowProfile(false);
-                          }}
-                          className="group w-full flex items-center justify-between rounded-2xl p-3 text-left transition-all hover:bg-slate-50"
-                        >
-                          <span className="flex items-center gap-3">
-                            <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-primary shadow-sm group-hover:border-primary/20 group-hover:bg-primary group-hover:text-white transition-all">
-                              <User size={17} />
-                            </span>
-                            <span>
-                              <span className="block text-sm font-black text-primary">Profile</span>
-                              <span className="block text-[11px] font-bold text-slate-400">Account and access details</span>
-                            </span>
-                          </span>
-                          <ChevronRight size={16} className="text-slate-300 group-hover:text-primary" />
-                        </button>
-
-                        <button
-                          onClick={() => {
-                            setActiveTab("settings");
-                            setShowProfile(false);
-                          }}
-                          className="group mt-1 w-full flex items-center justify-between rounded-2xl p-3 text-left transition-all hover:bg-slate-50"
-                        >
-                          <span className="flex items-center gap-3">
-                            <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-primary shadow-sm group-hover:border-primary/20 group-hover:bg-primary group-hover:text-white transition-all">
-                              <Settings size={17} />
-                            </span>
-                            <span>
-                              <span className="block text-sm font-black text-primary">Settings</span>
-                              <span className="block text-[11px] font-bold text-slate-400">Security and company controls</span>
-                            </span>
-                          </span>
-                          <ChevronRight size={16} className="text-slate-300 group-hover:text-primary" />
-                        </button>
-
-                        <div className="my-3 h-px bg-slate-100" />
-
-                        <button
-                          onClick={() => {
-                            setShowProfile(false);
-                            setShowSignOut(true);
-                          }}
-                          className="group w-full flex items-center justify-between rounded-2xl border border-red-100/70 bg-gradient-to-r from-red-50 to-white p-3 text-left transition-all hover:border-red-200 hover:shadow-lg hover:shadow-red-100/70"
-                        >
-                          <span className="flex items-center gap-3">
-                            <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-red-100 bg-red-50 text-red-500 shadow-sm group-hover:bg-red-500 group-hover:text-white transition-all">
-                              <LogOut size={17} />
-                            </span>
-                            <span>
-                              <span className="block text-sm font-black text-red-500">Sign Out</span>
-                              <span className="block text-[11px] font-bold text-red-300">End current session</span>
-                            </span>
-                          </span>
-                          <ChevronRight size={16} className="text-red-200 group-hover:text-red-500" />
-                        </button>
-                     </div>
-
-                     <div className="flex items-center justify-between border-t border-slate-100 bg-slate-50 px-5 py-3">
-                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Session secure</span>
-                        <span className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-emerald-600">
-                          <CheckCircle2 size={13} /> Verified
-                        </span>
-                     </div>
-                  </div>
-              )}
             </div>
           </div>
         </header>
 
-        {showSignOut && (
-          <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/35 px-6 backdrop-blur-sm animate-in fade-in duration-150">
-            <div className="w-full max-w-md overflow-hidden rounded-[2rem] border border-white/80 bg-white shadow-2xl shadow-slate-950/20 animate-in zoom-in-95 duration-150">
-              <div className="relative bg-gradient-to-br from-slate-50 via-white to-red-50 p-6">
-                <button
-                  onClick={() => setShowSignOut(false)}
-                  className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-400 shadow-sm transition-all hover:text-primary"
-                  aria-label="Close sign out dialog"
-                >
-                  <X size={16} />
-                </button>
-
-                <div className="flex items-start gap-4">
-                  <div className="relative">
-                    <div className="flex h-16 w-16 overflow-hidden items-center justify-center rounded-2xl bg-gradient-to-br from-[#1D4ED8] via-primary to-[#0F172A] text-xl font-black text-white shadow-xl shadow-blue-950/20">
-                      {avatarPreview ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={avatarPreview} alt="Rajkumar Rathore" className="h-full w-full object-cover" />
-                      ) : (
-                        "RR"
-                      )}
-                    </div>
-                    <span className="absolute -bottom-1 -right-1 flex h-6 w-6 items-center justify-center rounded-full border-[3px] border-white bg-emerald-500">
-                      <Shield size={12} className="text-white" />
-                    </span>
-                  </div>
-                  <div className="min-w-0 pr-8">
-                    <p className="text-xl font-black tracking-tight text-[#1E293B]">Sign out securely?</p>
-                    <p className="mt-1 text-sm font-semibold leading-6 text-slate-500">
-                      Your current CRM session will close on this device.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="mt-6 grid grid-cols-2 gap-3">
-                  <div className="rounded-2xl border border-slate-100 bg-white p-4">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">User</p>
-                    <p className="mt-1 truncate text-sm font-black text-primary">Rajkumar Rathore</p>
-                  </div>
-                  <div className="rounded-2xl border border-slate-100 bg-white p-4">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Role</p>
-                    <p className="mt-1 text-sm font-black text-primary">Super Admin</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-3 border-y border-slate-100 p-5">
-                {[
-                  ["Unsaved forms", "Draft data on this screen may be lost."],
-                  ["Active session", "Other browser sessions stay active unless revoked."],
-                  ["Security log", "This sign out action will be recorded in audit logs."],
-                ].map(([title, detail]) => (
-                  <div key={title} className="flex items-start gap-3 rounded-2xl bg-slate-50 p-3">
-                    <CheckCircle2 size={17} className="mt-0.5 shrink-0 text-emerald-500" />
-                    <div>
-                      <p className="text-sm font-black text-primary">{title}</p>
-                      <p className="mt-0.5 text-xs font-semibold text-slate-500">{detail}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              <div className="flex flex-col gap-3 bg-white p-5 sm:flex-row">
-                <button
-                  onClick={() => setShowSignOut(false)}
-                  className="h-12 flex-1 rounded-2xl border border-slate-200 bg-white px-5 text-xs font-black uppercase tracking-widest text-primary transition-all hover:bg-slate-50"
-                >
-                  Stay Logged In
-                </button>
-                <button className="h-12 flex-1 rounded-2xl border border-red-500 bg-red-500 px-5 text-xs font-black uppercase tracking-widest text-white shadow-lg shadow-red-500/20 transition-all hover:bg-red-600">
-                  Sign Out
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        <main className="p-12 flex-1">
-          <div className="max-w-[1400px] mx-auto">
+        <main className="w-full min-w-0 flex-1 p-12">
+          <div className="mx-auto w-full max-w-[1600px] min-w-0 transition-all duration-500">
             {activeTab === "overview" && <DashboardOverview />}
             {activeTab === "onboarding" && <OnboardingWizard />}
-            {activeTab === "employees" && <HRMSHub activeView="employees" />}
-            {activeTab === "attendance" && <HRMSHub activeView="attendance" />}
-            {activeTab === "leave" && <HRMSHub activeView="leave" />}
-            {activeTab === "payroll" && <HRMSHub activeView="payroll" />}
-            {activeTab === "exit" && <HRMSHub activeView="exit" />}
+            {activeTab === "employees" && <HRMSHub activeView="employees" onAddEmployee={() => setActiveTab("onboarding")} />}
+            {activeTab === "attendance" && <HRMSHub activeView="attendance" onAddEmployee={() => setActiveTab("onboarding")} />}
+            {activeTab === "leave" && <HRMSHub activeView="leave" onAddEmployee={() => setActiveTab("onboarding")} />}
+            {activeTab === "payroll" && <HRMSHub activeView="payroll" onAddEmployee={() => setActiveTab("onboarding")} />}
+            {activeTab === "exit" && <HRMSHub activeView="exit" onAddEmployee={() => setActiveTab("onboarding")} />}
             {activeTab === "leads" && <LeadWizard />}
             {activeTab === "followups" && <FollowUps />}
             {activeTab === "clients" && <ClientsContacts />}
+            {activeTab === "agreements" && <ProjectAgreement />}
             {activeTab === "campaigns" && <MarketingHub activeView="campaigns" />}
             {activeTab === "roi" && <MarketingHub activeView="roi" />}
             {activeTab === "sources" && <MarketingHub activeView="sources" />}
             {activeTab === "projects" && <ProjectHub activeView="projects" />}
+            {activeTab === "team-tracking" && <ProjectHub activeView="team-tracking" />}
             {activeTab === "tasks" && <ProjectHub activeView="tasks" />}
             {activeTab === "milestones" && <ProjectHub activeView="milestones" />}
             {activeTab === "deadlines" && <ProjectHub activeView="deadlines" />}
@@ -740,75 +625,7 @@ export default function Dashboard() {
             )}
             
             {activeTab === "support" && (
-               <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4">
-                  <div className="bg-primary p-12 rounded-[3rem] text-white flex flex-col md:flex-row justify-between items-center gap-8 overflow-hidden relative">
-                     <div className="relative z-10 max-w-lg text-center md:text-left">
-                        <h3 className="text-4xl font-black tracking-tight">How can we help?</h3>
-                        <p className="text-white/60 mt-4 text-lg">Search our knowledge base or raise a high-priority support ticket.</p>
-                        <div className="mt-8 relative">
-                           <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
-                           <input type="text" placeholder="Search for guides, articles..." className="w-full pl-14 pr-6 py-4 bg-white rounded-2xl text-slate-900 font-bold outline-none shadow-2xl shadow-primary/20" />
-                        </div>
-                     </div>
-                     <HelpCircle className="text-white/5 absolute -right-10 -bottom-10" size={300} />
-                     <div className="relative z-10 grid grid-cols-2 gap-4">
-                        <div className="p-6 bg-white/10 rounded-3xl border border-white/10 text-center group hover:bg-accent transition-all cursor-pointer">
-                           <div className="w-12 h-12 bg-accent rounded-2xl flex items-center justify-center text-primary mx-auto mb-4 group-hover:bg-primary group-hover:text-white transition-all"><MessageSquare size={24} /></div>
-                           <p className="font-bold group-hover:text-primary">Live Chat</p>
-                        </div>
-                        <div className="p-6 bg-white/10 rounded-3xl border border-white/10 text-center group hover:bg-accent transition-all cursor-pointer">
-                           <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-primary mx-auto mb-4 group-hover:bg-primary group-hover:text-white transition-all"><HelpCircle size={24} /></div>
-                           <p className="font-bold group-hover:text-primary">Raising Ticket</p>
-                        </div>
-                     </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                     <div className="lg:col-span-2 space-y-6">
-                        <h4 className="text-xl font-black text-primary uppercase tracking-widest px-4">Popular Articles</h4>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                           {[
-                             "How to generate your first invoice?",
-                             "Managing multi-level approvals",
-                             "GST filing guide for IT companies",
-                             "Adding team members & permissions"
-                           ].map((item, i) => (
-                              <div key={i} className="p-6 bg-white border border-slate-100 rounded-[2rem] hover:shadow-xl transition-all cursor-pointer group">
-                                 <div className="flex justify-between items-start">
-                                    <p className="font-bold text-primary max-w-[80%]">{item}</p>
-                                    <ChevronRight size={18} className="text-slate-300 group-hover:text-accent group-hover:translate-x-1 transition-all" />
-                                 </div>
-                              </div>
-                           ))}
-                        </div>
-                     </div>
-                     <div className="bg-[#1E293B] p-8 rounded-[2.5rem] text-white">
-                        <h4 className="font-black text-xl mb-6">Support Status</h4>
-                        <div className="space-y-6">
-                           <div className="flex items-center gap-4">
-                              <div className="w-3 h-3 rounded-full bg-green-500 shadow-lg shadow-green-500/50"></div>
-                              <div>
-                                 <p className="text-sm font-bold">System Status</p>
-                                 <p className="text-[10px] text-slate-400 font-bold uppercase">All systems operational</p>
-                              </div>
-                           </div>
-                           <div className="p-4 bg-white/5 rounded-2xl border border-white/5">
-                              <p className="text-xs font-bold text-slate-400">Response Time</p>
-                              <p className="text-2xl font-black text-accent mt-1">~15 Mins</p>
-                           </div>
-                           <Button className="w-full bg-accent text-primary h-12 font-black">Contact Support</Button>
-                        </div>
-                     </div>
-                  </div>
-               </div>
-            )}
-            
-            {activeTab === "team" && (
-               <div className="bg-white p-20 rounded-[3rem] text-center border border-slate-100 shadow-sm animate-in zoom-in-95">
-                  <Shield size={64} className="mx-auto text-primary mb-6 opacity-20" />
-                  <h3 className="text-2xl font-black text-primary uppercase tracking-widest">Admin Control Restricted</h3>
-                  <p className="text-slate-400 mt-2">You are viewing this in prototype mode.</p>
-               </div>
+               <div className="p-20 text-center font-bold text-slate-300 italic">Support module syncing...</div>
             )}
           </div>
         </main>
@@ -816,5 +633,3 @@ export default function Dashboard() {
     </div>
   );
 }
-
-

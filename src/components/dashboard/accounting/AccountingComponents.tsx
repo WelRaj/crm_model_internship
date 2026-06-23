@@ -26,18 +26,18 @@ const iconToneStyles: Record<Tone, string> = {
 };
 
 export function AccountingPage({
-  title, description, icon: Icon, badge, actions, children,
+  title, description, icon : Icon, badge, actions, children,
 }: {
   title: string; description: string; icon: LucideIcon; badge?: string; actions?: ReactNode; children: ReactNode;
 }) {
   return (
-    <div className="space-y-8 animate-in fade-in duration-500">
-      <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
-        <div className="flex items-start gap-4">
+    <div className="w-full min-w-0 space-y-8 animate-in fade-in duration-500">
+      <div className="flex min-w-0 flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
+        <div className="flex min-w-0 items-start gap-4">
           <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-primary text-white shadow-lg">
             <Icon size={26} />
           </div>
-          <div>
+          <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-3">
               <h2 className="text-3xl font-black tracking-tight text-[#1E293B]">{title}</h2>
               {badge ? <StatusBadge tone="blue">{badge}</StatusBadge> : null}
@@ -45,7 +45,7 @@ export function AccountingPage({
             <p className="mt-1 max-w-3xl text-sm font-medium leading-6 text-slate-500">{description}</p>
           </div>
         </div>
-        {actions ? <div className="flex flex-wrap gap-3">{actions}</div> : null}
+        {actions ? <div className="flex shrink-0 flex-wrap justify-start gap-3 xl:justify-end">{actions}</div> : null}
       </div>
       {children}
     </div>
@@ -105,15 +105,18 @@ export function MetricCard({
 }
 
 export function Panel({
-  title, description, children, actions,
+  title, description, children, actions, icon : ICON,
 }: {
-  title: string; description?: string; children: ReactNode; actions?: ReactNode;
+  title: string; description?: string; children: ReactNode; actions?: ReactNode; icon?:LucideIcon;
 }) {
   return (
-    <section className="rounded-2xl border border-border bg-white p-6 shadow-sm">
+    <section className="min-w-0 overflow-hidden rounded-2xl border border-border bg-white p-6 shadow-sm">
       <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
         <div>
-          <h3 className="text-lg font-black text-primary">{title}</h3>
+         <div className="flex items-center gap-2">
+          {ICON && <ICON size={18}/>}
+          <h3 className="text-lg font-black text primary">{title}</h3>
+         </div>
           {description ? <p className="mt-1 text-xs font-semibold leading-5 text-slate-500">{description}</p> : null}
         </div>
         {actions ? <div className="flex flex-wrap gap-2">{actions}</div> : null}
@@ -136,8 +139,6 @@ export function Field({
 }: {
   label: string; placeholder?: string; required?: boolean; type?: string; options?: string[]; multiline?: boolean; error?: string; register?: any; onChange?: (e: any) => void; defaultValue?: any; [key: string]: any;
 }) {
-  const listId = `list-${label.replace(/\s+/g, '-').toLowerCase()}`;
-
   return (
     <label className="block space-y-1.5">
       <span className="text-xs font-black uppercase tracking-widest text-slate-500">
@@ -156,28 +157,33 @@ export function Field({
             error ? "border-red-500 focus:border-red-500 focus:ring-red-500/10" : "border-border focus:border-primary"
           }`}
         />
+      ) : options ? (
+        <select
+          {...register}
+          defaultValue={defaultValue}
+          onChange={onChange || register?.onChange}
+          {...rest}
+          className={`h-11 w-full rounded-xl border border-border bg-white px-3 text-sm font-semibold text-primary outline-none transition-all focus:ring-4 focus:ring-primary/10 focus:border-primary ${
+            error ? "border-red-500" : ""
+          }`}
+        >
+          <option value="">Select {label}...</option>
+          {options.map((option: string) => (
+            <option key={option} value={option}>{option}</option>
+          ))}
+        </select>
       ) : (
-        <div className="relative">
-          <input
-            type={type}
-            {...register}
-            defaultValue={defaultValue}
-            onChange={onChange || register?.onChange}
-            list={options ? listId : undefined}
-            placeholder={placeholder || (options ? `Select or type ${label}...` : "")}
-            {...rest}
-            className={`h-11 w-full rounded-xl border bg-white px-3 text-sm font-semibold text-primary outline-none transition-all placeholder:text-slate-300 focus:ring-4 focus:ring-primary/10 ${      
-              error ? "border-red-500 focus:border-red-500 focus:ring-red-500/10" : "border-border focus:border-primary"
-            }`}
-          />
-          {options && (
-            <datalist id={listId}>
-              {options.map((option: string) => (
-                <option key={option} value={option} />
-              ))}
-            </datalist>
-          )}
-        </div>
+        <input
+          type={type}
+          {...register}
+          defaultValue={defaultValue}
+          onChange={onChange || register?.onChange}
+          placeholder={placeholder}
+          {...rest}
+          className={`h-11 w-full rounded-xl border bg-white px-3 text-sm font-semibold text-primary outline-none transition-all placeholder:text-slate-300 focus:ring-4 focus:ring-primary/10 ${      
+            error ? "border-red-500 focus:border-red-500 focus:ring-red-500/10" : "border-border focus:border-primary"
+          }`}
+        />
       )}
       {error && <p className="text-[10px] font-black uppercase tracking-widest text-red-500">{error}</p>}
     </label>

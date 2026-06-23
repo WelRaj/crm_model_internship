@@ -30,7 +30,7 @@ import {
   User,
   UserCheck,
   UserMinus,
-  Users,
+  Users, X, Zap,
 } from "lucide-react";
 import React, { useState, useEffect, type ComponentType, type ReactNode } from "react";  import { Field, Panel } from "../accounting/AccountingComponents";
 
@@ -75,11 +75,19 @@ const payrollRows = [
   { name: "Meera Singh", ctc: "INR 3.6L", gross: "INR 30,000", deductions: "INR 1,800", net: "INR 28,200", status: "Ready" },
 ];
 
+const initialExitCases = [
+  { id: "EX-001", name: "Karan Patel", role: "Backend Developer", lastDay: "28 Jun 2026", reason: "Higher studies", notice: "Serving", handover: 65, risk: "Medium", assets: { laptop: true, idCard: false, email: false }, ffStatus: "In Progress" },
+  { id: "EX-002", name: "Divya Rao", role: "HR Executive", lastDay: "15 Jun 2026", reason: "Relocation", notice: "Final Week", handover: 86, risk: "Low", assets: { laptop: true, idCard: true, email: true }, ffStatus: "Cleared" },
+  { id: "EX-003", name: "Nitin Verma", role: "Support Engineer", lastDay: "20 Jun 2026", reason: "Career move", notice: "Serving", handover: 42, risk: "High", assets: { laptop: false, idCard: false, email: false }, ffStatus: "Pending" },
+];
+// Old static array removed
+/*
 const exitCases = [
   { name: "Karan Patel", role: "Backend Developer", lastDay: "28 Jun 2026", reason: "Higher studies", notice: "Serving", handover: 65, risk: "Medium" },
   { name: "Divya Rao", role: "HR Executive", lastDay: "15 Jun 2026", reason: "Relocation", notice: "Final Week", handover: 86, risk: "Low" },
   { name: "Nitin Verma", role: "Support Engineer", lastDay: "20 Jun 2026", reason: "Career move", notice: "Serving", handover: 42, risk: "High" },
 ];
+*/
 
 function Badge({ children, tone = "slate" }: { children: ReactNode; tone?: Tone }) {
   return (
@@ -178,8 +186,20 @@ function ActionButton({
   );
 }
 
-function EmployeeProfile({ employee, initialTab = 'overview', onBack }: { employee: any, initialTab?: 'overview' | 'leave', onBack: () => void }) {
+
+
+function EmployeeProfile({ employee, initialTab = 'overview', onBack }: { employee: any, initialTab?: string, onBack: () => void }) {
   const [activeTab, setActiveTab] = useState(initialTab);
+
+  const tabs = [
+    { id: 'overview', label: 'Overview' },
+    { id: 'registration', label: 'Registration' },
+    { id: 'employment', label: 'Employment' },
+    { id: 'documents', label: 'Documents' },
+    { id: 'verification', label: 'Verification' },
+    { id: 'training', label: 'Training' },
+    { id: 'leave', label: 'Leave & Attendance' },
+  ];
 
   return (
     <div className="space-y-6 animate-in slide-in-from-right-4 duration-500">
@@ -189,11 +209,12 @@ function EmployeeProfile({ employee, initialTab = 'overview', onBack }: { employ
         </button>
         <div>
           <h3 className="text-xl font-black text-primary">Employee Profile</h3>
-          <p className="text-xs font-bold text-slate-500">Detailed view of {employee.name}</p>
+          <p className="text-xs font-bold text-slate-500">Master Record - {employee.name}</p>
         </div>
       </div>
 
       <div className="rounded-2xl border border-border bg-white p-6 shadow-sm">
+        {/* Header Profile Info */}
         <div className="flex flex-col gap-6 md:flex-row md:items-center">
           <div className="flex h-24 w-24 items-center justify-center rounded-3xl bg-primary text-2xl font-black text-white shadow-xl">
             {employee.name.split(" ").map((n: string) => n[0]).join("")}
@@ -203,7 +224,7 @@ function EmployeeProfile({ employee, initialTab = 'overview', onBack }: { employ
               <h2 className="text-2xl font-black text-primary">{employee.name}</h2>
               <Badge tone={statusTone(employee.status)}>{employee.status}</Badge>
             </div>
-            <p className="mt-1 text-sm font-bold text-slate-500">{employee.role} â€¢ {employee.id}</p>
+            <p className="mt-1 text-sm font-bold text-slate-500">{employee.role} • {employee.id}</p>
             <div className="mt-4 flex flex-wrap gap-4">
               <div className="flex items-center gap-2 text-xs font-bold text-slate-600">
                 <Mail size={14} className="text-slate-400" /> {employee.email}
@@ -227,67 +248,235 @@ function EmployeeProfile({ employee, initialTab = 'overview', onBack }: { employ
           </div>
         </div>
 
-        <div className="mt-8 flex gap-6 border-b border-slate-100">
-          <button 
-            onClick={() => setActiveTab('overview')}
-            className={`pb-4 text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'overview' ? 'border-b-2 border-primary text-primary' : 'text-slate-400 hover:text-slate-600'}`}
-          >
-            Overview
-          </button>
-          <button 
-            onClick={() => setActiveTab('leave')}
-            className={`pb-4 text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'leave' ? 'border-b-2 border-primary text-primary' : 'text-slate-400 hover:text-slate-600'}`}
-          >
-            Leave & Attendance
-          </button>
+        {/* Tab Navigation */}
+        <div className="mt-8 flex gap-6 border-b border-slate-100 overflow-x-auto no-scrollbar">
+          {tabs.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`pb-4 text-[10px] font-black uppercase tracking-widest whitespace-nowrap transition-all ${activeTab === tab.id ? 'border-b-2 border-primary text-primary' : 'text-slate-400 hover:text-slate-600'}`}
+            >
+              {tab.label}
+            </button>
+          ))}
         </div>
 
+        {/* Tab Content */}
         <div className="mt-8">
-          {activeTab === 'overview' ? (
+          {activeTab === 'overview' && (
             <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
-              <div className="space-y-6">
-                <div className="flex items-center gap-3">
-                  <User className="text-primary" size={18} />
-                  <h4 className="text-sm font-black uppercase tracking-wider text-primary">Personal Details</h4>
-                </div>
-                <div className="grid grid-cols-1 gap-4 rounded-2xl bg-slate-50 p-5">
-                  {[
-                    ['Full Name', employee.name],
-                    ['Email Address', employee.email],
-                    ['Mobile Number', employee.mobile],
-                    ['Work Location', employee.location],
-                    ['Joined Date', employee.joined],
-                  ].map(([label, val]) => (
-                    <div key={label} className="flex justify-between border-b border-slate-200/50 pb-3 last:border-0 last:pb-0">
-                      <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">{label}</span>
-                      <span className="text-sm font-bold text-slate-700">{val}</span>
+              <Panel title="Quick Summary" icon={Zap}>
+                 <div className="space-y-4">
+                    <div className="p-4 bg-emerald-50 border border-emerald-100 rounded-xl">
+                       <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-1">Current Status</p>
+                       <p className="text-sm font-bold text-emerald-900">Employee has completed onboarding and is currently active in the {employee.team} team.</p>
                     </div>
-                  ))}
-                </div>
-              </div>
+                    <div className="grid grid-cols-2 gap-4">
+                       <div className="p-4 bg-slate-50 rounded-xl">
+                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Efficiency</p>
+                          <p className="text-lg font-black text-primary">94%</p>
+                       </div>
+                       <div className="p-4 bg-slate-50 rounded-xl">
+                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Attendance</p>
+                          <p className="text-lg font-black text-primary">98.2%</p>
+                       </div>
+                    </div>
+                 </div>
+              </Panel>
+              <Panel title="Professional Map" icon={Briefcase}>
+                 <div className="space-y-4">
+                    <div className="flex items-center gap-4">
+                       <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600">
+                          <Users size={20} />
+                       </div>
+                       <div>
+                          <p className="text-xs font-black text-primary">Manager: {employee.manager}</p>
+                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Reporting Line</p>
+                       </div>
+                    </div>
+                    <div className="flex items-center gap-4">
+                       <div className="h-10 w-10 rounded-full bg-purple-100 flex items-center justify-center text-purple-600">
+                          <Building2 size={20} />
+                       </div>
+                       <div>
+                          <p className="text-xs font-black text-primary">{employee.team} Department</p>
+                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Team Allocation</p>
+                       </div>
+                    </div>
+                 </div>
+              </Panel>
+            </div>
+          )}
 
-              <div className="space-y-6">
-                <div className="flex items-center gap-3">
-                  <Briefcase className="text-primary" size={18} />
-                  <h4 className="text-sm font-black uppercase tracking-wider text-primary">Employment Details</h4>
-                </div>
-                <div className="grid grid-cols-1 gap-4 rounded-2xl bg-slate-50 p-5">
-                  {[
-                    ['Department / Team', employee.team],
-                    ['Reporting Manager', employee.manager],
-                    ['Employment Type', employee.type],
-                    ['Designation', employee.role],
-                    ['Employee ID', employee.id],
-                  ].map(([label, val]) => (
-                    <div key={label} className="flex justify-between border-b border-slate-200/50 pb-3 last:border-0 last:pb-0">
-                      <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">{label}</span>
-                      <span className="text-sm font-bold text-slate-700">{val}</span>
-                    </div>
-                  ))}
-                </div>
+          {activeTab === 'registration' && (
+            <div className="space-y-6 animate-in fade-in duration-300">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <Panel title="Identity Information" description="Basic details from Step 1 Registration">
+                  <div className="grid grid-cols-1 gap-4">
+                    {[
+                      ['Full Name', employee.name],
+                      ['Date of Birth', '15 May 1995'],
+                      ['Gender', 'Male'],
+                      ['Blood Group', 'O+'],
+                      ['Nationality', 'Indian'],
+                      ['Marital Status', 'Single'],
+                    ].map(([label, val]) => (
+                      <div key={label} className="flex justify-between border-b border-slate-100 pb-3 last:border-0">
+                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">{label}</span>
+                        <span className="text-sm font-bold text-slate-700">{val}</span>
+                      </div>
+                    ))}
+                  </div>
+                </Panel>
+                <Panel title="Contact Channels" description="Personal and emergency reachable points">
+                  <div className="grid grid-cols-1 gap-4">
+                    {[
+                      ['Personal Email', employee.email],
+                      ['Mobile Number', employee.mobile],
+                      ['Alternate Mobile', '+91 98765 00000'],
+                      ['Emergency Contact', 'Vikram (Father)'],
+                      ['Emergency Phone', '+91 90000 11111'],
+                      ['Permanent Address', '123, Tech Park, Jaipur, Rajasthan'],
+                    ].map(([label, val]) => (
+                      <div key={label} className="flex justify-between border-b border-slate-100 pb-3 last:border-0">
+                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">{label}</span>
+                        <span className="text-sm font-bold text-slate-700 text-right">{val}</span>
+                      </div>
+                    ))}
+                  </div>
+                </Panel>
               </div>
             </div>
-          ) : (
+          )}
+
+          {activeTab === 'employment' && (
+            <div className="space-y-6 animate-in fade-in duration-300">
+               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <Panel title="Contractual Terms" description="Employment specifics from Step 2">
+                  <div className="grid grid-cols-1 gap-4">
+                    {[
+                      ['Employee ID', employee.id],
+                      ['Designation', employee.role],
+                      ['Department', employee.team],
+                      ['Employment Type', employee.type],
+                      ['Probation Period', '6 Months'],
+                      ['Notice Period', '90 Days'],
+                    ].map(([label, val]) => (
+                      <div key={label} className="flex justify-between border-b border-slate-100 pb-3 last:border-0">
+                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">{label}</span>
+                        <span className="text-sm font-bold text-slate-700">{val}</span>
+                      </div>
+                    ))}
+                  </div>
+                </Panel>
+                <Panel title="Operational Setup" description="Workplace and schedule details">
+                  <div className="grid grid-cols-1 gap-4">
+                    {[
+                      ['Work Location', employee.location],
+                      ['Work Shift', 'General (10:00 - 19:00)'],
+                      ['System Assets', 'MacBook Pro - Serial: IT-882'],
+                      ['Official Email', `corp.${employee.email.split('@')[0]}@company.com`],
+                      ['Reporting Manager', employee.manager],
+                      ['Joined Date', employee.joined],
+                    ].map(([label, val]) => (
+                      <div key={label} className="flex justify-between border-b border-slate-100 pb-3 last:border-0">
+                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">{label}</span>
+                        <span className="text-sm font-bold text-slate-700">{val}</span>
+                      </div>
+                    ))}
+                  </div>
+                </Panel>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'documents' && (
+            <div className="space-y-6 animate-in fade-in duration-300">
+              <Panel title="Document Vault" description="Digital copies uploaded during Step 3 Onboarding">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {[
+                    'Aadhaar Card', 'PAN Card', '10th Marksheet', '12th Marksheet',
+                    'Degree Certificate', 'Offer Letter (Prev)', 'Relieving Letter', 'Bank Passbook'
+                  ].map((doc) => (
+                    <div key={doc} className="flex items-center justify-between p-4 rounded-xl border border-slate-100 bg-slate-50/50 hover:bg-white transition-all cursor-pointer group">
+                       <div className="flex items-center gap-3">
+                          <FileCheck2 className="text-slate-400 group-hover:text-primary" size={20} />
+                          <span className="text-xs font-bold text-slate-600">{doc}</span>
+                       </div>
+                       <Download size={14} className="text-slate-400 opacity-0 group-hover:opacity-100" />
+                    </div>
+                  ))}
+                </div>
+              </Panel>
+            </div>
+          )}
+
+          {activeTab === 'verification' && (
+            <div className="space-y-6 animate-in fade-in duration-300">
+               <Panel title="KYC & Compliance Status" description="Verification summary from Step 4">
+                  <div className="space-y-4">
+                    {[
+                      { name: 'Identity (Aadhaar/PAN)', status: 'Verified', by: 'Admin HR', date: '14 Jan 2026' },
+                      { name: 'Educational Background', status: 'Verified', by: 'Background Check Agency', date: '18 Jan 2026' },
+                      { name: 'Previous Employment', status: 'Verified', by: 'Admin HR', date: '15 Jan 2026' },
+                      { name: 'Address Verification', status: 'Under Review', by: 'System Auto-Check', date: 'Ongoing' },
+                      { name: 'Criminal Records', status: 'Verified', by: 'Third Party Agency', date: '20 Jan 2026' },
+                    ].map((v) => (
+                      <div key={v.name} className="flex items-center justify-between p-4 rounded-2xl bg-white border border-slate-100 shadow-sm">
+                         <div className="flex items-center gap-4">
+                            <div className={`h-10 w-10 rounded-xl flex items-center justify-center ${v.status === 'Verified' ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'}`}>
+                               <ShieldCheck size={20} />
+                            </div>
+                            <div>
+                               <p className="text-sm font-black text-primary">{v.name}</p>
+                               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">By: {v.by} • {v.date}</p>
+                            </div>
+                         </div>
+                         <Badge tone={v.status === 'Verified' ? 'green' : 'amber'}>{v.status}</Badge>
+                      </div>
+                    ))}
+                  </div>
+               </Panel>
+            </div>
+          )}
+
+          {activeTab === 'training' && (
+            <div className="space-y-6 animate-in fade-in duration-300">
+               <div className="rounded-[2.5rem] bg-slate-900 p-8 text-white relative overflow-hidden shadow-2xl">
+                  <Zap className="absolute -right-12 -bottom-12 text-white/5" size={240} />
+                  <div className="relative z-10">
+                     <div className="flex justify-between items-end mb-8">
+                        <div>
+                           <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Onboarding Step 5</p>
+                           <h3 className="text-2xl font-black mt-1">Training & Induction Progress</h3>
+                        </div>
+                        <div className="text-right">
+                           <p className="text-3xl font-black text-accent">85%</p>
+                           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Course Completion</p>
+                        </div>
+                     </div>
+
+                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {[
+                          { label: 'Company History & Vision', done: true },
+                          { label: 'Security & Data Privacy', done: true },
+                          { label: 'Product Architecture', done: true },
+                          { label: 'Client Communication', done: true },
+                          { label: 'System Access & VPN', done: true },
+                          { label: 'Project Specific Induction', done: false },
+                        ].map((t) => (
+                          <div key={t.label} className={`flex items-center gap-3 p-4 rounded-2xl border ${t.done ? 'bg-white/5 border-white/10' : 'bg-transparent border-white/5 opacity-40'}`}>
+                             <CheckCircle2 size={18} className={t.done ? 'text-accent' : 'text-white/20'} />
+                             <span className="text-xs font-bold">{t.label}</span>
+                          </div>
+                        ))}
+                     </div>
+                  </div>
+               </div>
+            </div>
+          )}
+
+          {activeTab === 'leave' && (
             <div className="space-y-8">
               <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
                 <MetricCard label="Earned Leave" value="18" helper="8 days used" icon={Calendar} tone="blue" />
@@ -323,90 +512,11 @@ function EmployeeProfile({ employee, initialTab = 'overview', onBack }: { employ
   );
 }
 
-function EditEmployee({ employee, onBack }: { employee: any, onBack: () => void }) {
-  const [formData, setFormData] = useState({
-    role: employee.role,
-    team: employee.team,
-    mobile: employee.mobile,
-  });
-
-  return (
-    <div className="space-y-6 animate-in slide-in-from-right-4 duration-500">
-      <div className="flex items-center gap-4">
-        <button onClick={onBack} className="flex h-10 w-10 items-center justify-center rounded-xl border border-border bg-white text-slate-500 hover:bg-slate-50 shadow-sm transition-all">
-          <ArrowLeft size={18} />
-        </button>
-        <div>
-          <h3 className="text-xl font-black text-primary">Edit Employee</h3>
-          <p className="text-xs font-bold text-slate-500">Update information for {employee.name}</p>
-        </div>
-      </div>
-
-      <div className="max-w-2xl rounded-2xl border border-border bg-white p-8 shadow-sm">
-        <div className="space-y-6">
-          <div className="grid grid-cols-1 gap-6">
-            <div className="space-y-2">
-              <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Designation / Role</label>
-              <div className="relative">
-                <BriefcaseBusiness className="absolute left-4 top-3.5 text-slate-400" size={18} />
-                <input 
-                  type="text" 
-                  value={formData.role}
-                  onChange={(e) => setFormData({...formData, role: e.target.value})}
-                  className="w-full rounded-xl border border-border bg-slate-50 py-3 pl-12 pr-4 text-sm font-bold text-primary focus:border-primary focus:outline-none transition-all"
-                  placeholder="e.g. Senior Developer"
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Department / Team</label>
-              <div className="relative">
-                <Building2 className="absolute left-4 top-3.5 text-slate-400" size={18} />
-                <input 
-                  type="text" 
-                  value={formData.team}
-                  onChange={(e) => setFormData({...formData, team: e.target.value})}
-                  className="w-full rounded-xl border border-border bg-slate-50 py-3 pl-12 pr-4 text-sm font-bold text-primary focus:border-primary focus:outline-none transition-all"
-                  placeholder="e.g. Product Engineering"
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Mobile Number</label>
-              <div className="relative">
-                <Phone className="absolute left-4 top-3.5 text-slate-400" size={18} />
-                <input 
-                  type="text" 
-                  value={formData.mobile}
-                  onChange={(e) => setFormData({...formData, mobile: e.target.value})}
-                  className="w-full rounded-xl border border-border bg-slate-50 py-3 pl-12 pr-4 text-sm font-bold text-primary focus:border-primary focus:outline-none transition-all"
-                  placeholder="+91 00000 00000"
-                />
-              </div>
-            </div>
-          </div>
-
-          <div className="pt-4 flex gap-3">
-            <button onClick={onBack} className="flex-1 rounded-xl border border-border bg-white py-4 text-xs font-black uppercase tracking-widest text-slate-500 hover:bg-slate-50 transition-all">
-              Cancel
-            </button>
-            <button onClick={onBack} className="flex-1 rounded-xl bg-primary py-4 text-xs font-black uppercase tracking-widest text-white shadow-lg shadow-primary/20 hover:bg-primary/90 transition-all">
-              Save Changes
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function EmployeesView() {
+function EmployeesView({ setExits }: { setExits: any }) {
   const [employeeList, setEmployeeList] = useState(employees);
   const [view, setView] = useState<'list' | 'profile' | 'edit'>('list');
   const [selectedEmp, setSelectedEmp] = useState<any>(null);
-  const [profileTab, setProfileTab] = useState<'overview' | 'leave'>('overview');
+  const [profileTab, setProfileTab] = useState<string>('overview');
   const [quitDialogOpen, setQuitDialogOpen] = useState(false);
   const [empToQuit, setEmpToQuit] = useState<any>(null);
 
@@ -446,7 +556,7 @@ function EmployeesView() {
               <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                 <div className="flex gap-4">
                   <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary text-sm font-black text-white group-hover:scale-110 transition-transform">
-                    {employee.name.split(" ").map((part) => part[0]).join("")}
+                    {employee.name.split(" ").map((part: string) => part[0]).join("")}
                   </div>
                   <div>
                     <p className="text-lg font-black text-primary">{employee.name}</p>
@@ -456,17 +566,17 @@ function EmployeesView() {
                 <div className="flex flex-col items-end gap-2">
                    <Badge tone={statusTone(employee.status)}>{employee.status}</Badge>
                    <div className="flex gap-1">
-                      <button 
+                      <button
                         onClick={() => { setSelectedEmp(employee); setProfileTab('overview'); setView('profile'); }}
                         className="p-2 text-slate-400 hover:text-primary hover:bg-slate-100 rounded-lg transition-all" title="View Profile">
                         <Eye size={16} />
                       </button>
-                      <button 
+                      <button
                         onClick={() => { setSelectedEmp(employee); setView('edit'); }}
                         className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all" title="Edit Employee">
                         <Edit2 size={16} />
                       </button>
-                      <button 
+                      <button
                         onClick={() => { setSelectedEmp(employee); setProfileTab('leave'); setView('profile'); }}
                         className="p-2 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all" title="Leave & Attendance">
                         <CalendarDays size={16} />
@@ -517,17 +627,31 @@ function EmployeesView() {
             </div>
             <h3 className="text-2xl font-black text-primary">Offboard Employee?</h3>
             <p className="mt-2 text-slate-500 font-medium">Are you sure you want to offboard <span className="font-bold text-primary">{empToQuit.name}</span>? This will update their status to Exited.</p>
-            
+
             <div className="mt-8 flex gap-3">
-              <button 
+              <button
                 onClick={() => { setQuitDialogOpen(false); setEmpToQuit(null); }}
                 className="flex-1 h-12 rounded-xl border border-border bg-white text-xs font-black uppercase tracking-widest text-slate-500 hover:bg-slate-50 transition-all"
               >
                 Cancel
               </button>
-              <button 
+              <button
                 onClick={() => {
                   setEmployeeList(prev => prev.map(emp => emp.id === empToQuit.id ? { ...emp, status: 'Exited' } : emp));
+                  // Automatically add to ExitView
+                  const exitEntry = {
+                    id: `EX-AUTO-${Date.now()}`,
+                    name: empToQuit.name,
+                    role: empToQuit.role,
+                    lastDay: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString(), // Default 30 days notice
+                    reason: "Offboarded from directory",
+                    notice: "Final Month",
+                    handover: 0,
+                    risk: "Medium",
+                    assets: { laptop: false, idCard: false, email: false },
+                    ffStatus: "Pending"
+                  };
+                  setExits((prevExits: any) => [exitEntry, ...prevExits]);
                   setQuitDialogOpen(false);
                   setEmpToQuit(null);
                 }}
@@ -544,71 +668,59 @@ function EmployeesView() {
   );
 }
 
-function AttendanceView() {
+function LeaveView({ isApplying, setIsApplying }: { isApplying: boolean, setIsApplying: (v: boolean) => void }) {
+  const [requests, setRequests] = useState(leaveRequests);
+  const [newLeave, setNewLeave] = useState({
+    name: "Rahul Verma", // Mock logged in user
+    type: "Earned Leave",
+    startDate: "",
+    endDate: "",
+    reason: "",
+  });
+
+  const calculateDays = (start: string, end: string) => {
+    if (!start || !end) return 0;
+    const s = new Date(start);
+    const e = new Date(end);
+    const diff = Math.ceil((e.getTime() - s.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+    return diff > 0 ? diff : 0;
+  };
+
+  const handleApply = () => {
+    const days = calculateDays(newLeave.startDate, newLeave.endDate);
+    const request = {
+      name: newLeave.name,
+      type: newLeave.type,
+      dates: `${newLeave.startDate} - ${newLeave.endDate}`,
+      days,
+      reason: newLeave.reason,
+      status: "Pending",
+    };
+    setRequests([request, ...requests]);
+    setIsApplying(false);
+    setNewLeave({ name: "Rahul Verma", type: "Earned Leave", startDate: "", endDate: "", reason: "" });
+  };
+
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-4">
-        <MetricCard label="Present Today" value="221" helper="89% attendance" icon={Fingerprint} tone="green" />
-        <MetricCard label="Late Marks" value="11" helper="After grace window" icon={Clock} tone="amber" />
-        <MetricCard label="Remote Check-ins" value="64" helper="Geo/IP verified" icon={Laptop} tone="blue" />
-        <MetricCard label="Missing Punch" value="07" helper="Needs HR action" icon={AlertTriangle} tone="red" />
-      </div>
-
-      <section className="rounded-2xl border border-border bg-white p-6 shadow-sm">
-        <div className="mb-5">
-          <h3 className="text-lg font-black text-primary">Attendance Control Room</h3>
-          <p className="mt-1 text-xs font-semibold text-slate-500">Daily punch, shift, work mode, billable hours and exception tracking for hybrid IT teams.</p>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[860px] text-left">
-            <thead>
-              <tr className="border-b border-slate-100">
-                {["Employee", "Shift", "Check-in", "Mode", "Billable", "Status"].map((head) => (
-                  <th key={head} className="pb-4 text-[10px] font-black uppercase tracking-widest text-slate-400">{head}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {attendanceRows.map((row) => (
-                <tr key={row.name} className="hover:bg-slate-50/60">
-                  <td className="py-5 font-black text-primary">{row.name}</td>
-                  <td className="py-5 text-sm font-bold text-slate-500">{row.shift}</td>
-                  <td className="py-5 text-sm font-bold text-slate-500">{row.checkIn}</td>
-                  <td className="py-5">
-                    <span className="inline-flex items-center gap-2 text-sm font-bold text-slate-600">
-                      <MapPin size={15} /> {row.mode}
-                    </span>
-                  </td>
-                  <td className="py-5 text-sm font-black text-primary">{row.billable}</td>
-                  <td className="py-5"><Badge tone={statusTone(row.status)}>{row.status}</Badge></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
-    </div>
-  );
-}
-
-function LeaveView() {
-  return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-4">
-        <MetricCard label="Pending Requests" value="16" helper="HR + manager queue" icon={Plane} tone="amber" />
+        <MetricCard label="Pending Requests" value={String(requests.filter(r => r.status === "Pending" || r.status.includes("Review")).length)} helper="HR + manager queue" icon={Plane} tone="amber" />
         <MetricCard label="Approved Month" value="42" helper="Including WFH" icon={CheckCircle2} tone="green" />
         <MetricCard label="Leave Liability" value="312d" helper="Earned leave balance" icon={Calendar} tone="blue" />
         <MetricCard label="Policy Exceptions" value="03" helper="Needs review" icon={AlertTriangle} tone="red" />
       </div>
 
       <section className="rounded-2xl border border-border bg-white p-6 shadow-sm">
-        <div className="mb-5">
-          <h3 className="text-lg font-black text-primary">Leave & WFH Requests</h3>
-          <p className="mt-1 text-xs font-semibold text-slate-500">Practical approval queue with leave type, date range, days, reason and approval stage.</p>
+        <div className="mb-5 flex justify-between items-center">
+          <div>
+            <h3 className="text-lg font-black text-primary">Leave & WFH Requests</h3>
+            <p className="mt-1 text-xs font-semibold text-slate-500">Practical approval queue with leave type, date range, days, reason and approval stage.</p>
+          </div>
+          <ActionButton icon={Plus} variant="accent" onClick={() => setIsApplying(true)}>Apply Leave</ActionButton>
         </div>
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-          {leaveRequests.map((request) => (
-            <div key={`${request.name}-${request.dates}`} className="rounded-2xl border border-border bg-slate-50 p-5">
+          {requests.map((request, i) => (
+            <div key={i} className="rounded-2xl border border-border bg-slate-50 p-5">
               <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                 <div>
                   <p className="text-lg font-black text-primary">{request.name}</p>
@@ -630,46 +742,98 @@ function LeaveView() {
           ))}
         </div>
       </section>
+
+      {isApplying && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 animate-in fade-in">
+          <div className="w-full max-w-xl bg-white rounded-[2.5rem] p-10 shadow-2xl border border-slate-100 relative animate-in zoom-in-95">
+             <button onClick={() => setIsApplying(false)} className="absolute right-8 top-8 p-2 text-slate-400 hover:bg-slate-50 rounded-full"><X size={20}/></button>
+             <h3 className="text-2xl font-black text-primary tracking-tight">Apply for Leave</h3>
+             <p className="text-slate-500 text-sm font-medium mt-1">Please provide your leave details for manager review.</p>
+
+             <div className="mt-8 space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                   <div className="space-y-2">
+                      <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Leave Type</label>
+                      <select
+                        value={newLeave.type}
+                        onChange={(e) => setNewLeave({...newLeave, type: e.target.value})}
+                        className="w-full rounded-xl border border-border bg-slate-50 py-3 px-4 text-sm font-bold text-primary focus:border-primary outline-none"
+                      >
+                         <option>Earned Leave</option>
+                         <option>Sick Leave</option>
+                         <option>Casual Leave</option>
+                         <option>Work From Home</option>
+                         <option>Comp Off</option>
+                      </select>
+                   </div>
+                   <div className="space-y-2">
+                      <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Employee Name</label>
+                      <input type="text" value={newLeave.name} disabled className="w-full rounded-xl border border-border bg-slate-100 py-3 px-4 text-sm font-bold text-primary" />
+                   </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-6">
+                   <div className="space-y-2">
+                      <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Start Date</label>
+                      <input type="date" value={newLeave.startDate} onChange={(e) => setNewLeave({...newLeave, startDate: e.target.value})} className="w-full rounded-xl border border-border bg-slate-50 py-3 px-4 text-sm font-bold text-primary focus:border-primary outline-none" />
+                    </div>
+                   <div className="space-y-2">
+                      <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">End Date</label>
+                      <input type="date" value={newLeave.endDate} onChange={(e) => setNewLeave({...newLeave, endDate: e.target.value})} className="w-full rounded-xl border border-border bg-slate-50 py-3 px-4 text-sm font-bold text-primary focus:border-primary outline-none" />
+                   </div>
+                </div>
+
+                <div className="space-y-2">
+                   <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Reason for Leave</label>
+                   <textarea
+                     rows={3}
+                     placeholder="State your reason clearly..."
+                     value={newLeave.reason}
+                     onChange={(e) => setNewLeave({...newLeave, reason: e.target.value})}
+                     className="w-full rounded-xl border border-border bg-slate-50 py-3 px-4 text-sm font-bold text-primary focus:border-primary outline-none resize-none"
+                   ></textarea>
+                </div>
+
+                <div className="flex gap-3 pt-4">
+                   <button onClick={() => setIsApplying(false)} className="flex-1 h-12 rounded-xl border border-border bg-white text-xs font-black uppercase tracking-widest text-slate-500 hover:bg-slate-50">Cancel</button>
+                   <button onClick={handleApply} className="flex-[2] h-12 rounded-xl bg-primary text-white text-xs font-black uppercase tracking-widest shadow-lg shadow-primary/20 hover:bg-primary/90">Submit Request</button>
+                </div>
+             </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-function PayrollView() {
-  const [payroll, setPayroll] = useState( [
+function AttendanceView() {
+  return (
+    <div className="p-8 text-center text-slate-500">
+      <h3 className="text-lg font-black text-primary">Attendance Module</h3>
+      <p>Attendance tracking is currently under development.</p>
+    </div>
+  );
+}
+
+
+const initialPayroll = [
   { 
-    id: "SAL-2026-061", 
-    employee: "Rahul Verma", 
+    id: "SAL-2026-001", 
     empId: "EMP-102", 
-    mobile: "9876543210", 
-    month: "June 2026", 
-    basic: 50000, hra: 20000, allowance: 15000, conveyance: 5000, bonus: 2000,
-    pf: 6000, pt: 200, tds: 3600, advance: 0,
-    gross: "INR 92,000", deductions: "INR 9,800", net: "INR 82,200", 
+    name: "Rahul Verma", 
+    mobile: "+91 98765 43210", 
+    basic: 50000, hra: 20000, allowance: 15000, conveyance: 5000, bonus: 7000,
+    pf: 6000, pt: 200, tds: 3000, advance: 600, gross: "INR 92,000", deductions: "INR 9,800", net: "INR 82,200",
     status: "Approved" 
   },
-  { 
-    id: "SAL-2026-062", 
-    employee: "Swati Joshi", 
-    empId: "EMP-118", 
-    mobile: "9876543211", 
-    month: "June 2026", 
-    basic: 65000, hra: 25000, allowance: 18000, conveyance: 5000, bonus: 5000,
-    pf: 9000, pt: 200, tds: 6200, advance: 0,
-    gross: "INR 1,18,000", deductions: "INR 15,400", net: "INR 1,02,600", 
-    status: "Pending Finance" 
-  },
-  { 
-    id: "SAL-2026-063", 
-    employee: "Amir Khan", 
-    empId: "EMP-124", 
-    mobile: "9876543212", 
-    month: "June 2026", 
-    basic: 45000, hra: 15000, allowance: 10000, conveyance: 3000, bonus: 3000,
-    pf: 4500, pt: 200, tds: 2000, advance: 0,
-    gross: "INR 76,000", deductions: "INR 6,700", net: "INR 69,300", 
-    status: "HR Review" 
-  },
-]);
+];
+
+function PayrollView({ isAdding, setIsAdding }: { isAdding: boolean, setIsAdding: (v: boolean) => void }) {
+  const [payroll, setPayroll] = useState(initialPayroll);
+  const [editingRow, setEditingRow] = useState<any>(null);
+  const [newRow, setNewRow] = useState<any>({
+    empId: "", name: "", mobile: "", basic: 0, hra: 0, allowance: 0, conveyance: 0, bonus: 0, pf: 0, pt: 0, tds: 0, advance: 0, status: "Pending",
+  });
 
   // --- Sync with LocalStorage ---
   useEffect(() => {
@@ -677,15 +841,34 @@ function PayrollView() {
     if (savedPayroll) {
       setPayroll(JSON.parse(savedPayroll));
     }
-    
-    // Event listener for cross-tab or same-page sync
-    const handleStorage = () => {
-      const updated = localStorage.getItem("crm_payroll_data");
-      if (updated) setPayroll(JSON.parse(updated));
-    };
-    window.addEventListener("storage", handleStorage);
-    return () => window.removeEventListener("storage", handleStorage);
   }, []);
+
+  useEffect(() => {
+    localStorage.setItem("crm_payroll_data", JSON.stringify(payroll));
+  }, [payroll]);
+
+  const calculateFinancials = (row: any) => {
+    const gross = (Number(row.basic) || 0) + (Number(row.hra) || 0) + (Number(row.allowance) || 0) + (Number(row.conveyance) || 0) + (Number(row.bonus) || 0);
+    const deductions = (Number(row.pf) || 0) + (Number(row.pt) || 0) + (Number(row.tds) || 0) + (Number(row.advance) || 0);
+    const net = gross - deductions;
+    return { ...row, gross, deductions, net };
+  };
+
+  const saveEdit = (updatedRow: any) => {
+    const fullRow = calculateFinancials(updatedRow);
+    setPayroll(payroll.map((p:any) => p.id === updatedRow.id ? fullRow : p));
+    setEditingRow(null);
+  };
+
+  const addPayroll = () => {
+    const id = `SAL-2026-${String(payroll.length + 61).padStart(3, '0')}`;
+    const fullRow = calculateFinancials({ ...newRow, id });
+    setPayroll([...payroll, fullRow]);
+    setIsAdding(false);
+    setNewRow({
+      empId: "", name: "", mobile: "", basic: 0, hra: 0, allowance: 0, conveyance: 0, bonus: 0, pf: 0, pt: 0, tds: 0, advance: 0, status: "Pending",
+    });
+  };
 
   return (
     <div className="space-y-6">
@@ -698,12 +881,18 @@ function PayrollView() {
       </div>
 
       <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-4 w-full">
-        <MetricCard label="Monthly Payroll" value={`₹${payroll.reduce((acc, curr) => acc + (typeof curr.net === "string" ? Number(curr.net.replace(/[^0-9.-]+/g,"")) : (curr.net || 0)), 0).toLocaleString()}`} helper={`${payroll.length} records`} icon={BadgeIndianRupee} tone="green" />
-        <MetricCard label="Approved" value={payroll.filter(p => p.status === "Approved").length.toString()} helper="Bank ready" icon={CheckCircle2} tone="blue" />
-        <MetricCard label="Processing" value={payroll.filter(p => p.status !== "Approved").length.toString()} helper="Pending Finance" icon={Clock} tone="amber" />
+        <MetricCard label="Monthly Payroll" value={`₹${payroll.reduce((acc:any, curr:any) => acc + (typeof curr.net === "string" ? Number(curr.net.replace(/[^0-9.-]+/g,"")) : (curr.net || 0)), 0).toLocaleString()}`} helper={`${payroll.length} records`} icon={BadgeIndianRupee} tone="green" />
+        <MetricCard label="Approved" value={payroll.filter((p:any) => p.status === "Approved").length.toString()} helper="Bank ready" icon={CheckCircle2} tone="blue" />
+        <MetricCard label="Processing" value={payroll.filter((p:any) => p.status !== "Approved").length.toString()} helper="Pending Finance" icon={Clock} tone="amber" />
       </div>
 
       <section className="rounded-2xl border border-border bg-white p-6 shadow-sm">
+        <div className="mb-5 flex justify-between items-center">
+          <div>
+            <h3 className="text-lg font-black text-primary">Payroll Register</h3>
+            <p className="mt-1 text-xs font-semibold text-slate-500">Official salary breakdown as synced from the Finance and Accounting module.</p>
+          </div>
+        </div>
         <div className="overflow-x-auto">
           <table className="w-full min-w-[2000px] text-left">
             <thead>
@@ -728,7 +917,7 @@ function PayrollView() {
             </thead>
 
             <tbody className="divide-y divide-slate-100 text-xs font-bold text-slate-700">
-              {payroll.map((row) => (
+              {payroll.map((row:any) => (
                 <tr key={row.id} className="hover:bg-slate-50/60 transition-colors">
                   <td className="py-4">{row.empId}</td>
                   <td className="py-4 font-black text-primary">{row.name}</td>
@@ -738,13 +927,13 @@ function PayrollView() {
                   <td className="py-4">₹{(row.allowance || 0).toLocaleString()}</td>
                   <td className="py-4">₹{(row.conveyance || 0).toLocaleString()}</td>
                   <td className="py-4">₹{(row.bonus || 0).toLocaleString()}</td>
-                  <td className="py-4 font-black text-primary">₹{row.gross.toLocaleString()}</td>
+                  <td className="py-4 font-black text-primary">₹{(typeof row.gross === "string" ? row.gross : (row.gross || 0).toLocaleString())}</td>
                   <td className="py-4">₹{(row.pf || 0).toLocaleString()}</td>
                   <td className="py-4">₹{(row.pt || 0).toLocaleString()}</td>
                   <td className="py-4">₹{(row.tds || 0).toLocaleString()}</td>
                   <td className="py-4">₹{(row.advance || 0).toLocaleString()}</td>
-                  <td className="py-4 font-black text-red-600">₹{row.deductions.toLocaleString()}</td>
-                  <td className="py-4 font-black text-emerald-600">₹{row.net.toLocaleString()}</td>
+                  <td className="py-4 font-black text-red-600">₹{(typeof row.deductions === "string" ? row.deductions : (row.deductions || 0).toLocaleString())}</td>
+                  <td className="py-4 font-black text-emerald-600">₹{(typeof row.net === "string" ? row.net : (row.net || 0).toLocaleString())}</td>
                   <td className="py-4"><Badge tone={statusTone(row.status)}>{row.status}</Badge></td>
                 </tr>
               ))}
@@ -756,54 +945,186 @@ function PayrollView() {
   );
 }
 
-function ExitView() {
+function ExitView({ exits, setExits, isStarting, setIsStarting }: { exits: any[], setExits: any, isStarting: boolean, setIsStarting: (v: boolean) => void }) {
+  const [newExit, setNewExit] = useState({
+    name: "",
+    lastDay: "",
+    reason: "",
+    risk: "Low",
+  });
+
+  const handleStartExit = () => {
+    const entry = {
+      id: `EX-00${exits.length + 1}`,
+      name: newExit.name,
+      role: "Team Member", // Mock role
+      lastDay: newExit.lastDay,
+      reason: newExit.reason,
+      notice: "Serving",
+      handover: 0,
+      risk: newExit.risk,
+      assets: { laptop: false, idCard: false, email: false },
+      ffStatus: "Pending"
+    };
+    setExits([entry, ...exits]);
+    setIsStarting(false);
+  };
+
+  const toggleAsset = (id: string, assetKey: string) => {
+    setExits(exits.map((e: any) => e.id === id ? { ...e, assets: { ...e.assets, [assetKey]: !e.assets[assetKey] } } : e));
+  };
+
+  const updateFF = (id: string, status: string) => {
+    setExits(exits.map((e: any) => e.id === id ? { ...e, ffStatus: status } : e));
+  };
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-in fade-in duration-500">
       <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-4">
-        <MetricCard label="Open Exits" value="12" helper="Notice period active" icon={LogOut} tone="amber" />
-        <MetricCard label="Knowledge Transfer" value="74%" helper="Average completion" icon={FileCheck2} tone="blue" />
-        <MetricCard label="Asset Recovery" value="09" helper="Laptop, ID, access" icon={Laptop} tone="purple" />
-        <MetricCard label="High Risk" value="03" helper="Client or project impact" icon={AlertTriangle} tone="red" />
+        <MetricCard label="Open Exits" value={String(exits.length)} helper="Notice period active" icon={LogOut} tone="amber" />
+        <MetricCard label="F&F Cleared" value={String(exits.filter(e => e.ffStatus === "Cleared").length)} helper="Settlements done" icon={CheckCircle2} tone="green" />
+        <MetricCard label="Asset Recovery" value={String(exits.filter(e => Object.values(e.assets).every(v => v)).length)} helper="Fully recovered" icon={Laptop} tone="purple" />
+        <MetricCard label="Pending F&F" value={String(exits.filter(e => e.ffStatus === "Pending").length)} helper="Financial queue" icon={AlertTriangle} tone="red" />
       </div>
 
       <section className="rounded-2xl border border-border bg-white p-6 shadow-sm">
-        <div className="mb-5">
-          <h3 className="text-lg font-black text-primary">Exit Management</h3>
-          <p className="mt-1 text-xs font-semibold text-slate-500">Notice period, handover, asset recovery, payroll lock and access revocation tracking.</p>
+        <div className="mb-8 flex justify-between items-center">
+          <div>
+            <h3 className="text-lg font-black text-primary">Exit Management Dashboard</h3>
+            <p className="mt-1 text-xs font-semibold text-slate-500">Full lifecycle tracking from resignation to final settlement.</p>
+          </div>
+          <ActionButton icon={LogOut} variant="accent" onClick={() => setIsStarting(true)}>Start New Exit</ActionButton>
         </div>
-        <div className="space-y-4">
-          {exitCases.map((item) => (
-            <div key={item.name} className="rounded-2xl border border-border bg-slate-50 p-5">
-              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                <div>
-                  <p className="text-lg font-black text-primary">{item.name}</p>
-                  <p className="mt-1 text-xs font-bold text-slate-500">{item.role} - Last day: {item.lastDay}</p>
+
+        <div className="grid grid-cols-1 gap-6">
+          {exits.map((item) => (
+            <div key={item.id} className="rounded-[2rem] border border-slate-100 bg-slate-50/50 p-7 group hover:bg-white hover:shadow-xl transition-all">
+              <div className="flex flex-col gap-6 md:flex-row md:items-start md:justify-between">
+                <div className="flex gap-5">
+                   <div className="h-14 w-14 rounded-2xl bg-primary flex items-center justify-center text-white text-xl font-black shadow-lg shadow-primary/20">
+                      {item.name.charAt(0)}
+                   </div>
+                   <div>
+                      <h4 className="text-xl font-black text-primary">{item.name}</h4>
+                      <p className="text-xs font-bold text-slate-500 mt-1">{item.role} • ID: {item.id}</p>
+                      <div className="mt-3 flex gap-2">
+                        <Badge tone={statusTone(item.risk)}>{item.risk} Risk</Badge>
+                        <Badge tone="blue">LWD: {item.lastDay}</Badge>
+                      </div>
+                   </div>
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  <Badge tone={statusTone(item.risk)}>{item.risk} Risk</Badge>
-                  <Badge tone="blue">{item.notice}</Badge>
+
+                <div className="flex flex-col md:items-end gap-3">
+                   <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Settlement Status</p>
+                   <select
+                     value={item.ffStatus}
+                     onChange={(e) => updateFF(item.id, e.target.value)}
+                     className={`text-xs font-black uppercase tracking-widest px-4 py-2 rounded-xl border-2 transition-all outline-none ${item.ffStatus === "Cleared" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-amber-200 bg-amber-50 text-amber-700"}`}
+                   >
+                      <option>Pending</option>
+                      <option>In Progress</option>
+                      <option>Cleared</option>
+                   </select>
                 </div>
               </div>
-              <div className="mt-5 rounded-xl bg-white p-4">
-                <div className="flex justify-between text-xs font-black uppercase tracking-widest text-slate-500">
-                  <span>Handover Completion</span>
-                  <span>{item.handover}%</span>
-                </div>
-                <div className="mt-3">
-                  <ProgressBar value={item.handover} tone={item.risk === "High" ? "red" : item.risk === "Medium" ? "amber" : "green"} />
-                </div>
-                <p className="mt-3 text-xs font-semibold text-slate-500">Reason: {item.reason}</p>
+
+              <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-8">
+                 <div className="p-6 bg-white rounded-2xl border border-slate-100 shadow-sm">
+                    <h5 className="text-xs font-black uppercase tracking-widest text-primary mb-4 flex items-center gap-2">
+                       <Laptop size={14} /> Asset Recovery Checklist
+                    </h5>
+                    <div className="space-y-3">
+                       {[
+                         { key: 'laptop', label: 'Laptop & Charger' },
+                         { key: 'idCard', label: 'ID Card & Access Keys' },
+                         { key: 'email', label: 'Official Email Revoked' }
+                       ].map((asset: any) => (
+                         <div key={asset.key} onClick={() => toggleAsset(item.id, asset.key)} className="flex items-center justify-between cursor-pointer group">
+                            <span className="text-xs font-bold text-slate-600 group-hover:text-primary">{asset.label}</span>
+                            <div className={`h-5 w-5 rounded-md border-2 flex items-center justify-center transition-all ${item.assets[asset.key] ? "bg-emerald-500 border-emerald-500 text-white" : "border-slate-200"}`}>
+                               {item.assets[asset.key] && <CheckCircle2 size={12} />}
+                            </div>
+                         </div>
+                       ))}
+                    </div>
+                 </div>
+
+                 <div className="p-6 bg-white rounded-2xl border border-slate-100 shadow-sm flex flex-col justify-between">
+                    <div>
+                      <div className="flex justify-between items-center mb-4">
+                        <h5 className="text-xs font-black uppercase tracking-widest text-primary">Handover & Knowledge Transfer</h5>
+                        <span className="text-sm font-black text-primary">{item.handover}%</span>
+                      </div>
+                      <ProgressBar value={item.handover} tone={item.handover > 80 ? "green" : "amber"} />
+                    </div>
+                    <p className="mt-4 text-[10px] font-bold text-slate-500 italic leading-relaxed">
+                       Reason: {item.reason}
+                    </p>
+                 </div>
               </div>
             </div>
           ))}
         </div>
       </section>
+
+      {isStarting && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 animate-in fade-in">
+           <div className="w-full max-w-xl bg-white rounded-[2.5rem] p-10 shadow-2xl border border-slate-100 relative animate-in zoom-in-95">
+              <button onClick={() => setIsStarting(false)} className="absolute right-8 top-8 p-2 text-slate-400 hover:bg-slate-50 rounded-full"><X size={20}/></button>
+              <h3 className="text-2xl font-black text-primary tracking-tight">Initiate Exit Process</h3>
+              <p className="text-slate-500 text-sm font-medium mt-1">Select employee and enter offboarding timelines.</p>
+
+              <div className="mt-8 space-y-6">
+                 <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Employee to Offboard</label>
+                    <select
+                      value={newExit.name}
+                      onChange={(e) => setNewExit({...newExit, name: e.target.value})}
+                      className="w-full rounded-xl border border-border bg-slate-50 py-3 px-4 text-sm font-bold text-primary focus:border-primary outline-none"
+                    >
+                       <option value="">Select Employee...</option>
+                       {employees.map(emp => <option key={emp.id} value={emp.name}>{emp.name} ({emp.id})</option>)}
+                    </select>
+                 </div>
+
+                 <div className="grid grid-cols-2 gap-6">
+                    <div className="space-y-2">
+                       <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Last Working Day</label>
+                       <input type="date" value={newExit.lastDay} onChange={(e) => setNewExit({...newExit, lastDay: e.target.value})} className="w-full rounded-xl border border-border bg-slate-50 py-3 px-4 text-sm font-bold text-primary focus:border-primary outline-none" />
+                    </div>
+                    <div className="space-y-2">
+                       <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Risk Assessment</label>
+                       <select value={newExit.risk} onChange={(e) => setNewExit({...newExit, risk: e.target.value})} className="w-full rounded-xl border border-border bg-slate-50 py-3 px-4 text-sm font-bold text-primary focus:border-primary outline-none">
+                          <option>Low</option>
+                          <option>Medium</option>
+                          <option>High</option>
+                       </select>
+                    </div>
+                 </div>
+
+                 <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Reason for Departure</label>
+                    <textarea value={newExit.reason} onChange={(e) => setNewExit({...newExit, reason: e.target.value})} rows={3} placeholder="Describe the reason..." className="w-full rounded-xl border border-border bg-slate-50 py-3 px-4 text-sm font-bold text-primary focus:border-primary outline-none resize-none"></textarea>
+                 </div>
+
+                 <div className="flex gap-3 pt-4">
+                    <button onClick={() => setIsStarting(false)} className="flex-1 h-12 rounded-xl border border-border bg-white text-xs font-black uppercase tracking-widest text-slate-500 hover:bg-slate-50">Cancel</button>
+                    <button onClick={handleStartExit} className="flex-[2] h-12 rounded-xl bg-red-600 text-white text-xs font-black uppercase tracking-widest shadow-lg shadow-red-200 hover:bg-red-700 transition-all">Start Offboarding</button>
+                 </div>
+              </div>
+           </div>
+        </div>
+      )}
     </div>
   );
 }
 
-export default function HRMSHub({ activeView }: { activeView: HRMSView }) {
-  
+export default function HRMSHub({ activeView, onAddEmployee }: { activeView: HRMSView, onAddEmployee?: () => void }) {
+  const [exits, setExits] = useState(initialExitCases);
+  const [isStartingExit, setIsApplyingExit] = useState(false);
+  const [isApplyingLeave, setIsApplyingLeave] = useState(false);
+  const [isAddingPayroll, setIsAddingPayroll] = useState(false);
+
   const title =
     activeView === "employees"
       ? "Employees"
@@ -844,17 +1165,34 @@ export default function HRMSHub({ activeView }: { activeView: HRMSView }) {
         <div className="flex flex-wrap gap-3">
           <ActionButton icon={Download}>Export</ActionButton>
           <ActionButton icon={Filter}>Filter</ActionButton>
-          <ActionButton icon={activeView === "payroll" ? undefined : Plus} variant="accent" >
-            {activeView === "employees" ? "Add Employee" : activeView === "attendance" ? "Regularize" : activeView === "leave" ? "Apply Leave" : activeView === "payroll" ? "Payroll Register" : "Start Exit"}
+          <ActionButton
+            icon={activeView === "payroll" ? undefined : Plus}
+            variant="accent"
+            onClick={() => {
+              if (activeView === "employees" && onAddEmployee) {
+                onAddEmployee();
+              }
+              if (activeView === "leave") {
+                setIsApplyingLeave(true);
+              }
+              if (activeView === "exit") {
+                setIsApplyingExit(true);
+              }
+              if (activeView === "payroll") {
+                setIsAddingPayroll(true);
+              }
+            }}
+          >
+            {activeView === "employees" ? "Add Employee" : activeView === "attendance" ? "Regularize" : activeView === "leave" ? "Apply Leave" : activeView === "payroll" ? "New Payroll" : "Start Exit"}
           </ActionButton>
         </div>
       </div>
 
-      {activeView === "employees" && <EmployeesView />}
+      {activeView === "employees" && <EmployeesView setExits={setExits} />}
       {activeView === "attendance" && <AttendanceView />}
-      {activeView === "leave" && <LeaveView />}
-      {activeView === "payroll" && <PayrollView />}
-      {activeView === "exit" && <ExitView />}
+      {activeView === "leave" && <LeaveView isApplying={isApplyingLeave} setIsApplying={setIsApplyingLeave} />}
+      {activeView === "payroll" && <PayrollView isAdding={isAddingPayroll} setIsAdding={setIsAddingPayroll} />}
+      {activeView === "exit" && <ExitView exits={exits} setExits={setExits} isStarting={isStartingExit} setIsStarting={setIsApplyingExit} />}
 
       <section className="rounded-2xl border border-border bg-primary p-6 text-white shadow-sm">
         <div className="flex items-center gap-3">
@@ -878,6 +1216,3 @@ export default function HRMSHub({ activeView }: { activeView: HRMSView }) {
     </div>
   );
 }
-
-
-

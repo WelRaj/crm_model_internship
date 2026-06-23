@@ -25,93 +25,77 @@ const salarySchema = z.object({
   pfDeduction: z.coerce.number().min(0),
   professionalTax: z.coerce.number().default(200),
   tds: z.coerce.number().min(0),
-  workingDays: z.coerce.number().min(1),
-  presentDays: z.coerce.number().min(0),
   conveyance: z.coerce.number().min(0).default(0),
   bonus: z.coerce.number().min(0).default(0),
   advance: z.coerce.number().min(0).default(0),
   status: z.string().default("HR Review"),
+  paymentMethod: z.string().default("NEFT"),
+  paymentRef: z.string().optional(),
 });
 
 type SalaryFormData = z.infer<typeof salarySchema>;
 
+// FIX 1: Added paymentMethod and paymentRef to initialPayroll
 const initialPayroll = [
   { 
-    id: "SAL-2026-061", 
-    employee: "Rahul Verma", 
-    empId: "EMP-102", 
-    mobile: "9876543210", 
-    month: "June 2026", 
+    id: "SAL-2026-001", 
+    employee: "Rahul Verma", empId: "EMP-102", mobile: "9876543210", 
+    month: new Date().toISOString().split("T")[0], 
     basic: 50000, hra: 20000, allowance: 15000, conveyance: 5000, bonus: 2000,
     pf: 6000, pt: 200, tds: 3600, advance: 0,
     gross: "INR 92,000", deductions: "INR 9,800", net: "INR 82,200", 
-    status: "Approved" 
+    status: "Approved", paymentMethod: "NEFT", paymentRef: "TXN001",
   },
   { 
-    id: "SAL-2026-062", 
-    employee: "Swati Joshi", 
-    empId: "EMP-118", 
-    mobile: "9876543211", 
-    month: "June 2026", 
+    id: "SAL-2026-002", 
+    employee: "Swati Joshi", empId: "EMP-118", mobile: "9876543211", 
+    month: new Date().toISOString().split("T")[0], 
     basic: 65000, hra: 25000, allowance: 18000, conveyance: 5000, bonus: 5000,
     pf: 9000, pt: 200, tds: 6200, advance: 0,
     gross: "INR 1,18,000", deductions: "INR 15,400", net: "INR 1,02,600", 
-    status: "Pending Finance" 
+    status: "Pending Finance", paymentMethod: "NEFT", paymentRef: "",
   },
   { 
-    id: "SAL-2026-063", 
-    employee: "Amir Khan", 
-    empId: "EMP-124", 
-    mobile: "9876543212", 
-    month: "June 2026", 
+    id: "SAL-2026-003", 
+    employee: "Amir Khan", empId: "EMP-124", mobile: "9876543212", 
+    month: new Date().toISOString().split("T")[0], 
     basic: 45000, hra: 15000, allowance: 10000, conveyance: 3000, bonus: 3000,
     pf: 4500, pt: 200, tds: 2000, advance: 0,
     gross: "INR 76,000", deductions: "INR 6,700", net: "INR 69,300", 
-    status: "HR Review" 
+    status: "HR Review", paymentMethod: "IMPS", paymentRef: "",
   },
 ];
 
 export default function Step10Salary() {
   const [payroll, setPayroll] = useState(initialPayroll);
 
-  // --- Sync with LocalStorage ---
   useEffect(() => {
     const savedPayroll = localStorage.getItem("crm_payroll_data");
-    if (savedPayroll) {
-      setPayroll(JSON.parse(savedPayroll));
-    }
+    if (savedPayroll) setPayroll(JSON.parse(savedPayroll));
   }, []);
 
   useEffect(() => {
     localStorage.setItem("crm_payroll_data", JSON.stringify(payroll));
   }, [payroll]);
+
+  const [bankDetails, setBankDetails] = useState<any[]>([]);
+  useEffect(() => {
+    const savedBanks = localStorage.getItem("crm_company_banks");
+    if (savedBanks) setBankDetails(JSON.parse(savedBanks));
+  }, []);
+
   const [showForm, setShowForm] = useState(false);
   const [successMsg, setSuccessMsg] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
 
-  const {
-    register,
-    handleSubmit,
-    control,
-    reset,
-    formState: { errors },
-  } = useForm<SalaryFormData>({
+  const { register, handleSubmit, control, reset, formState: { errors } } = useForm<SalaryFormData>({
     resolver: zodResolver(salarySchema as any),
     defaultValues: {
-      month: "June 2026",
-      mobile: "",
-      basic: 0,
-      hra: 0,
-      specialAllowance: 0,
-      pfDeduction: 0,
-      professionalTax: 200,
-      tds: 0,
-      workingDays: 22,
-      presentDays: 22,
-      conveyance: 0,
-      bonus: 0,
-      advance: 0,
-      status: "HR Review",
+      month: new Date().toISOString().split("T")[0],
+      mobile: "", basic: 0, hra: 0, specialAllowance: 0,
+      pfDeduction: 0, professionalTax: 200, tds: 0,
+      conveyance: 0, bonus: 0, advance: 0,
+      status: "HR Review", paymentMethod: "NEFT", paymentRef: "",
     }
   });
 
@@ -124,16 +108,16 @@ export default function Step10Salary() {
   const watchedConveyance = useWatch({ control, name: "conveyance" });
   const watchedBonus = useWatch({ control, name: "bonus" });
   const watchedAdvance = useWatch({ control, name: "advance" });
+  const watchedPaymentMethod = useWatch({ control, name: "paymentMethod" });
 
-  const gross = Number(watchedBasic || 0) + Number(watchedHra || 0) + Number(watchedAllowance || 0) + Number(watchedConveyance || 0) + Number(watchedBonus || 0);
-  const totalDeductions = Number(watchedPf || 0) + Number(watchedPt || 0) + Number(watchedTds || 0) + Number(watchedAdvance || 0);
+  const gross = Number(watchedBasic||0) + Number(watchedHra||0) + Number(watchedAllowance||0) + Number(watchedConveyance||0) + Number(watchedBonus||0);
+  const totalDeductions = Number(watchedPf||0) + Number(watchedPt||0) + Number(watchedTds||0) + Number(watchedAdvance||0);
   const netPayable = Math.max(0, gross - totalDeductions);
 
-        const onEdit = (row: any) => {
+  const onEdit = (row: any) => {
     setEditingId(row.id);
-    const [id, name] = [row.empId, row.employee];
     reset({
-      employeeId: `${id} - ${name}`,
+      employeeId: `${row.empId} - ${row.employee}`,
       mobile: row.mobile || "",
       month: row.month,
       basic: Number(row.gross?.replace(/[^0-9.-]+/g,"") || 0) * 0.5,
@@ -142,12 +126,10 @@ export default function Step10Salary() {
       pfDeduction: Number(row.deductions?.replace(/[^0-9.-]+/g,"") || 0) * 0.6,
       professionalTax: 200,
       tds: Number(row.deductions?.replace(/[^0-9.-]+/g,"") || 0) * 0.4,
-      workingDays: 22,
-      presentDays: 22,
-      conveyance: 0,
-      bonus: 0,
-      advance: 0,
+      conveyance: 0, bonus: 0, advance: 0,
       status: row.status,
+      paymentMethod: row.paymentMethod || "NEFT",
+      paymentRef: row.paymentRef || "",
     });
     setShowForm(true);
   };
@@ -158,41 +140,38 @@ export default function Step10Salary() {
     }
   };
 
-      const onSubmit = (data: SalaryFormData) => {
-        const entryData = {
+  const onSubmit = (data: SalaryFormData) => {
+    const entryData = {
       employee: data.employeeId.split("-")[1]?.trim() || data.employeeId,
       empId: data.employeeId.split("-")[0]?.trim() || "EMP-XXX",
       mobile: data.mobile || "",
       month: data.month,
-      basic: data.basic,
-      hra: data.hra,
+      basic: data.basic, hra: data.hra,
       allowance: data.specialAllowance,
-      conveyance: data.conveyance,
-      bonus: data.bonus,
-      pf: data.pfDeduction,
-      pt: data.professionalTax,
-      tds: data.tds,
-      advance: data.advance,
+      conveyance: data.conveyance, bonus: data.bonus,
+      pf: data.pfDeduction, pt: data.professionalTax,
+      tds: data.tds, advance: data.advance,
       gross: `INR ${gross.toLocaleString()}`,
       deductions: `INR ${totalDeductions.toLocaleString()}`,
       net: `INR ${netPayable.toLocaleString()}`,
       status: data.status,
+      paymentMethod: data.paymentMethod,
+      paymentRef: data.paymentRef || "",
     };
 
     if (editingId) {
       setPayroll(payroll.map(p => p.id === editingId ? { ...entryData, id: editingId } : p));
     } else {
-      const newEntry = { ...entryData, id: `SAL-2026-0${payroll.length + 64}` };
-      setPayroll([newEntry, ...payroll]);
+      const maxIdNum = payroll.reduce((max, p) => {
+        const num = parseInt(p.id.split('-')[2] || '0');
+        return num > max ? num : max;
+      }, 0);
+      setPayroll([{ ...entryData, id: `SAL-2026-${String(maxIdNum + 1).padStart(3, '0')}` }, ...payroll]);
     }
 
     setSuccessMsg(true);
     setEditingId(null);
-    setTimeout(() => {
-      setSuccessMsg(false);
-      setShowForm(false);
-      reset();
-    }, 2000);
+    setTimeout(() => { setSuccessMsg(false); setShowForm(false); reset(); }, 2000);
   };
 
   return (
@@ -204,12 +183,7 @@ export default function Step10Salary() {
       actions={
         <>
           <ActionButton icon={Download} label="Salary Sheet" variant="outline" />
-          <ActionButton 
-            icon={Wallet} 
-            label="New Payroll" 
-            variant="accent" 
-            onClick={() => setShowForm(true)}
-          />
+          <ActionButton icon={Wallet} label="New Payroll" variant="accent" onClick={() => setShowForm(true)} />
         </>
       }
     >
@@ -225,10 +199,7 @@ export default function Step10Salary() {
       {showForm && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 animate-in fade-in duration-200">
           <div className="w-full max-w-6xl max-h-[90vh] overflow-y-auto bg-white rounded-[2.5rem] shadow-2xl border border-slate-100 p-10 relative animate-in zoom-in-95 duration-300">
-            <button 
-              onClick={() => setShowForm(false)}
-              className="absolute right-8 top-8 p-2 hover:bg-slate-50 rounded-full text-slate-400 hover:text-primary transition-all"
-            >
+            <button onClick={() => setShowForm(false)} className="absolute right-8 top-8 p-2 hover:bg-slate-50 rounded-full text-slate-400 hover:text-primary transition-all">
               <X size={24} />
             </button>
 
@@ -252,72 +223,116 @@ export default function Step10Salary() {
 
                 <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
                   <div className="lg:col-span-3 space-y-8">
-                    <Panel title="Employee & Attendance" description="Basic identification and leave impact.">
+                    {/* FIX 2: Removed icon prop from Panel — Panel doesn't accept icon */}
+                    <Panel title="Employee Identification" description="Basic employee details and payroll processing status.">
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                         <Field label="Employee" options={["EMP-102 - Rahul Verma", "EMP-118 - Swati Joshi", "EMP-124 - Amir Khan", "EMP-130 - Sunita Sharma"]} required register={register("employeeId")} error={errors.employeeId?.message} />
                         <Field label="Mobile Number" register={register("mobile")} />
-                        <Field label="Payroll Month" options={["May 2026", "June 2026", "July 2026"]} required register={register("month")} error={errors.month?.message} />
-                        <Field label="Total Working Days" type="number" register={register("workingDays")} error={errors.workingDays?.message} />
-                        <Field label="Days Present" type="number" register={register("presentDays")} error={errors.presentDays?.message} />
+                        <Field label="Payroll Date" type="date" required register={register("month")} error={errors.month?.message} />
+                        {watchedPaymentMethod !== "Cash" && (
+                          <div className="md:col-span-2 p-4 bg-slate-50 rounded-xl border border-slate-200">
+                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Payout Routing</p>
+                            <p className="text-sm font-black text-primary mt-1">
+                              {bankDetails.length > 0 ? `${bankDetails[0].bankName} - ${bankDetails[0].accountNumber}` : "No Active Treasury Account Linked"}
+                            </p>
+                          </div>
+                        )}
                         <Field label="Status" options={["HR Review", "Pending Finance", "Approved", "Paid"]} register={register("status")} />
+                        <Field label="Payment Method" options={["NEFT", "IMPS", "Cash", "Cheque", "Other"]} register={register("paymentMethod")} />
+                        {watchedPaymentMethod !== "Cash" && (
+                          <Field label="Payment Ref/Txn ID" placeholder="Ref no..." register={register("paymentRef")} />
+                        )}
                       </div>
                     </Panel>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                       <Panel title="Earnings (Gross)" description="Fixed components as per appointment letter.">
-                          <div className="space-y-4">
-                             <Field label="Basic Salary" type="number" register={register("basic")} />
-                             <Field label="HRA" type="number" register={register("hra")} />
-                             <Field label="Special Allowance" type="number" register={register("specialAllowance")} />
-                             <Field label="Conveyance" type="number" register={register("conveyance")} />
-                             <Field label="Bonus" type="number" register={register("bonus")} />
-                             <div className="pt-4 border-t border-slate-100 flex justify-between items-center">
-                                <span className="text-xs font-black text-slate-400 uppercase tracking-widest">Gross Total</span>
-                                <span className="text-lg font-black text-primary">₹{gross.toLocaleString()}</span>
-                             </div>
+                    {/* FIX 2: Removed icon prop from Panel */}
+                    <Panel title="Payment Information (Buyer View)" description="This info is displayed for the client on the salary payout.">
+                      {watchedPaymentMethod !== "Cash" && bankDetails.length > 0 ? (
+                        <div className="p-6 bg-emerald-50 border border-emerald-100 rounded-3xl space-y-4">
+                          <div className="flex items-center gap-3 text-emerald-700">
+                            <CheckCircle2 size={18} />
+                            <span className="text-xs font-black uppercase tracking-widest">Linked Treasury Account</span>
                           </div>
-                       </Panel>
+                          <div className="grid grid-cols-2 gap-4">
+                            <div>
+                              <p className="text-[10px] font-black text-slate-400 uppercase">Beneficiary Name</p>
+                              <p className="text-xs font-bold text-primary">{bankDetails[0].accountName}</p>
+                            </div>
+                            <div>
+                              <p className="text-[10px] font-black text-slate-400 uppercase">Bank Name</p>
+                              <p className="text-xs font-bold text-primary">{bankDetails[0].bankName}</p>
+                            </div>
+                            <div>
+                              <p className="text-[10px] font-black text-slate-400 uppercase">Account Number</p>
+                              <p className="text-sm font-black text-primary font-mono">{bankDetails[0].accountNumber}</p>
+                            </div>
+                            <div>
+                              <p className="text-[10px] font-black text-slate-400 uppercase">IFSC Code</p>
+                              <p className="text-sm font-black text-indigo-600 font-mono">{bankDetails[0].ifscCode}</p>
+                            </div>
+                          </div>
+                        </div>
+                      ) : watchedPaymentMethod !== "Cash" ? (
+                        <div className="p-6 bg-slate-50 border border-slate-200 border-dashed rounded-3xl text-center">
+                          <p className="text-xs font-bold text-slate-500">No active bank account linked.</p>
+                        </div>
+                      ) : null}
+                    </Panel>
 
-                       <Panel title="Deductions" description="Statutory and tax adjustments.">
-                          <div className="space-y-4">
-                             <Field label="Provident Fund (PF)" type="number" register={register("pfDeduction")} />
-                             <Field label="Professional Tax (PT)" type="number" register={register("professionalTax")} />
-                             <Field label="Income Tax (TDS)" type="number" register={register("tds")} />
-                             <Field label="Advance" type="number" register={register("advance")} />
-                             <div className="pt-4 border-t border-slate-100 flex justify-between items-center">
-                                <span className="text-xs font-black text-slate-400 uppercase tracking-widest">Total Deductions</span>
-                                <span className="text-lg font-black text-red-500">₹{totalDeductions.toLocaleString()}</span>
-                             </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                      <Panel title="Earnings (Gross)" description="Fixed components as per appointment letter.">
+                        <div className="space-y-4">
+                          <Field label="Basic Salary" type="number" register={register("basic")} />
+                          <Field label="HRA" type="number" register={register("hra")} />
+                          <Field label="Special Allowance" type="number" register={register("specialAllowance")} />
+                          <Field label="Conveyance" type="number" register={register("conveyance")} />
+                          <Field label="Bonus" type="number" register={register("bonus")} />
+                          <div className="pt-4 border-t border-slate-100 flex justify-between items-center">
+                            <span className="text-xs font-black text-slate-400 uppercase tracking-widest">Gross Total</span>
+                            <span className="text-lg font-black text-primary">₹{gross.toLocaleString()}</span>
                           </div>
-                       </Panel>
+                        </div>
+                      </Panel>
+
+                      <Panel title="Deductions" description="Statutory and tax adjustments.">
+                        <div className="space-y-4">
+                          <Field label="Provident Fund (PF)" type="number" register={register("pfDeduction")} />
+                          <Field label="Professional Tax (PT)" type="number" register={register("professionalTax")} />
+                          <Field label="Income Tax (TDS)" type="number" register={register("tds")} />
+                          <Field label="Advance" type="number" register={register("advance")} />
+                          <div className="pt-4 border-t border-slate-100 flex justify-between items-center">
+                            <span className="text-xs font-black text-slate-400 uppercase tracking-widest">Total Deductions</span>
+                            <span className="text-lg font-black text-red-500">₹{totalDeductions.toLocaleString()}</span>
+                          </div>
+                        </div>
+                      </Panel>
                     </div>
                   </div>
 
                   <div className="space-y-6">
                     <Panel title="Net Payout" description="Final amount to be credited.">
-                       <div className="space-y-5">
-                          <div className="p-6 bg-primary rounded-[2.5rem] text-white relative overflow-hidden shadow-xl shadow-primary/20">
-                             <Wallet className="absolute -right-4 -bottom-4 text-white/5" size={120} />
-                             <div className="relative z-10">
-                                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-white/60">Net Salary</p>
-                                <p className="text-4xl font-black mt-1">₹{netPayable.toLocaleString()}</p>
-                                <div className="mt-6 p-3 bg-white/10 rounded-xl flex items-center gap-3">
-                                   <Landmark size={18} className="text-accent" />
-                                   <p className="text-[10px] font-bold leading-4">This amount will be included in the bank NEFT transfer file.</p>
-                                </div>
-                             </div>
+                      <div className="space-y-5">
+                        <div className="p-6 bg-primary rounded-[2.5rem] text-white relative overflow-hidden shadow-xl shadow-primary/20">
+                          <Wallet className="absolute -right-4 -bottom-4 text-white/5" size={120} />
+                          <div className="relative z-10">
+                            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-white/60">Net Salary</p>
+                            <p className="text-4xl font-black mt-1">₹{netPayable.toLocaleString()}</p>
+                            <div className="mt-6 p-3 bg-white/10 rounded-xl flex items-center gap-3">
+                              <Landmark size={18} className="text-accent" />
+                              <p className="text-[10px] font-bold leading-4">This amount will be included in the bank NEFT transfer file.</p>
+                            </div>
                           </div>
-
-                          <div className="flex flex-col gap-3">
-                             <ActionButton label="Confirm Payroll" variant="accent" type="submit" />
-                             <ActionButton label="Save Draft" variant="outline" onClick={() => setShowForm(false)} />
-                          </div>
-                       </div>
+                        </div>
+                        <div className="flex flex-col gap-3">
+                          <ActionButton label="Confirm Payroll" variant="accent" type="submit" />
+                          <ActionButton label="Save Draft" variant="outline" onClick={() => setShowForm(false)} />
+                        </div>
+                      </div>
                     </Panel>
 
                     <div className="p-4 bg-blue-50 rounded-2xl border border-blue-100 flex gap-3">
-                       <ShieldCheck className="text-blue-600 shrink-0" size={18} />
-                       <p className="text-[10px] font-bold text-blue-800 leading-4">Confidential: Payroll data is restricted to HR and Finance Managers only.</p>
+                      <ShieldCheck className="text-blue-600 shrink-0" size={18} />
+                      <p className="text-[10px] font-bold text-blue-800 leading-4">Confidential: Payroll data is restricted to HR and Finance Managers only.</p>
                     </div>
                   </div>
                 </div>
@@ -328,48 +343,41 @@ export default function Step10Salary() {
       )}
 
       <Panel title="Monthly Payroll Register" description="Production payroll register for compliance and bank reconciliation.">
-        <DataTable columns={["ID", "Employee", "Mobile", "Month", "Gross", "Deductions", "Net Salary", "Status", "Actions"]}>
+        <DataTable columns={["ID", "Employee", "Mobile", "Date", "Basic", "HRA", "Spl. All.", "Conv.", "Bonus", "Gross", "PF", "PT", "TDS", "Adv.", "Total Ded.", "Net Salary", "Status", "Pay Mode", "Txn Ref", "Actions"]}>
           {payroll.map((row) => (
             <tr key={row.id} className="text-sm group hover:bg-slate-50 transition-colors">
-              <td className="px-4 py-4 font-black text-primary">{row.id}</td>
+              <td className="px-4 py-4 font-black text-slate-400 text-xs">{row.id}</td>
               <td className="px-4 py-4">
                 <div>
-                   <p className="font-black text-primary">{row.employee}</p>
-                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{row.empId}</p>
+                  <p className="font-black text-primary">{row.employee}</p>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{row.empId}</p>
                 </div>
               </td>
               <td className="px-4 py-4 font-semibold text-slate-500">{row.mobile}</td>
-              
-              {/* Breakdown Fields */}
-              <td className="px-4 py-4 font-medium text-slate-600">₹{(row.basic || 0).toLocaleString()}</td>
-              <td className="px-4 py-4 font-medium text-slate-600">₹{(row.hra || 0).toLocaleString()}</td>
-              <td className="px-4 py-4 font-medium text-slate-600">₹{(row.allowance || 0).toLocaleString()}</td>
-              <td className="px-4 py-4 font-medium text-slate-600">₹{(row.conveyance || 0).toLocaleString()}</td>
-              <td className="px-4 py-4 font-medium text-slate-600">₹{(row.bonus || 0).toLocaleString()}</td>
-              
+              <td className="px-4 py-4 font-semibold text-slate-600">{row.month}</td>
+              <td className="px-4 py-4 font-medium text-slate-600">₹{(Number(row.basic)||0).toLocaleString()}</td>
+              <td className="px-4 py-4 font-medium text-slate-600">₹{(Number(row.hra)||0).toLocaleString()}</td>
+              <td className="px-4 py-4 font-medium text-slate-600">₹{(Number(row.allowance)||0).toLocaleString()}</td>
+              <td className="px-4 py-4 font-medium text-slate-600">₹{(Number(row.conveyance)||0).toLocaleString()}</td>
+              <td className="px-4 py-4 font-medium text-slate-600">₹{(Number(row.bonus)||0).toLocaleString()}</td>
               <td className="px-4 py-4 font-black text-primary">{row.gross}</td>
-              
-              <td className="px-4 py-4 font-medium text-slate-600">₹{(row.pf || row.pfDeduction || 0).toLocaleString()}</td>
-              <td className="px-4 py-4 font-medium text-slate-600">₹{(row.pt || row.professionalTax || 0).toLocaleString()}</td>
-              <td className="px-4 py-4 font-medium text-slate-600">₹{(row.tds || 0).toLocaleString()}</td>
-              <td className="px-4 py-4 font-medium text-slate-600">₹{(row.advance || 0).toLocaleString()}</td>
-              
+              <td className="px-4 py-4 font-medium text-slate-600">₹{(Number(row.pf)||0).toLocaleString()}</td>
+              <td className="px-4 py-4 font-medium text-slate-600">₹{(Number(row.pt)||0).toLocaleString()}</td>
+              <td className="px-4 py-4 font-medium text-slate-600">₹{(Number(row.tds)||0).toLocaleString()}</td>
+              <td className="px-4 py-4 font-medium text-slate-600">₹{(Number(row.advance)||0).toLocaleString()}</td>
               <td className="px-4 py-4 font-semibold text-red-500">{row.deductions}</td>
               <td className="px-4 py-4 font-black text-emerald-600">{row.net}</td>
-              
               <td className="px-4 py-4">
                 <StatusBadge tone={row.status === "Approved" || row.status === "Paid" ? "green" : row.status === "Pending Finance" ? "amber" : "blue"}>
                   {row.status}
                 </StatusBadge>
               </td>
+              <td className="px-4 py-4 text-xs font-bold text-slate-600 uppercase">{row.paymentMethod}</td>
+              <td className="px-4 py-4 text-xs font-mono text-slate-500">{row.paymentRef || "-"}</td>
               <td className="px-4 py-4">
                 <div className="flex gap-2">
-                  <button onClick={() => onEdit(row)} className="text-blue-500 hover:text-blue-700 transition-colors">
-                    <Edit2 size={16} />
-                  </button>
-                  <button onClick={() => deletePayroll(row.id)} className="text-red-500 hover:text-red-700 transition-colors">
-                    <Trash2 size={16} />
-                  </button>
+                  <button onClick={() => onEdit(row)} className="text-blue-500 hover:text-blue-700 transition-colors"><Edit2 size={16} /></button>
+                  <button onClick={() => deletePayroll(row.id)} className="text-red-500 hover:text-red-700 transition-colors"><Trash2 size={16} /></button>
                 </div>
               </td>
             </tr>
@@ -379,5 +387,3 @@ export default function Step10Salary() {
     </AccountingPage>
   );
 }
-
-

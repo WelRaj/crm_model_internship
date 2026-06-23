@@ -45,7 +45,11 @@ type ClientAccount = {
   contacts: Contact[];
 };
 
-const accounts: ClientAccount[] = [
+type NewClientForm = Omit<ClientAccount, "id" | "contacts" | "openDeals" | "tags"> & {
+  tags: string;
+};
+
+const initialAccounts: ClientAccount[] = [
   {
     id: "ACC-24001",
     company: "Apex Finserve Pvt Ltd",
@@ -121,6 +125,28 @@ const accounts: ClientAccount[] = [
     ],
   },
 ];
+
+const blankClientForm: NewClientForm = {
+  company: "",
+  industry: "",
+  city: "",
+  owner: "Rajkumar Rathore",
+  health: "New",
+  stage: "Prospect",
+  value: "INR 0.0L",
+  lastTouch: "Just now",
+  nextAction: "",
+  tags: "New",
+};
+
+const blankContactForm: Contact = {
+  name: "",
+  role: "",
+  email: "",
+  phone: "",
+  influence: "Decision Maker",
+  status: "Primary",
+};
 
 const timeline = [
   { type: "Call", title: "Discovery call completed", detail: "Discussed lead scoring, loan officer dashboard, and reporting needs.", time: "Today, 11:20 AM", icon: Phone },
@@ -206,13 +232,102 @@ function BadgeCheckSvg({ size = 16, className = "" }: { size?: number; className
 }
 
 export default function ClientsContacts() {
-  const [selectedAccountId, setSelectedAccountId] = useState(accounts[0].id);
+  const [accountItems, setAccountItems] = useState<ClientAccount[]>(initialAccounts);
+  const [selectedAccountId, setSelectedAccountId] = useState(initialAccounts[0].id);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [showClientForm, setShowClientForm] = useState(false);
+  const [showContactForm, setShowContactForm] = useState(false);
+  const [newClient, setNewClient] = useState<NewClientForm>(blankClientForm);
+  const [newContact, setNewContact] = useState<Contact>(blankContactForm);
+
   const selectedAccount = useMemo(
-    () => accounts.find((account) => account.id === selectedAccountId) || accounts[0],
-    [selectedAccountId]
+    () => accountItems.find((account) => account.id === selectedAccountId) || accountItems[0],
+    [accountItems, selectedAccountId]
   );
 
-  const totalContacts = accounts.reduce((sum, account) => sum + account.contacts.length, 0);
+  const filteredAccounts = useMemo(() => {
+    const normalizedSearch = searchTerm.trim().toLowerCase();
+    if (!normalizedSearch) return accountItems;
+    return accountItems.filter((account) =>
+      [
+        account.company,
+        account.industry,
+        account.city,
+        account.owner,
+        account.stage,
+        account.health,
+        ...account.tags,
+        ...account.contacts.flatMap((contact) => [contact.name, contact.email, contact.phone, contact.role]),
+      ]
+        .join(" ")
+        .toLowerCase()
+        .includes(normalizedSearch)
+    );
+  }, [accountItems, searchTerm]);
+
+  const totalContacts = accountItems.reduce((sum, account) => sum + account.contacts.length, 0);
+  const atRiskCount = accountItems.filter((account) => account.health === "At Risk").length;
+
+  const handleCreateClient = () => {
+    if (!newClient.company.trim() || !newClient.owner.trim()) return;
+
+    const client: ClientAccount = {
+      ...newClient,
+      id: `ACC-${Date.now().toString().slice(-5)}`,
+      openDeals: 0,
+      tags: newClient.tags.split(",").map((tag) => tag.trim()).filter(Boolean),
+      contacts: [],
+    };
+    setAccountItems((current) => [client, ...current]);
+    setSelectedAccountId(client.id);
+    setNewClient(blankClientForm);
+    setShowClientForm(false);
+  };
+
+  const handleCreateContact = () => {
+    if (!newContact.name.trim() || !newContact.email.trim()) return;
+
+    setAccountItems((current) =>
+      current.map((account) =>
+        account.id === selectedAccount.id
+          ? {
+              ...account,
+              contacts: [newContact, ...account.contacts],
+              lastTouch: "Just now",
+              nextAction: `Follow up with ${newContact.name}`,
+            }
+          : account
+      )
+    );
+    setNewContact(blankContactForm);
+    setShowContactForm(false);
+  };
+
+  const handleExport = () => {
+    const csvRows = [
+      ["ID", "Company", "Industry", "City", "Owner", "Health", "Stage", "Value", "Contacts", "Next Action"],
+      ...filteredAccounts.map((account) => [
+        account.id,
+        account.company,
+        account.industry,
+        account.city,
+        account.owner,
+        account.health,
+        account.stage,
+        account.value,
+        String(account.contacts.length),
+        account.nextAction,
+      ]),
+    ];
+    const csv = csvRows.map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "clients-contacts.csv";
+    link.click();
+    URL.revokeObjectURL(url);
+  };
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
@@ -231,24 +346,54 @@ export default function ClientsContacts() {
           </div>
         </div>
         <div className="flex flex-wrap gap-3">
-          <button className="inline-flex h-11 items-center gap-2 rounded-xl border border-border bg-white px-4 text-xs font-black uppercase tracking-widest text-primary shadow-sm hover:bg-slate-50">
+          <button onClick={handleExport} className="inline-flex h-11 items-center gap-2 rounded-xl border border-border bg-white px-4 text-xs font-black uppercase tracking-widest text-primary shadow-sm hover:bg-slate-50">
             <Download size={16} /> Export
           </button>
-          <button className="inline-flex h-11 items-center gap-2 rounded-xl bg-primary px-4 text-xs font-black uppercase tracking-widest text-white shadow-lg hover:bg-primary/90">
+          <button onClick={() => setShowClientForm((current) => !current)} className="inline-flex h-11 items-center gap-2 rounded-xl bg-primary px-4 text-xs font-black uppercase tracking-widest text-white shadow-lg hover:bg-primary/90">
             <Plus size={16} /> Add Client
           </button>
-          <button className="inline-flex h-11 items-center gap-2 rounded-xl bg-accent px-4 text-xs font-black uppercase tracking-widest text-primary shadow-lg hover:bg-accent/90">
+          <button onClick={() => setShowContactForm((current) => !current)} className="inline-flex h-11 items-center gap-2 rounded-xl bg-accent px-4 text-xs font-black uppercase tracking-widest text-primary shadow-lg hover:bg-accent/90">
             <UserCheck size={16} /> Add Contact
           </button>
         </div>
       </div>
 
       <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-4">
-        <MetricCard label="Client Accounts" value={String(accounts.length)} helper="Active CRM accounts" icon={Building2} />
+        <MetricCard label="Client Accounts" value={String(accountItems.length)} helper="Active CRM accounts" icon={Building2} />
         <MetricCard label="Contacts Mapped" value={String(totalContacts)} helper="Decision makers and users" icon={Users} />
         <MetricCard label="Open Deal Value" value="INR 60.0L" helper="Across active accounts" icon={Wallet} />
-        <MetricCard label="At-risk Accounts" value="01" helper="Needs escalation" icon={ShieldAlert} />
+        <MetricCard label="At-risk Accounts" value={String(atRiskCount).padStart(2, "0")} helper="Needs escalation" icon={ShieldAlert} />
       </div>
+
+      {showClientForm ? (
+        <section className="rounded-2xl border border-border bg-white p-6 shadow-sm">
+          <div className="mb-5 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+            <div>
+              <h3 className="text-lg font-black text-primary">Add Client Account</h3>
+              <p className="mt-1 text-xs font-semibold text-slate-500">Create a local CRM account record for frontend validation.</p>
+            </div>
+            <button onClick={() => setShowClientForm(false)} className="h-9 rounded-xl bg-slate-50 px-4 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:bg-slate-100">Close</button>
+          </div>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+            <input value={newClient.company} onChange={(e) => setNewClient((current) => ({ ...current, company: e.target.value }))} placeholder="Company name" className="h-11 rounded-xl border border-border px-3 text-sm font-semibold text-primary outline-none focus:ring-4 focus:ring-primary/10" />
+            <input value={newClient.industry} onChange={(e) => setNewClient((current) => ({ ...current, industry: e.target.value }))} placeholder="Industry" className="h-11 rounded-xl border border-border px-3 text-sm font-semibold text-primary outline-none focus:ring-4 focus:ring-primary/10" />
+            <input value={newClient.city} onChange={(e) => setNewClient((current) => ({ ...current, city: e.target.value }))} placeholder="City" className="h-11 rounded-xl border border-border px-3 text-sm font-semibold text-primary outline-none focus:ring-4 focus:ring-primary/10" />
+            <input value={newClient.owner} onChange={(e) => setNewClient((current) => ({ ...current, owner: e.target.value }))} placeholder="Owner" className="h-11 rounded-xl border border-border px-3 text-sm font-semibold text-primary outline-none focus:ring-4 focus:ring-primary/10" />
+            <select value={newClient.health} onChange={(e) => setNewClient((current) => ({ ...current, health: e.target.value as ClientAccount["health"] }))} className="h-11 rounded-xl border border-border px-3 text-sm font-semibold text-primary outline-none focus:ring-4 focus:ring-primary/10">
+              {(["Excellent", "Good", "At Risk", "New"] as const).map((health) => <option key={health}>{health}</option>)}
+            </select>
+            <select value={newClient.stage} onChange={(e) => setNewClient((current) => ({ ...current, stage: e.target.value as ClientAccount["stage"] }))} className="h-11 rounded-xl border border-border px-3 text-sm font-semibold text-primary outline-none focus:ring-4 focus:ring-primary/10">
+              {(["Prospect", "Active Client", "Expansion", "Renewal", "Dormant"] as const).map((stage) => <option key={stage}>{stage}</option>)}
+            </select>
+            <input value={newClient.value} onChange={(e) => setNewClient((current) => ({ ...current, value: e.target.value }))} placeholder="Account value" className="h-11 rounded-xl border border-border px-3 text-sm font-semibold text-primary outline-none focus:ring-4 focus:ring-primary/10" />
+            <input value={newClient.tags} onChange={(e) => setNewClient((current) => ({ ...current, tags: e.target.value }))} placeholder="Tags comma separated" className="h-11 rounded-xl border border-border px-3 text-sm font-semibold text-primary outline-none focus:ring-4 focus:ring-primary/10" />
+            <input value={newClient.nextAction} onChange={(e) => setNewClient((current) => ({ ...current, nextAction: e.target.value }))} placeholder="Next action" className="h-11 rounded-xl border border-border px-3 text-sm font-semibold text-primary outline-none focus:ring-4 focus:ring-primary/10" />
+          </div>
+          <div className="mt-4 flex justify-end">
+            <button onClick={handleCreateClient} className="h-11 rounded-xl bg-primary px-5 text-xs font-black uppercase tracking-widest text-white shadow-lg">Save Client</button>
+          </div>
+        </section>
+      ) : null}
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-[420px_minmax(0,1fr)]">
         <section className="rounded-2xl border border-border bg-white p-5 shadow-sm">
@@ -257,13 +402,19 @@ export default function ClientsContacts() {
               <h3 className="text-lg font-black text-primary">Account Directory</h3>
               <p className="mt-1 text-xs font-semibold text-slate-500">Scan ownership, health, stage, and next action.</p>
             </div>
-            <button className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-50 text-primary hover:bg-slate-100">
-              <Search size={18} />
-            </button>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300" size={15} />
+              <input
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Search..."
+                className="h-10 w-40 rounded-xl border border-border bg-slate-50 pl-9 pr-3 text-xs font-bold text-primary outline-none focus:ring-4 focus:ring-primary/10"
+              />
+            </div>
           </div>
 
           <div className="space-y-3">
-            {accounts.map((account) => {
+            {filteredAccounts.map((account) => {
               const isSelected = account.id === selectedAccountId;
               return (
                 <button
@@ -301,6 +452,11 @@ export default function ClientsContacts() {
                 </button>
               );
             })}
+            {filteredAccounts.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-border bg-slate-50 p-6 text-center text-xs font-black uppercase tracking-widest text-slate-400">
+                No accounts found
+              </div>
+            ) : null}
           </div>
         </section>
 
@@ -355,10 +511,32 @@ export default function ClientsContacts() {
                 <h3 className="text-lg font-black text-primary">Contact Map</h3>
                 <p className="mt-1 text-xs font-semibold text-slate-500">Decision makers, finance contacts, technical owners, and daily users.</p>
               </div>
-              <button className="inline-flex h-10 items-center gap-2 rounded-xl border border-border bg-white px-4 text-xs font-black uppercase tracking-widest text-primary hover:bg-slate-50">
+              <button onClick={() => setShowContactForm((current) => !current)} className="inline-flex h-10 items-center gap-2 rounded-xl border border-border bg-white px-4 text-xs font-black uppercase tracking-widest text-primary hover:bg-slate-50">
                 <Plus size={15} /> Add Contact
               </button>
             </div>
+
+            {showContactForm ? (
+              <div className="mb-5 rounded-2xl border border-border bg-slate-50 p-4">
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                  <input value={newContact.name} onChange={(e) => setNewContact((current) => ({ ...current, name: e.target.value }))} placeholder="Contact name" className="h-11 rounded-xl border border-border px-3 text-sm font-semibold text-primary outline-none focus:ring-4 focus:ring-primary/10" />
+                  <input value={newContact.role} onChange={(e) => setNewContact((current) => ({ ...current, role: e.target.value }))} placeholder="Role" className="h-11 rounded-xl border border-border px-3 text-sm font-semibold text-primary outline-none focus:ring-4 focus:ring-primary/10" />
+                  <input value={newContact.email} onChange={(e) => setNewContact((current) => ({ ...current, email: e.target.value }))} placeholder="Email" className="h-11 rounded-xl border border-border px-3 text-sm font-semibold text-primary outline-none focus:ring-4 focus:ring-primary/10" />
+                  <input value={newContact.phone} onChange={(e) => setNewContact((current) => ({ ...current, phone: e.target.value }))} placeholder="Phone" className="h-11 rounded-xl border border-border px-3 text-sm font-semibold text-primary outline-none focus:ring-4 focus:ring-primary/10" />
+                  <select value={newContact.influence} onChange={(e) => setNewContact((current) => ({ ...current, influence: e.target.value as Contact["influence"] }))} className="h-11 rounded-xl border border-border px-3 text-sm font-semibold text-primary outline-none focus:ring-4 focus:ring-primary/10">
+                    {(["Decision Maker", "Finance", "Technical", "User", "Gatekeeper"] as const).map((influence) => <option key={influence}>{influence}</option>)}
+                  </select>
+                  <select value={newContact.status} onChange={(e) => setNewContact((current) => ({ ...current, status: e.target.value as Contact["status"] }))} className="h-11 rounded-xl border border-border px-3 text-sm font-semibold text-primary outline-none focus:ring-4 focus:ring-primary/10">
+                    {(["Primary", "Active", "Warm", "Inactive"] as const).map((status) => <option key={status}>{status}</option>)}
+                  </select>
+                </div>
+                <div className="mt-4 flex justify-end">
+                  <button onClick={handleCreateContact} className="h-10 rounded-xl bg-accent px-5 text-xs font-black uppercase tracking-widest text-primary shadow-lg">
+                    Save Contact
+                  </button>
+                </div>
+              </div>
+            ) : null}
 
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
               {selectedAccount.contacts.map((contact) => (
@@ -384,15 +562,15 @@ export default function ClientsContacts() {
                     </div>
                   </div>
                   <div className="mt-4 flex gap-2">
-                    <button className="flex h-9 flex-1 items-center justify-center gap-2 rounded-xl bg-white text-xs font-black text-primary shadow-sm hover:bg-slate-100">
+                    <a href={`tel:${contact.phone.replace(/\s/g, "")}`} className="flex h-9 flex-1 items-center justify-center gap-2 rounded-xl bg-white text-xs font-black text-primary shadow-sm hover:bg-slate-100">
                       <Phone size={14} /> Call
-                    </button>
-                    <button className="flex h-9 flex-1 items-center justify-center gap-2 rounded-xl bg-white text-xs font-black text-primary shadow-sm hover:bg-slate-100">
+                    </a>
+                    <a href={`https://wa.me/${contact.phone.replace(/\D/g, "")}`} target="_blank" rel="noreferrer" className="flex h-9 flex-1 items-center justify-center gap-2 rounded-xl bg-white text-xs font-black text-primary shadow-sm hover:bg-slate-100">
                       <MessageSquare size={14} /> WhatsApp
-                    </button>
-                    <button className="flex h-9 flex-1 items-center justify-center gap-2 rounded-xl bg-white text-xs font-black text-primary shadow-sm hover:bg-slate-100">
+                    </a>
+                    <a href={`mailto:${contact.email}`} className="flex h-9 flex-1 items-center justify-center gap-2 rounded-xl bg-white text-xs font-black text-primary shadow-sm hover:bg-slate-100">
                       <Mail size={14} /> Email
-                    </button>
+                    </a>
                   </div>
                 </div>
               ))}

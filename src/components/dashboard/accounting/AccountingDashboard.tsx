@@ -3,7 +3,7 @@
 import { 
   Users, Truck, FileText, Receipt, IndianRupee, BellRing, 
   RotateCcw, Wallet, BarChart3, UserSquare2, Percent, 
-  Calculator, LineChart, ShieldCheck, History, Lock,
+  Calculator, LineChart, ShieldCheck, History, Lock, Landmark,
   TrendingUp, TrendingDown, ArrowUpRight, Plus
 } from "lucide-react";
 
@@ -16,27 +16,27 @@ export default function AccountingDashboard({ onSelectModule }: { onSelectModule
   ];
 
   const modules = [
-    { id: "accounting-clients", label: "Client Master", icon: Users },
-    { id: "accounting-vendors", label: "Vendor Master", icon: Truck },
-    { id: "accounting-quotations", label: "Quotations", icon: FileText },
-    { id: "accounting-invoices", label: "Invoices", icon: Receipt },
-    { id: "accounting-payments", label: "Payments", icon: Wallet },
-    { id: "accounting-reminders", label: "Reminders", icon: BellRing },
-    { id: "accounting-credit-notes", label: "Credit Notes", icon: RotateCcw },
-    { id: "accounting-expenses", label: "Expenses", icon: IndianRupee },
-    { id: "accounting-budgets", label: "Budgets", icon: BarChart3 },
-    { id: "accounting-salary", label: "Salary/Payroll", icon: UserSquare2 },
-    { id: "accounting-gst", label: "GST Mgmt", icon: Percent },
-    { id: "accounting-tds", label: "TDS Mgmt", icon: Calculator },
-    { id: "accounting-reports", label: "Reports", icon: LineChart },
-    { id: "accounting-approvals", label: "Approvals", icon: ShieldCheck },
-    { id: "accounting-audit-logs", label: "Audit Logs", icon: History },
-    { id: "accounting-access", label: "Access Control", icon: Lock },
+    { id: "accounting-clients",      label: "Client Master",              icon: Users },
+    { id: "accounting-vendors",      label: "Vendor Master",              icon: Truck },
+    { id: "accounting-quotations",   label: "Quotations",                 icon: FileText },
+    { id: "accounting-invoices",     label: "Invoices",                   icon: Receipt },
+    { id: "accounting-payments",     label: "Payments",                   icon: Wallet },
+    { id: "accounting-reminders",    label: "Reminders",                  icon: BellRing },
+    { id: "accounting-credit-notes", label: "Credit Notes",               icon: RotateCcw },
+    { id: "accounting-expenses",     label: "Sales, Purchase & Expenses", icon: TrendingDown },
+    { id: "accounting-budgets",      label: "Budgets",                    icon: BarChart3 },
+    { id: "accounting-salary",       label: "Salary/Payroll",             icon: UserSquare2 },
+    { id: "accounting-gst",          label: "GST Mgmt",                   icon: Percent },
+    { id: "accounting-tds",          label: "TDS Mgmt",                   icon: Calculator },
+    { id: "accounting-reports",      label: "Reports",                    icon: LineChart },
+    { id: "accounting-approvals",    label: "Approvals",                  icon: ShieldCheck },
+    { id: "accounting-audit-logs",   label: "Audit Logs",                 icon: History },
+    { id: "accounting-access",       label: "Access Control",             icon: Lock },
+    { id: "accounting-bank-details", label: "Bank Details",               icon: Landmark },
   ];
 
   return (
     <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-700">
-      {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
         <div>
           <h2 className="text-3xl font-black text-[#0F172A] tracking-tight">Accounting Control Center</h2>
@@ -52,7 +52,6 @@ export default function AccountingDashboard({ onSelectModule }: { onSelectModule
         </div>
       </div>
 
-      {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {stats.map((stat, i) => (
           <div key={i} className="bg-white p-7 rounded-[2rem] border border-slate-100 shadow-sm hover:shadow-xl transition-all">
@@ -68,7 +67,6 @@ export default function AccountingDashboard({ onSelectModule }: { onSelectModule
         ))}
       </div>
 
-      {/* Main Grid View */}
       <div>
         <h3 className="text-sm font-black text-slate-900 uppercase tracking-[0.2em] mb-8 ml-2">Masters & Modules</h3>
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-4 gap-4">

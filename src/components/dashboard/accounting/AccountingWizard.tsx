@@ -4,11 +4,9 @@ import React from 'react';
 import type { ComponentType } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import { 
-  Users, Truck, FileText, Receipt, IndianRupee, BellRing, 
+  Users, Truck, FileText, Receipt, ReceiptText, IndianRupee, BellRing, 
   RotateCcw, Wallet, BarChart3, UserSquare2, Percent, 
-  Calculator, LineChart, ShieldCheck, History, Lock 
-} from 'lucide-react';
-
+  Calculator, LineChart, ShieldCheck, History, Lock, Landmark ,TrendingDown} from 'lucide-react';
 import AccountingDashboard from './AccountingDashboard';
 import { AuthProvider, ProtectedModule } from './AccessControlContext';
 
@@ -19,7 +17,7 @@ import Step4Invoices from './Step4Invoices';
 import Step5Payments from './Step5Payments';
 import Step6Reminders from './Step6Reminders';
 import Step7CreditNotes from './Step7CreditNotes';
-import Step8Expenses from './Step8Expenses';
+import Step8expenses from './Step8expenses';
 import Step9Budgets from './Step9Budgets';
 import Step10Salary from './Step10Salary';
 import Step11GST from './Step11GST';
@@ -28,6 +26,7 @@ import Step13Reports from './Step13Reports';
 import Step14Approvals from './Step14Approvals';
 import Step15AuditLogs from './Step15AuditLogs';
 import Step16Access from './Step16Access';
+import Step17BankDetails from './Step17BankDetails';
 
 export type AccountingModuleId =
   | 'accounting-clients'
@@ -45,7 +44,9 @@ export type AccountingModuleId =
   | 'accounting-reports'
   | 'accounting-approvals'
   | 'accounting-audit-logs'
-  | 'accounting-access';
+  | 'accounting-access'
+  | 'accounting-bank-details'
+
 
 type AccountingModule = {
   id: AccountingModuleId;
@@ -62,7 +63,7 @@ export const ACCOUNTING_MODULES: AccountingModule[] = [
   { id: 'accounting-payments', label: 'Payments', icon: Wallet, component: Step5Payments },
   { id: 'accounting-reminders', label: 'Reminders', icon: BellRing, component: Step6Reminders },
   { id: 'accounting-credit-notes', label: 'Credit Notes', icon: RotateCcw, component: Step7CreditNotes },
-  { id: 'accounting-expenses', label: 'Expenses', icon: IndianRupee, component: Step8Expenses },
+  { id: 'accounting-expenses', label:'Sale/Purchase/Exp', icon: TrendingDown, component: Step8expenses },
   { id: 'accounting-budgets', label: 'Budgets', icon: BarChart3, component: Step9Budgets },
   { id: 'accounting-salary', label: 'Salary/Payroll', icon: UserSquare2, component: Step10Salary },
   { id: 'accounting-gst', label: 'GST Mgmt', icon: Percent, component: Step11GST },
@@ -71,6 +72,7 @@ export const ACCOUNTING_MODULES: AccountingModule[] = [
   { id: 'accounting-approvals', label: 'Approvals', icon: ShieldCheck, component: Step14Approvals },
   { id: 'accounting-audit-logs', label: 'Audit Logs', icon: History, component: Step15AuditLogs },
   { id: 'accounting-access', label: 'Access Control', icon: Lock, component: Step16Access },
+  { id: 'accounting-bank-details', label: 'Bank Details', icon: Landmark, component: Step17BankDetails },
 ];
 
 type AccountingWizardProps = {

@@ -1,10 +1,13 @@
 "use client";
 
+import { useMemo, useState } from "react";
 import {
+  Archive,
   BadgeIndianRupee,
   Bot,
   CalendarClock,
   Download,
+  Edit3,
   Filter,
   Gauge,
   Globe2,
@@ -22,10 +25,72 @@ import {
   TrendingUp,
   Users,
   Wallet,
+  X,
 } from "lucide-react";
 
 type MarketingView = "campaigns" | "roi" | "sources";
 type Tone = "blue" | "green" | "amber" | "red" | "purple" | "slate" | "cyan";
+type CampaignStatus = "Draft" | "Active" | "Review" | "Scale" | "Archived";
+type CampaignChannel = "Google Search" | "LinkedIn Ads" | "Meta Ads" | "WhatsApp" | "Email" | "Webinar" | "Marketplace";
+type SourceType = "Organic" | "Paid" | "Referral" | "Outbound" | "Event" | "Partner" | "Offline";
+type SourceStatus = "Active" | "Review" | "Paused" | "Archived";
+type SourceQuality = "High" | "High Intent" | "Enterprise" | "Warm" | "Mixed" | "Nurture" | "Low";
+
+type CampaignRecord = {
+  id: string;
+  name: string;
+  channel: CampaignChannel;
+  objective: string;
+  audienceSegment: string;
+  budgetAmount: number;
+  spentAmount: number;
+  leads: number;
+  mql: number;
+  pipelineAmount: number;
+  startDate: string;
+  endDate: string;
+  utmSource: string;
+  utmMedium: string;
+  utmCampaign: string;
+  landingPage: string;
+  leadForm: string;
+  owner: string;
+  status: CampaignStatus;
+  nextAction: string;
+};
+
+type CampaignFormState = Omit<CampaignRecord, "id">;
+type RoiChannelRow = {
+  channel: CampaignChannel;
+  spendAmount: number;
+  leads: number;
+  cpl: number;
+  mql: number;
+  cac: number;
+  pipelineAmount: number;
+  roi: number;
+  campaignCount: number;
+};
+
+type LeadSourceRecord = {
+  id: string;
+  source: string;
+  type: SourceType;
+  normalizedKey: string;
+  defaultUtmSource: string;
+  defaultUtmMedium: string;
+  owner: string;
+  quality: SourceQuality;
+  leads: number;
+  mql: number;
+  sql: number;
+  won: number;
+  last30Change: number;
+  status: SourceStatus;
+  nextAction: string;
+};
+
+type LeadSourceFormState = Omit<LeadSourceRecord, "id">;
 
 const toneClasses: Record<Tone, string> = {
   blue: "border-blue-200 bg-blue-50 text-blue-700",
@@ -37,86 +102,246 @@ const toneClasses: Record<Tone, string> = {
   cyan: "border-cyan-200 bg-cyan-50 text-cyan-700",
 };
 
-const campaigns = [
+const campaignChannels: CampaignChannel[] = ["Google Search", "LinkedIn Ads", "Meta Ads", "WhatsApp", "Email", "Webinar", "Marketplace"];
+const campaignStatuses: CampaignStatus[] = ["Draft", "Active", "Review", "Scale", "Archived"];
+const sourceTypes: SourceType[] = ["Organic", "Paid", "Referral", "Outbound", "Event", "Partner", "Offline"];
+const sourceStatuses: SourceStatus[] = ["Active", "Review", "Paused", "Archived"];
+const sourceQualities: SourceQuality[] = ["High", "High Intent", "Enterprise", "Warm", "Mixed", "Nurture", "Low"];
+
+const initialCampaigns: CampaignRecord[] = [
   {
     id: "CMP-2026-041",
     name: "AI CRM Automation Launch",
-    channel: "LinkedIn + Google Search",
+    channel: "LinkedIn Ads",
     objective: "B2B demo bookings",
-    budget: "INR 2.4L",
-    spent: "INR 1.62L",
+    audienceSegment: "Founders and sales heads",
+    budgetAmount: 240000,
+    spentAmount: 162000,
     leads: 184,
     mql: 71,
-    pipeline: "INR 18.6L",
-    roas: "4.8x",
+    pipelineAmount: 1860000,
+    startDate: "2026-06-01",
+    endDate: "2026-06-30",
+    utmSource: "linkedin",
+    utmMedium: "paid-social",
+    utmCampaign: "ai-crm-automation-launch",
+    landingPage: "/landing/ai-crm",
+    leadForm: "Demo booking form",
+    owner: "B2B Growth",
     status: "Active",
+    nextAction: "Increase founder audience if CPL remains below target",
   },
   {
     id: "CMP-2026-042",
     name: "WhatsApp Lead Nurture",
-    channel: "WhatsApp + Meta Retargeting",
+    channel: "WhatsApp",
     objective: "Revive warm leads",
-    budget: "INR 90K",
-    spent: "INR 54K",
+    audienceSegment: "Old enquiries and proposal drop-offs",
+    budgetAmount: 90000,
+    spentAmount: 54000,
     leads: 128,
     mql: 43,
-    pipeline: "INR 7.2L",
-    roas: "3.9x",
+    pipelineAmount: 720000,
+    startDate: "2026-06-05",
+    endDate: "2026-07-05",
+    utmSource: "whatsapp",
+    utmMedium: "nurture",
+    utmCampaign: "whatsapp-lead-nurture",
+    landingPage: "/crm/demo",
+    leadForm: "WhatsApp quick reply",
+    owner: "Marketing Ops",
     status: "Active",
+    nextAction: "Split sequence by lead score",
   },
   {
     id: "CMP-2026-043",
     name: "ERP for IT Services Webinar",
-    channel: "Email + LinkedIn Event",
+    channel: "Webinar",
     objective: "Webinar registrations",
-    budget: "INR 65K",
-    spent: "INR 61K",
+    audienceSegment: "IT service company owners",
+    budgetAmount: 65000,
+    spentAmount: 61000,
     leads: 312,
     mql: 56,
-    pipeline: "INR 5.4L",
-    roas: "2.1x",
+    pipelineAmount: 540000,
+    startDate: "2026-05-20",
+    endDate: "2026-06-20",
+    utmSource: "webinar",
+    utmMedium: "event",
+    utmCampaign: "erp-it-services-webinar",
+    landingPage: "/webinars/erp-it-services",
+    leadForm: "Webinar registration",
+    owner: "Content Marketing",
     status: "Review",
+    nextAction: "Qualify attendees before next webinar spend",
   },
   {
     id: "CMP-2026-044",
     name: "Founder Search Intent",
     channel: "Google Search",
     objective: "High-intent enquiries",
-    budget: "INR 1.8L",
-    spent: "INR 1.78L",
+    audienceSegment: "Founders searching CRM/ERP vendors",
+    budgetAmount: 180000,
+    spentAmount: 178000,
     leads: 96,
     mql: 52,
-    pipeline: "INR 14.2L",
-    roas: "5.7x",
+    pipelineAmount: 1420000,
+    startDate: "2026-06-01",
+    endDate: "2026-06-28",
+    utmSource: "google",
+    utmMedium: "cpc",
+    utmCampaign: "founder-search-intent",
+    landingPage: "/landing/crm-for-founders",
+    leadForm: "Consultation form",
+    owner: "Performance Marketing",
     status: "Scale",
+    nextAction: "Increase exact match budget",
   },
 ];
 
-const roiRows = [
-  { channel: "Google Search", spend: "INR 4.2L", leads: 226, cpl: "INR 1,858", mql: 114, cac: "INR 18,400", pipeline: "INR 32.6L", roi: "6.1x", tone: "green" },
-  { channel: "LinkedIn Ads", spend: "INR 3.1L", leads: 148, cpl: "INR 2,095", mql: 82, cac: "INR 22,700", pipeline: "INR 24.8L", roi: "4.4x", tone: "blue" },
-  { channel: "Meta Retargeting", spend: "INR 1.4L", leads: 205, cpl: "INR 683", mql: 49, cac: "INR 16,900", pipeline: "INR 8.9L", roi: "2.8x", tone: "amber" },
-  { channel: "Email Nurture", spend: "INR 38K", leads: 91, cpl: "INR 418", mql: 33, cac: "INR 6,200", pipeline: "INR 5.2L", roi: "8.4x", tone: "green" },
-  { channel: "Marketplace / Upwork", spend: "INR 72K", leads: 39, cpl: "INR 1,846", mql: 21, cac: "INR 14,100", pipeline: "INR 6.1L", roi: "3.6x", tone: "blue" },
+const blankCampaignForm: CampaignFormState = {
+  name: "",
+  channel: "Google Search",
+  objective: "",
+  audienceSegment: "",
+  budgetAmount: 0,
+  spentAmount: 0,
+  leads: 0,
+  mql: 0,
+  pipelineAmount: 0,
+  startDate: "2026-06-23",
+  endDate: "2026-07-23",
+  utmSource: "",
+  utmMedium: "",
+  utmCampaign: "",
+  landingPage: "",
+  leadForm: "",
+  owner: "Marketing",
+  status: "Draft",
+  nextAction: "",
+};
+
+const initialSources: LeadSourceRecord[] = [
+  { id: "SRC-001", source: "Website Organic", type: "Organic", normalizedKey: "website_organic", defaultUtmSource: "website", defaultUtmMedium: "organic", leads: 214, mql: 86, sql: 39, won: 12, quality: "High", owner: "SEO Team", last30Change: 22, status: "Active", nextAction: "Add service pages" },
+  { id: "SRC-002", source: "Google Ads", type: "Paid", normalizedKey: "google_ads", defaultUtmSource: "google", defaultUtmMedium: "cpc", leads: 226, mql: 98, sql: 51, won: 15, quality: "High Intent", owner: "Performance", last30Change: 14, status: "Active", nextAction: "Scale exact-match keywords" },
+  { id: "SRC-003", source: "LinkedIn", type: "Paid", normalizedKey: "linkedin_ads", defaultUtmSource: "linkedin", defaultUtmMedium: "paid-social", leads: 148, mql: 61, sql: 29, won: 8, quality: "Enterprise", owner: "B2B Growth", last30Change: 31, status: "Active", nextAction: "Increase founder audience" },
+  { id: "SRC-004", source: "WhatsApp Referral", type: "Referral", normalizedKey: "whatsapp_referral", defaultUtmSource: "whatsapp", defaultUtmMedium: "referral", leads: 86, mql: 42, sql: 24, won: 9, quality: "Warm", owner: "Sales", last30Change: 9, status: "Active", nextAction: "Launch referral incentive" },
+  { id: "SRC-005", source: "Meta Ads", type: "Paid", normalizedKey: "meta_ads", defaultUtmSource: "meta", defaultUtmMedium: "paid-social", leads: 205, mql: 54, sql: 16, won: 3, quality: "Mixed", owner: "Performance", last30Change: -6, status: "Review", nextAction: "Tighten retargeting" },
+  { id: "SRC-006", source: "Events / Webinar", type: "Event", normalizedKey: "events_webinar", defaultUtmSource: "webinar", defaultUtmMedium: "event", leads: 312, mql: 76, sql: 31, won: 7, quality: "Nurture", owner: "Marketing", last30Change: 48, status: "Active", nextAction: "Segment by intent score" },
 ];
 
-const sources = [
-  { source: "Website Organic", leads: 214, quality: "High", conversion: "18.2%", owner: "SEO Team", last30: "+22%", action: "Add service pages", tone: "green" },
-  { source: "Google Ads", leads: 226, quality: "High Intent", conversion: "22.7%", owner: "Performance", last30: "+14%", action: "Scale exact-match keywords", tone: "green" },
-  { source: "LinkedIn", leads: 148, quality: "Enterprise", conversion: "16.5%", owner: "B2B Growth", last30: "+31%", action: "Increase founder audience", tone: "blue" },
-  { source: "WhatsApp Referral", leads: 86, quality: "Warm", conversion: "28.4%", owner: "Sales", last30: "+9%", action: "Launch referral incentive", tone: "purple" },
-  { source: "Meta Ads", leads: 205, quality: "Mixed", conversion: "7.4%", owner: "Performance", last30: "-6%", action: "Tighten retargeting", tone: "amber" },
-  { source: "Events / Webinar", leads: 312, quality: "Nurture", conversion: "9.8%", owner: "Marketing", last30: "+48%", action: "Segment by intent score", tone: "cyan" },
-];
+const blankSourceForm: LeadSourceFormState = {
+  source: "",
+  type: "Organic",
+  normalizedKey: "",
+  defaultUtmSource: "",
+  defaultUtmMedium: "",
+  owner: "Marketing",
+  quality: "Mixed",
+  leads: 0,
+  mql: 0,
+  sql: 0,
+  won: 0,
+  last30Change: 0,
+  status: "Active",
+  nextAction: "",
+};
 
-const funnel = [
-  { label: "Impressions", value: "9.8L", percent: 100 },
-  { label: "Clicks", value: "42.6K", percent: 72 },
-  { label: "Leads", value: "1,191", percent: 48 },
-  { label: "MQL", value: "428", percent: 31 },
-  { label: "SQL", value: "186", percent: 18 },
-  { label: "Won", value: "38", percent: 8 },
-];
+function formatCurrency(value: number) {
+  return `INR ${value.toLocaleString("en-IN")}`;
+}
+
+function formatRoas(campaign: Pick<CampaignRecord, "spentAmount" | "pipelineAmount">) {
+  if (campaign.spentAmount <= 0) return "0.0x";
+  return `${(campaign.pipelineAmount / campaign.spentAmount).toFixed(1)}x`;
+}
+
+function formatRatio(value: number) {
+  return `${value.toFixed(1)}x`;
+}
+
+function roiTone(value: number): Tone {
+  if (value >= 5) return "green";
+  if (value >= 3) return "blue";
+  if (value >= 1.5) return "amber";
+  return "red";
+}
+
+function aggregateRoiByChannel(campaigns: CampaignRecord[]): RoiChannelRow[] {
+  const rows = new Map<CampaignChannel, RoiChannelRow>();
+  campaigns.forEach((campaign) => {
+    const current = rows.get(campaign.channel) || {
+      channel: campaign.channel,
+      spendAmount: 0,
+      leads: 0,
+      cpl: 0,
+      mql: 0,
+      cac: 0,
+      pipelineAmount: 0,
+      roi: 0,
+      campaignCount: 0,
+    };
+    current.spendAmount += campaign.spentAmount;
+    current.leads += campaign.leads;
+    current.mql += campaign.mql;
+    current.pipelineAmount += campaign.pipelineAmount;
+    current.campaignCount += 1;
+    rows.set(campaign.channel, current);
+  });
+
+  return Array.from(rows.values())
+    .map((row) => ({
+      ...row,
+      cpl: row.leads > 0 ? row.spendAmount / row.leads : 0,
+      cac: row.mql > 0 ? row.spendAmount / row.mql : 0,
+      roi: row.spendAmount > 0 ? row.pipelineAmount / row.spendAmount : 0,
+    }))
+    .sort((a, b) => b.pipelineAmount - a.pipelineAmount);
+}
+
+function campaignStatusTone(status: CampaignStatus): Tone {
+  if (status === "Scale") return "green";
+  if (status === "Review") return "amber";
+  if (status === "Active") return "blue";
+  if (status === "Archived") return "slate";
+  return "purple";
+}
+
+function makeCampaignId(count: number) {
+  return `CMP-2026-${String(45 + count).padStart(3, "0")}`;
+}
+
+function csvEscape(value: string | number) {
+  return `"${String(value).replace(/"/g, '""')}"`;
+}
+
+function sourceConversion(source: Pick<LeadSourceRecord, "leads" | "sql">) {
+  if (source.leads <= 0) return 0;
+  return (source.sql / source.leads) * 100;
+}
+
+function sourceQualityTone(quality: SourceQuality): Tone {
+  if (quality === "High" || quality === "High Intent" || quality === "Warm") return "green";
+  if (quality === "Enterprise") return "blue";
+  if (quality === "Nurture") return "cyan";
+  if (quality === "Mixed") return "amber";
+  return "red";
+}
+
+function sourceStatusTone(status: SourceStatus): Tone {
+  if (status === "Active") return "green";
+  if (status === "Review") return "amber";
+  if (status === "Paused") return "blue";
+  return "slate";
+}
+
+function makeSourceId(count: number) {
+  return `SRC-${String(count + 1).padStart(3, "0")}`;
+}
+
+function normalizeSourceKey(value: string) {
+  return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+}
 
 function Badge({ children, tone = "slate" }: { children: React.ReactNode; tone?: Tone }) {
   return (
@@ -130,10 +355,14 @@ function ActionButton({
   icon: Icon,
   children,
   variant = "outline",
+  onClick,
+  type = "button",
 }: {
   icon: React.ComponentType<{ size?: number }>;
   children: React.ReactNode;
   variant?: "primary" | "outline" | "accent";
+  onClick?: () => void;
+  type?: "button" | "submit";
 }) {
   const styles = {
     primary: "bg-primary text-white border-primary",
@@ -142,7 +371,7 @@ function ActionButton({
   };
 
   return (
-    <button className={`inline-flex h-11 items-center justify-center gap-2 rounded-xl border px-4 text-xs font-black uppercase tracking-widest shadow-sm transition-all ${styles[variant]}`}>
+    <button type={type} onClick={onClick} className={`inline-flex h-11 items-center justify-center gap-2 rounded-xl border px-4 text-xs font-black uppercase tracking-widest shadow-sm transition-all ${styles[variant]}`}>
       <Icon size={16} />
       {children}
     </button>
@@ -203,15 +432,231 @@ function ProgressBar({ value, tone = "green" }: { value: number; tone?: "green" 
   );
 }
 
-function CampaignsView() {
+function CampaignsView({
+  campaigns,
+}: {
+  campaigns: CampaignRecord[];
+}) {
+  const [campaignItems, setCampaignItems] = useState<CampaignRecord[]>(campaigns);
+  const [form, setForm] = useState<CampaignFormState>(blankCampaignForm);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [showForm, setShowForm] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [channelFilter, setChannelFilter] = useState<"All" | CampaignChannel>("All");
+  const [statusFilter, setStatusFilter] = useState<"All" | CampaignStatus>("All");
+  const [validationError, setValidationError] = useState("");
+
+  const filteredCampaigns = useMemo(() => {
+    const normalizedSearch = searchTerm.trim().toLowerCase();
+    return campaignItems.filter((campaign) => {
+      const matchesSearch = !normalizedSearch || [
+        campaign.id,
+        campaign.name,
+        campaign.channel,
+        campaign.objective,
+        campaign.audienceSegment,
+        campaign.owner,
+        campaign.utmSource,
+        campaign.utmMedium,
+        campaign.utmCampaign,
+        campaign.landingPage,
+        campaign.leadForm,
+        campaign.nextAction,
+      ].join(" ").toLowerCase().includes(normalizedSearch);
+      const matchesChannel = channelFilter === "All" || campaign.channel === channelFilter;
+      const matchesStatus = statusFilter === "All" || campaign.status === statusFilter;
+      return matchesSearch && matchesChannel && matchesStatus;
+    });
+  }, [campaignItems, channelFilter, searchTerm, statusFilter]);
+
+  const activeCampaigns = campaignItems.filter((campaign) => campaign.status !== "Archived");
+  const activeSpend = activeCampaigns.reduce((sum, campaign) => sum + campaign.spentAmount, 0);
+  const activeBudget = activeCampaigns.reduce((sum, campaign) => sum + campaign.budgetAmount, 0);
+  const generatedLeads = activeCampaigns.reduce((sum, campaign) => sum + campaign.leads, 0);
+  const qualifiedLeads = activeCampaigns.reduce((sum, campaign) => sum + campaign.mql, 0);
+  const spendPercent = activeBudget > 0 ? Math.round((activeSpend / activeBudget) * 100) : 0;
+
+  const resetForm = () => {
+    setForm(blankCampaignForm);
+    setEditingId(null);
+    setValidationError("");
+  };
+
+  const openNewCampaign = () => {
+    resetForm();
+    setShowForm(true);
+  };
+
+  const handleExport = () => {
+    const rows = [
+      ["ID", "Name", "Channel", "Objective", "Audience", "Budget", "Spent", "Leads", "MQL", "Pipeline", "ROAS", "Start Date", "End Date", "UTM Source", "UTM Medium", "UTM Campaign", "Landing Page", "Lead Form", "Owner", "Status", "Next Action"],
+      ...filteredCampaigns.map((campaign) => [
+        campaign.id,
+        campaign.name,
+        campaign.channel,
+        campaign.objective,
+        campaign.audienceSegment,
+        campaign.budgetAmount,
+        campaign.spentAmount,
+        campaign.leads,
+        campaign.mql,
+        campaign.pipelineAmount,
+        formatRoas(campaign),
+        campaign.startDate,
+        campaign.endDate,
+        campaign.utmSource,
+        campaign.utmMedium,
+        campaign.utmCampaign,
+        campaign.landingPage,
+        campaign.leadForm,
+        campaign.owner,
+        campaign.status,
+        campaign.nextAction,
+      ]),
+    ];
+    const csv = rows.map((row) => row.map(csvEscape).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "marketing-campaigns.csv";
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleNumberChange = (field: "budgetAmount" | "spentAmount" | "leads" | "mql" | "pipelineAmount", value: string) => {
+    setForm((current) => ({ ...current, [field]: Math.max(0, Number(value) || 0) }));
+  };
+
+  const handleEdit = (campaign: CampaignRecord) => {
+    const formState: CampaignFormState = {
+      name: campaign.name,
+      channel: campaign.channel,
+      objective: campaign.objective,
+      audienceSegment: campaign.audienceSegment,
+      budgetAmount: campaign.budgetAmount,
+      spentAmount: campaign.spentAmount,
+      leads: campaign.leads,
+      mql: campaign.mql,
+      pipelineAmount: campaign.pipelineAmount,
+      startDate: campaign.startDate,
+      endDate: campaign.endDate,
+      utmSource: campaign.utmSource,
+      utmMedium: campaign.utmMedium,
+      utmCampaign: campaign.utmCampaign,
+      landingPage: campaign.landingPage,
+      leadForm: campaign.leadForm,
+      owner: campaign.owner,
+      status: campaign.status,
+      nextAction: campaign.nextAction,
+    };
+    setForm(formState);
+    setEditingId(campaign.id);
+    setValidationError("");
+    setShowForm(true);
+  };
+
+  const handleArchiveToggle = (campaignId: string) => {
+    setCampaignItems((current) =>
+      current.map((campaign) =>
+        campaign.id === campaignId
+          ? { ...campaign, status: campaign.status === "Archived" ? "Review" : "Archived", nextAction: campaign.status === "Archived" ? "Review restored campaign before scaling" : "Archived from active campaign view" }
+          : campaign
+      )
+    );
+  };
+
+  const handleSave = () => {
+    const requiredFields = [form.name, form.objective, form.audienceSegment, form.owner, form.utmSource, form.utmMedium, form.utmCampaign, form.landingPage, form.leadForm, form.nextAction];
+    if (requiredFields.some((field) => !field.trim())) {
+      setValidationError("Campaign name, objective, audience, owner, UTM, landing page, lead form and next action are required.");
+      return;
+    }
+    if (form.budgetAmount <= 0) {
+      setValidationError("Budget must be greater than zero.");
+      return;
+    }
+    if (form.spentAmount > form.budgetAmount) {
+      setValidationError("Spent amount cannot be higher than budget.");
+      return;
+    }
+    if (form.mql > form.leads) {
+      setValidationError("MQL count cannot be higher than total leads.");
+      return;
+    }
+    if (form.startDate > form.endDate) {
+      setValidationError("End date must be after start date.");
+      return;
+    }
+
+    if (editingId) {
+      setCampaignItems((current) => current.map((campaign) => campaign.id === editingId ? { ...form, id: editingId } : campaign));
+    } else {
+      const newCampaign: CampaignRecord = { ...form, id: makeCampaignId(campaignItems.length) };
+      setCampaignItems((current) => [newCampaign, ...current]);
+    }
+
+    resetForm();
+    setShowForm(false);
+  };
+
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-4">
-        <MetricCard label="Active Campaigns" value="12" helper="Across 6 channels" icon={Megaphone} tone="blue" />
-        <MetricCard label="Monthly Spend" value="INR 9.4L" helper="72% budget consumed" icon={Wallet} tone="amber" />
-        <MetricCard label="Generated Leads" value="1,191" helper="+24% vs last month" icon={Users} tone="green" />
-        <MetricCard label="AI Qualified" value="428" helper="MQL score above 70" icon={Bot} tone="purple" />
+      <div className="flex flex-wrap justify-end gap-3">
+        <ActionButton icon={Download} onClick={handleExport}>Export</ActionButton>
+        <ActionButton icon={Filter} onClick={() => setStatusFilter((current) => current === "Archived" ? "All" : "Archived")}>Archived</ActionButton>
+        <ActionButton icon={Plus} variant="accent" onClick={openNewCampaign}>New Campaign</ActionButton>
       </div>
+
+      <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-4">
+        <MetricCard label="Active Campaigns" value={String(activeCampaigns.length)} helper={`${new Set(activeCampaigns.map((campaign) => campaign.channel)).size} channels live`} icon={Megaphone} tone="blue" />
+        <MetricCard label="Monthly Spend" value={formatCurrency(activeSpend)} helper={`${spendPercent}% budget consumed`} icon={Wallet} tone="amber" />
+        <MetricCard label="Generated Leads" value={generatedLeads.toLocaleString("en-IN")} helper="From active campaigns" icon={Users} tone="green" />
+        <MetricCard label="AI Qualified" value={qualifiedLeads.toLocaleString("en-IN")} helper="MQL captured for CRM handoff" icon={Bot} tone="purple" />
+      </div>
+
+      {showForm ? (
+        <section className="rounded-2xl border border-border bg-white p-6 shadow-sm">
+          <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+            <div>
+              <h3 className="text-lg font-black text-primary">{editingId ? "Edit Campaign" : "Create Campaign"}</h3>
+              <p className="mt-1 text-xs font-semibold text-slate-500">Required fields keep campaign attribution clean for leads, ROI and future backend sync.</p>
+            </div>
+            <button type="button" onClick={() => { resetForm(); setShowForm(false); }} className="inline-flex h-9 items-center gap-2 rounded-xl border border-border bg-white px-4 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:bg-slate-50">
+              <X size={14} /> Close
+            </button>
+          </div>
+          {validationError ? <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-xs font-black text-red-700">{validationError}</div> : null}
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+            <input value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} placeholder="Campaign name" className="h-11 rounded-xl border border-border px-3 text-sm font-semibold text-primary outline-none focus:ring-4 focus:ring-primary/10" />
+            <select value={form.channel} onChange={(event) => setForm((current) => ({ ...current, channel: event.target.value as CampaignChannel }))} className="h-11 rounded-xl border border-border px-3 text-sm font-semibold text-primary outline-none focus:ring-4 focus:ring-primary/10">
+              {campaignChannels.map((channel) => <option key={channel}>{channel}</option>)}
+            </select>
+            <input value={form.objective} onChange={(event) => setForm((current) => ({ ...current, objective: event.target.value }))} placeholder="Objective" className="h-11 rounded-xl border border-border px-3 text-sm font-semibold text-primary outline-none focus:ring-4 focus:ring-primary/10" />
+            <input value={form.audienceSegment} onChange={(event) => setForm((current) => ({ ...current, audienceSegment: event.target.value }))} placeholder="Audience segment" className="h-11 rounded-xl border border-border px-3 text-sm font-semibold text-primary outline-none focus:ring-4 focus:ring-primary/10" />
+            <input type="number" min="0" value={form.budgetAmount} onChange={(event) => handleNumberChange("budgetAmount", event.target.value)} placeholder="Budget amount" className="h-11 rounded-xl border border-border px-3 text-sm font-semibold text-primary outline-none focus:ring-4 focus:ring-primary/10" />
+            <input type="number" min="0" value={form.spentAmount} onChange={(event) => handleNumberChange("spentAmount", event.target.value)} placeholder="Spent amount" className="h-11 rounded-xl border border-border px-3 text-sm font-semibold text-primary outline-none focus:ring-4 focus:ring-primary/10" />
+            <input type="number" min="0" value={form.leads} onChange={(event) => handleNumberChange("leads", event.target.value)} placeholder="Leads" className="h-11 rounded-xl border border-border px-3 text-sm font-semibold text-primary outline-none focus:ring-4 focus:ring-primary/10" />
+            <input type="number" min="0" value={form.mql} onChange={(event) => handleNumberChange("mql", event.target.value)} placeholder="MQL" className="h-11 rounded-xl border border-border px-3 text-sm font-semibold text-primary outline-none focus:ring-4 focus:ring-primary/10" />
+            <input type="number" min="0" value={form.pipelineAmount} onChange={(event) => handleNumberChange("pipelineAmount", event.target.value)} placeholder="Pipeline amount" className="h-11 rounded-xl border border-border px-3 text-sm font-semibold text-primary outline-none focus:ring-4 focus:ring-primary/10" />
+            <input type="date" value={form.startDate} onChange={(event) => setForm((current) => ({ ...current, startDate: event.target.value }))} className="h-11 rounded-xl border border-border px-3 text-sm font-semibold text-primary outline-none focus:ring-4 focus:ring-primary/10" />
+            <input type="date" value={form.endDate} onChange={(event) => setForm((current) => ({ ...current, endDate: event.target.value }))} className="h-11 rounded-xl border border-border px-3 text-sm font-semibold text-primary outline-none focus:ring-4 focus:ring-primary/10" />
+            <select value={form.status} onChange={(event) => setForm((current) => ({ ...current, status: event.target.value as CampaignStatus }))} className="h-11 rounded-xl border border-border px-3 text-sm font-semibold text-primary outline-none focus:ring-4 focus:ring-primary/10">
+              {campaignStatuses.map((status) => <option key={status}>{status}</option>)}
+            </select>
+            <input value={form.utmSource} onChange={(event) => setForm((current) => ({ ...current, utmSource: event.target.value }))} placeholder="UTM source" className="h-11 rounded-xl border border-border px-3 text-sm font-semibold text-primary outline-none focus:ring-4 focus:ring-primary/10" />
+            <input value={form.utmMedium} onChange={(event) => setForm((current) => ({ ...current, utmMedium: event.target.value }))} placeholder="UTM medium" className="h-11 rounded-xl border border-border px-3 text-sm font-semibold text-primary outline-none focus:ring-4 focus:ring-primary/10" />
+            <input value={form.utmCampaign} onChange={(event) => setForm((current) => ({ ...current, utmCampaign: event.target.value }))} placeholder="UTM campaign" className="h-11 rounded-xl border border-border px-3 text-sm font-semibold text-primary outline-none focus:ring-4 focus:ring-primary/10" />
+            <input value={form.landingPage} onChange={(event) => setForm((current) => ({ ...current, landingPage: event.target.value }))} placeholder="Landing page" className="h-11 rounded-xl border border-border px-3 text-sm font-semibold text-primary outline-none focus:ring-4 focus:ring-primary/10" />
+            <input value={form.leadForm} onChange={(event) => setForm((current) => ({ ...current, leadForm: event.target.value }))} placeholder="Lead form" className="h-11 rounded-xl border border-border px-3 text-sm font-semibold text-primary outline-none focus:ring-4 focus:ring-primary/10" />
+            <input value={form.owner} onChange={(event) => setForm((current) => ({ ...current, owner: event.target.value }))} placeholder="Owner" className="h-11 rounded-xl border border-border px-3 text-sm font-semibold text-primary outline-none focus:ring-4 focus:ring-primary/10" />
+            <input value={form.nextAction} onChange={(event) => setForm((current) => ({ ...current, nextAction: event.target.value }))} placeholder="Next action" className="md:col-span-3 h-11 rounded-xl border border-border px-3 text-sm font-semibold text-primary outline-none focus:ring-4 focus:ring-primary/10" />
+          </div>
+          <div className="mt-5 flex justify-end">
+            <ActionButton icon={Plus} variant="primary" onClick={handleSave}>{editingId ? "Save Changes" : "Save Campaign"}</ActionButton>
+          </div>
+        </section>
+      ) : null}
 
       <section className="rounded-2xl border border-border bg-white p-6 shadow-sm">
         <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -225,38 +670,69 @@ function CampaignsView() {
             <Badge tone="blue">Attribution Ready</Badge>
           </div>
         </div>
+        <div className="mb-5 grid grid-cols-1 gap-3 lg:grid-cols-[minmax(0,1fr)_220px_180px]">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300" size={16} />
+            <input value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder="Search campaign, owner, UTM, landing page..." className="h-11 w-full rounded-xl border border-border bg-slate-50 pl-10 pr-3 text-sm font-semibold text-primary outline-none focus:ring-4 focus:ring-primary/10" />
+          </div>
+          <select value={channelFilter} onChange={(event) => setChannelFilter(event.target.value as "All" | CampaignChannel)} className="h-11 rounded-xl border border-border bg-white px-3 text-sm font-semibold text-primary outline-none focus:ring-4 focus:ring-primary/10">
+            <option>All</option>
+            {campaignChannels.map((channel) => <option key={channel}>{channel}</option>)}
+          </select>
+          <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as "All" | CampaignStatus)} className="h-11 rounded-xl border border-border bg-white px-3 text-sm font-semibold text-primary outline-none focus:ring-4 focus:ring-primary/10">
+            <option>All</option>
+            {campaignStatuses.map((status) => <option key={status}>{status}</option>)}
+          </select>
+        </div>
         <div className="overflow-x-auto rounded-xl border border-border">
-          <table className="w-full min-w-[980px] text-left">
+          <table className="w-full min-w-[1320px] text-left">
             <thead className="bg-slate-50">
               <tr>
-                {["Campaign", "Channel", "Objective", "Budget", "Spent", "Leads", "MQL", "Pipeline", "ROAS", "Status"].map((heading) => (
+                {["Campaign", "Channel", "Objective", "Budget", "Spent", "Leads", "MQL", "Pipeline", "ROAS", "Dates", "Owner", "Status", "Actions"].map((heading) => (
                   <th key={heading} className="px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-400">{heading}</th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {campaigns.map((campaign) => (
+              {filteredCampaigns.map((campaign) => (
                 <tr key={campaign.id} className="text-sm">
                   <td className="px-4 py-4">
                     <p className="font-black text-primary">{campaign.name}</p>
-                    <p className="mt-1 text-xs font-semibold text-slate-500">{campaign.id}</p>
+                    <p className="mt-1 text-xs font-semibold text-slate-500">{campaign.id} - {campaign.utmCampaign}</p>
                   </td>
                   <td className="px-4 py-4 font-semibold text-slate-600">{campaign.channel}</td>
                   <td className="px-4 py-4 font-semibold text-slate-600">{campaign.objective}</td>
-                  <td className="px-4 py-4 font-black text-primary">{campaign.budget}</td>
-                  <td className="px-4 py-4 font-semibold text-slate-600">{campaign.spent}</td>
+                  <td className="px-4 py-4 font-black text-primary">{formatCurrency(campaign.budgetAmount)}</td>
+                  <td className="px-4 py-4 font-semibold text-slate-600">{formatCurrency(campaign.spentAmount)}</td>
                   <td className="px-4 py-4 font-black text-primary">{campaign.leads}</td>
                   <td className="px-4 py-4 font-black text-primary">{campaign.mql}</td>
-                  <td className="px-4 py-4 font-black text-primary">{campaign.pipeline}</td>
-                  <td className="px-4 py-4 font-black text-green-600">{campaign.roas}</td>
+                  <td className="px-4 py-4 font-black text-primary">{formatCurrency(campaign.pipelineAmount)}</td>
+                  <td className="px-4 py-4 font-black text-green-600">{formatRoas(campaign)}</td>
+                  <td className="px-4 py-4 font-semibold text-slate-600">{campaign.startDate} to {campaign.endDate}</td>
+                  <td className="px-4 py-4 font-semibold text-slate-600">{campaign.owner}</td>
                   <td className="px-4 py-4">
-                    <Badge tone={campaign.status === "Scale" ? "green" : campaign.status === "Review" ? "amber" : "blue"}>{campaign.status}</Badge>
+                    <Badge tone={campaignStatusTone(campaign.status)}>{campaign.status}</Badge>
+                  </td>
+                  <td className="px-4 py-4">
+                    <div className="flex gap-2">
+                      <button type="button" onClick={() => handleEdit(campaign)} className="inline-flex h-9 items-center gap-2 rounded-xl border border-border bg-white px-3 text-[10px] font-black uppercase tracking-widest text-primary hover:bg-slate-50">
+                        <Edit3 size={14} /> Edit
+                      </button>
+                      <button type="button" onClick={() => handleArchiveToggle(campaign.id)} className="inline-flex h-9 items-center gap-2 rounded-xl border border-border bg-white px-3 text-[10px] font-black uppercase tracking-widest text-slate-600 hover:bg-slate-50">
+                        <Archive size={14} /> {campaign.status === "Archived" ? "Restore" : "Archive"}
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
+        {filteredCampaigns.length === 0 ? (
+          <div className="mt-4 rounded-2xl border border-dashed border-border bg-slate-50 p-6 text-center text-xs font-black uppercase tracking-widest text-slate-400">
+            No campaigns match the current search or filters
+          </div>
+        ) : null}
       </section>
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
@@ -287,10 +763,10 @@ function CampaignsView() {
         <section className="xl:col-span-2 rounded-2xl border border-border bg-primary p-6 text-white shadow-sm">
           <div className="flex items-center gap-3">
             <Target className="text-accent" size={24} />
-            <h3 className="text-lg font-black">Campaign Builder Fields</h3>
+            <h3 className="text-lg font-black">Campaign Backend Shape</h3>
           </div>
           <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2">
-            {["Campaign Name", "Objective", "Channel", "Audience Segment", "Budget", "Start / End Date", "UTM Source", "Landing Page", "Lead Form", "Owner", "AI Score Rule", "Nurture Sequence"].map((field) => (
+            {["name", "objective", "channel", "audienceSegment", "budgetAmount", "spentAmount", "startDate / endDate", "utmSource / utmMedium / utmCampaign", "landingPage", "leadForm", "owner", "nextAction"].map((field) => (
               <div key={field} className="rounded-2xl border border-white/10 bg-white/5 p-4">
                 <p className="text-sm font-black">{field}</p>
                 <p className="mt-1 text-xs font-semibold text-slate-300">Required for clean attribution and follow-up automation.</p>
@@ -303,56 +779,145 @@ function CampaignsView() {
   );
 }
 
-function RoiView() {
+function RoiView({ campaigns }: { campaigns: CampaignRecord[] }) {
+  const [channelFilter, setChannelFilter] = useState<"All" | CampaignChannel>("All");
+  const [campaignFilter, setCampaignFilter] = useState("All");
+  const [startDate, setStartDate] = useState("2026-06-01");
+  const [endDate, setEndDate] = useState("2026-07-05");
+  const [reportMessage, setReportMessage] = useState("");
+
+  const filteredCampaigns = useMemo(() => {
+    return campaigns.filter((campaign) => {
+      const matchesChannel = channelFilter === "All" || campaign.channel === channelFilter;
+      const matchesCampaign = campaignFilter === "All" || campaign.id === campaignFilter;
+      const overlapsDateRange = campaign.endDate >= startDate && campaign.startDate <= endDate;
+      return campaign.status !== "Archived" && matchesChannel && matchesCampaign && overlapsDateRange;
+    });
+  }, [campaignFilter, campaigns, channelFilter, endDate, startDate]);
+
+  const channelRows = useMemo(() => aggregateRoiByChannel(filteredCampaigns), [filteredCampaigns]);
+  const totalSpend = filteredCampaigns.reduce((sum, campaign) => sum + campaign.spentAmount, 0);
+  const totalPipeline = filteredCampaigns.reduce((sum, campaign) => sum + campaign.pipelineAmount, 0);
+  const totalLeads = filteredCampaigns.reduce((sum, campaign) => sum + campaign.leads, 0);
+  const totalMql = filteredCampaigns.reduce((sum, campaign) => sum + campaign.mql, 0);
+  const blendedRoi = totalSpend > 0 ? totalPipeline / totalSpend : 0;
+  const avgCac = totalMql > 0 ? totalSpend / totalMql : 0;
+  const bestChannel = channelRows[0]?.channel || "No channel";
+  const funnelSteps = [
+    { label: "Campaigns", value: String(filteredCampaigns.length), percent: 100 },
+    { label: "Leads", value: totalLeads.toLocaleString("en-IN"), percent: totalLeads > 0 ? 78 : 0 },
+    { label: "MQL", value: totalMql.toLocaleString("en-IN"), percent: totalLeads > 0 ? Math.round((totalMql / totalLeads) * 100) : 0 },
+    { label: "Pipeline", value: formatCurrency(totalPipeline), percent: blendedRoi > 0 ? Math.min(100, Math.round(blendedRoi * 12)) : 0 },
+  ];
+
+  const handleExport = () => {
+    const rows = [
+      ["Channel", "Spend", "Leads", "CPL", "MQL", "CAC", "Pipeline", "ROI", "Campaigns"],
+      ...channelRows.map((row) => [
+        row.channel,
+        row.spendAmount,
+        row.leads,
+        Math.round(row.cpl),
+        row.mql,
+        Math.round(row.cac),
+        row.pipelineAmount,
+        formatRatio(row.roi),
+        row.campaignCount,
+      ]),
+    ];
+    const csv = rows.map((row) => row.map(csvEscape).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "marketing-roi.csv";
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleSendReport = () => {
+    setReportMessage(`ROI report prepared for ${filteredCampaigns.length} campaigns from ${startDate} to ${endDate}. Blended ROI: ${formatRatio(blendedRoi)}.`);
+  };
+
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-4">
-        <MetricCard label="Marketing Spend" value="INR 9.4L" helper="Current month" icon={IndianRupee} tone="amber" />
-        <MetricCard label="Pipeline Created" value="INR 77.6L" helper="Attributed pipeline" icon={TrendingUp} tone="green" />
-        <MetricCard label="Blended ROI" value="4.9x" helper="Pipeline / spend" icon={Gauge} tone="blue" />
-        <MetricCard label="Avg CAC" value="INR 18.2K" helper="Qualified acquisition cost" icon={BadgeIndianRupee} tone="purple" />
+      <div className="flex flex-wrap justify-end gap-3">
+        <ActionButton icon={Download} onClick={handleExport}>Export</ActionButton>
+        <ActionButton icon={Filter} onClick={() => { setChannelFilter("All"); setCampaignFilter("All"); }}>Clear Filters</ActionButton>
+        <ActionButton icon={Send} variant="accent" onClick={handleSendReport}>Send Report</ActionButton>
       </div>
+
+      <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-4">
+        <MetricCard label="Marketing Spend" value={formatCurrency(totalSpend)} helper={`${filteredCampaigns.length} campaign records`} icon={IndianRupee} tone="amber" />
+        <MetricCard label="Pipeline Created" value={formatCurrency(totalPipeline)} helper="Attributed campaign pipeline" icon={TrendingUp} tone="green" />
+        <MetricCard label="Blended ROI" value={formatRatio(blendedRoi)} helper="Pipeline divided by spend" icon={Gauge} tone="blue" />
+        <MetricCard label="Avg CAC" value={formatCurrency(Math.round(avgCac))} helper="Spend per qualified lead" icon={BadgeIndianRupee} tone="purple" />
+      </div>
+
+      <section className="rounded-2xl border border-border bg-white p-6 shadow-sm">
+        <div className="grid grid-cols-1 gap-3 lg:grid-cols-[180px_220px_1fr_1fr]">
+          <select value={channelFilter} onChange={(event) => setChannelFilter(event.target.value as "All" | CampaignChannel)} className="h-11 rounded-xl border border-border bg-white px-3 text-sm font-semibold text-primary outline-none focus:ring-4 focus:ring-primary/10">
+            <option>All</option>
+            {campaignChannels.map((channel) => <option key={channel}>{channel}</option>)}
+          </select>
+          <select value={campaignFilter} onChange={(event) => setCampaignFilter(event.target.value)} className="h-11 rounded-xl border border-border bg-white px-3 text-sm font-semibold text-primary outline-none focus:ring-4 focus:ring-primary/10">
+            <option value="All">All Campaigns</option>
+            {campaigns.map((campaign) => <option key={campaign.id} value={campaign.id}>{campaign.name}</option>)}
+          </select>
+          <input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} className="h-11 rounded-xl border border-border bg-white px-3 text-sm font-semibold text-primary outline-none focus:ring-4 focus:ring-primary/10" />
+          <input type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} className="h-11 rounded-xl border border-border bg-white px-3 text-sm font-semibold text-primary outline-none focus:ring-4 focus:ring-primary/10" />
+        </div>
+        {reportMessage ? (
+          <div className="mt-4 rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-xs font-black text-green-700">{reportMessage}</div>
+        ) : null}
+      </section>
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
         <section className="rounded-2xl border border-border bg-white p-6 shadow-sm">
           <div className="mb-5">
             <h3 className="text-lg font-black text-primary">ROI by Channel</h3>
-            <p className="mt-1 text-xs font-semibold text-slate-500">Compare spend, CPL, MQL, CAC, pipeline and ROI in one view.</p>
+            <p className="mt-1 text-xs font-semibold text-slate-500">Calculated from campaign spend, leads, MQL, and attributed pipeline.</p>
           </div>
           <div className="overflow-x-auto rounded-xl border border-border">
-            <table className="w-full min-w-[920px] text-left">
+            <table className="w-full min-w-[980px] text-left">
               <thead className="bg-slate-50">
                 <tr>
-                  {["Channel", "Spend", "Leads", "CPL", "MQL", "CAC", "Pipeline", "ROI"].map((heading) => (
+                  {["Channel", "Campaigns", "Spend", "Leads", "CPL", "MQL", "CAC", "Pipeline", "ROI"].map((heading) => (
                     <th key={heading} className="px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-400">{heading}</th>
                   ))}
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {roiRows.map((row) => (
+                {channelRows.map((row) => (
                   <tr key={row.channel} className="text-sm">
                     <td className="px-4 py-4 font-black text-primary">{row.channel}</td>
-                    <td className="px-4 py-4 font-semibold text-slate-600">{row.spend}</td>
+                    <td className="px-4 py-4 font-black text-primary">{row.campaignCount}</td>
+                    <td className="px-4 py-4 font-semibold text-slate-600">{formatCurrency(row.spendAmount)}</td>
                     <td className="px-4 py-4 font-black text-primary">{row.leads}</td>
-                    <td className="px-4 py-4 font-semibold text-slate-600">{row.cpl}</td>
+                    <td className="px-4 py-4 font-semibold text-slate-600">{formatCurrency(Math.round(row.cpl))}</td>
                     <td className="px-4 py-4 font-black text-primary">{row.mql}</td>
-                    <td className="px-4 py-4 font-semibold text-slate-600">{row.cac}</td>
-                    <td className="px-4 py-4 font-black text-primary">{row.pipeline}</td>
+                    <td className="px-4 py-4 font-semibold text-slate-600">{formatCurrency(Math.round(row.cac))}</td>
+                    <td className="px-4 py-4 font-black text-primary">{formatCurrency(row.pipelineAmount)}</td>
                     <td className="px-4 py-4">
-                      <Badge tone={row.tone as Tone}>{row.roi}</Badge>
+                      <Badge tone={roiTone(row.roi)}>{formatRatio(row.roi)}</Badge>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
+          {channelRows.length === 0 ? (
+            <div className="mt-4 rounded-2xl border border-dashed border-border bg-slate-50 p-6 text-center text-xs font-black uppercase tracking-widest text-slate-400">
+              No ROI records match the selected filters
+            </div>
+          ) : null}
         </section>
 
         <section className="rounded-2xl border border-border bg-white p-6 shadow-sm">
           <h3 className="text-lg font-black text-primary">Funnel Conversion</h3>
-          <p className="mt-1 text-xs font-semibold text-slate-500">Marketing-to-sales funnel snapshot.</p>
+          <p className="mt-1 text-xs font-semibold text-slate-500">Filtered campaign-to-pipeline snapshot.</p>
           <div className="mt-6 space-y-5">
-            {funnel.map((step, index) => (
+            {funnelSteps.map((step, index) => (
               <div key={step.label} className="space-y-2">
                 <div className="flex items-center justify-between">
                   <div>
@@ -378,10 +943,10 @@ function RoiView() {
         </div>
         <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
           {[
-            ["First Touch", "Original discovery source: organic, ads, referral, marketplace."],
-            ["Last Touch", "Final campaign before enquiry or demo booking."],
-            ["Assisted Touch", "Retargeting, WhatsApp, email nurture, webinar influence."],
-            ["Revenue Touch", "Won value, collection value, and retention/expansion value."],
+            ["Best Channel", `${bestChannel} has the highest attributed pipeline in the current filter.`],
+            ["Spend Source", "Spend comes from campaign records and should later map to accounting bills."],
+            ["Revenue Source", "Pipeline is still marketing-attributed and must later reconcile with CRM/project/accounting APIs."],
+            ["Report State", "Export and report actions use the selected date, campaign, and channel filters."],
           ].map(([title, text]) => (
             <div key={title} className="rounded-2xl border border-border bg-slate-50 p-4">
               <p className="text-sm font-black text-primary">{title}</p>
@@ -394,15 +959,205 @@ function RoiView() {
   );
 }
 
-function SourcesView() {
+function SourcesView({ sources }: { sources: LeadSourceRecord[] }) {
+  const [sourceItems, setSourceItems] = useState<LeadSourceRecord[]>(sources);
+  const [form, setForm] = useState<LeadSourceFormState>(blankSourceForm);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [showForm, setShowForm] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [typeFilter, setTypeFilter] = useState<"All" | SourceType>("All");
+  const [statusFilter, setStatusFilter] = useState<"All" | SourceStatus>("All");
+  const [validationError, setValidationError] = useState("");
+
+  const filteredSources = useMemo(() => {
+    const normalizedSearch = searchTerm.trim().toLowerCase();
+    return sourceItems.filter((source) => {
+      const matchesSearch = !normalizedSearch || [
+        source.id,
+        source.source,
+        source.type,
+        source.normalizedKey,
+        source.defaultUtmSource,
+        source.defaultUtmMedium,
+        source.owner,
+        source.quality,
+        source.nextAction,
+      ].join(" ").toLowerCase().includes(normalizedSearch);
+      const matchesType = typeFilter === "All" || source.type === typeFilter;
+      const matchesStatus = statusFilter === "All" || source.status === statusFilter;
+      return matchesSearch && matchesType && matchesStatus;
+    });
+  }, [searchTerm, sourceItems, statusFilter, typeFilter]);
+
+  const activeSources = sourceItems.filter((source) => source.status !== "Archived");
+  const totalLeads = activeSources.reduce((sum, source) => sum + source.leads, 0);
+  const totalSql = activeSources.reduce((sum, source) => sum + source.sql, 0);
+  const activeReviewCount = activeSources.filter((source) => source.status === "Review" || source.quality === "Mixed" || source.quality === "Low").length;
+  const topSource = [...activeSources].sort((a, b) => b.sql - a.sql)[0];
+  const warmestSource = [...activeSources].sort((a, b) => sourceConversion(b) - sourceConversion(a))[0];
+
+  const resetForm = () => {
+    setForm(blankSourceForm);
+    setEditingId(null);
+    setValidationError("");
+  };
+
+  const openNewSource = () => {
+    resetForm();
+    setShowForm(true);
+  };
+
+  const handleNumberChange = (field: "leads" | "mql" | "sql" | "won" | "last30Change", value: string) => {
+    const nextValue = field === "last30Change" ? Number(value) || 0 : Math.max(0, Number(value) || 0);
+    setForm((current) => ({ ...current, [field]: nextValue }));
+  };
+
+  const handleEdit = (source: LeadSourceRecord) => {
+    const formState: LeadSourceFormState = {
+      source: source.source,
+      type: source.type,
+      normalizedKey: source.normalizedKey,
+      defaultUtmSource: source.defaultUtmSource,
+      defaultUtmMedium: source.defaultUtmMedium,
+      owner: source.owner,
+      quality: source.quality,
+      leads: source.leads,
+      mql: source.mql,
+      sql: source.sql,
+      won: source.won,
+      last30Change: source.last30Change,
+      status: source.status,
+      nextAction: source.nextAction,
+    };
+    setForm(formState);
+    setEditingId(source.id);
+    setValidationError("");
+    setShowForm(true);
+  };
+
+  const handleArchiveToggle = (sourceId: string) => {
+    setSourceItems((current) =>
+      current.map((source) =>
+        source.id === sourceId
+          ? { ...source, status: source.status === "Archived" ? "Review" : "Archived", nextAction: source.status === "Archived" ? "Review restored source mapping" : "Archived from active source attribution" }
+          : source
+      )
+    );
+  };
+
+  const handleSave = () => {
+    const normalizedKey = form.normalizedKey.trim() || normalizeSourceKey(form.source);
+    const requiredFields = [form.source, normalizedKey, form.defaultUtmSource, form.defaultUtmMedium, form.owner, form.nextAction];
+    if (requiredFields.some((field) => !field.trim())) {
+      setValidationError("Source name, normalized key, UTM source, UTM medium, owner and next action are required.");
+      return;
+    }
+    if (form.mql > form.leads || form.sql > form.mql || form.won > form.sql) {
+      setValidationError("Lead counts must follow Leads >= MQL >= SQL >= Won.");
+      return;
+    }
+    const duplicate = sourceItems.some((source) => source.normalizedKey === normalizedKey && source.id !== editingId);
+    if (duplicate) {
+      setValidationError("Normalized source key must be unique.");
+      return;
+    }
+
+    const payload = { ...form, normalizedKey };
+    if (editingId) {
+      setSourceItems((current) => current.map((source) => source.id === editingId ? { ...payload, id: editingId } : source));
+    } else {
+      setSourceItems((current) => [{ ...payload, id: makeSourceId(current.length) }, ...current]);
+    }
+    resetForm();
+    setShowForm(false);
+  };
+
+  const handleExport = () => {
+    const rows = [
+      ["ID", "Source", "Type", "Normalized Key", "UTM Source", "UTM Medium", "Owner", "Quality", "Leads", "MQL", "SQL", "Won", "SQL Conversion", "Last 30", "Status", "Next Action"],
+      ...filteredSources.map((source) => [
+        source.id,
+        source.source,
+        source.type,
+        source.normalizedKey,
+        source.defaultUtmSource,
+        source.defaultUtmMedium,
+        source.owner,
+        source.quality,
+        source.leads,
+        source.mql,
+        source.sql,
+        source.won,
+        `${sourceConversion(source).toFixed(1)}%`,
+        `${source.last30Change}%`,
+        source.status,
+        source.nextAction,
+      ]),
+    ];
+    const csv = rows.map((row) => row.map(csvEscape).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "lead-sources.csv";
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-4">
-        <MetricCard label="Tracked Sources" value="18" helper="Online + offline" icon={Share2} tone="blue" />
-        <MetricCard label="Top Source" value="Google Ads" helper="22.7% conversion" icon={Search} tone="green" />
-        <MetricCard label="Warmest Source" value="Referral" helper="28.4% conversion" icon={Users} tone="purple" />
-        <MetricCard label="Needs Review" value="Meta Ads" helper="Quality below target" icon={Filter} tone="amber" />
+      <div className="flex flex-wrap justify-end gap-3">
+        <ActionButton icon={Download} onClick={handleExport}>Export</ActionButton>
+        <ActionButton icon={Filter} onClick={() => { setTypeFilter("All"); setStatusFilter("All"); setSearchTerm(""); }}>Clear Filters</ActionButton>
+        <ActionButton icon={Plus} variant="accent" onClick={openNewSource}>Add Source</ActionButton>
       </div>
+
+      <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-4">
+        <MetricCard label="Tracked Sources" value={String(activeSources.length)} helper={`${new Set(activeSources.map((source) => source.type)).size} source types`} icon={Share2} tone="blue" />
+        <MetricCard label="Top Source" value={topSource?.source || "None"} helper={`${topSource?.sql || 0} SQL leads`} icon={Search} tone="green" />
+        <MetricCard label="Warmest Source" value={warmestSource?.source || "None"} helper={`${warmestSource ? sourceConversion(warmestSource).toFixed(1) : "0.0"}% SQL conversion`} icon={Users} tone="purple" />
+        <MetricCard label="Needs Review" value={String(activeReviewCount).padStart(2, "0")} helper={`${totalSql} SQL from ${totalLeads} leads`} icon={Filter} tone="amber" />
+      </div>
+
+      {showForm ? (
+        <section className="rounded-2xl border border-border bg-white p-6 shadow-sm">
+          <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+            <div>
+              <h3 className="text-lg font-black text-primary">{editingId ? "Edit Lead Source" : "Add Lead Source"}</h3>
+              <p className="mt-1 text-xs font-semibold text-slate-500">Normalize source labels now so lead attribution does not become messy when backend APIs arrive.</p>
+            </div>
+            <button type="button" onClick={() => { resetForm(); setShowForm(false); }} className="inline-flex h-9 items-center gap-2 rounded-xl border border-border bg-white px-4 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:bg-slate-50">
+              <X size={14} /> Close
+            </button>
+          </div>
+          {validationError ? <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-xs font-black text-red-700">{validationError}</div> : null}
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+            <input value={form.source} onChange={(event) => setForm((current) => ({ ...current, source: event.target.value, normalizedKey: current.normalizedKey || normalizeSourceKey(event.target.value) }))} placeholder="Source name" className="h-11 rounded-xl border border-border px-3 text-sm font-semibold text-primary outline-none focus:ring-4 focus:ring-primary/10" />
+            <select value={form.type} onChange={(event) => setForm((current) => ({ ...current, type: event.target.value as SourceType }))} className="h-11 rounded-xl border border-border px-3 text-sm font-semibold text-primary outline-none focus:ring-4 focus:ring-primary/10">
+              {sourceTypes.map((type) => <option key={type}>{type}</option>)}
+            </select>
+            <input value={form.normalizedKey} onChange={(event) => setForm((current) => ({ ...current, normalizedKey: normalizeSourceKey(event.target.value) }))} placeholder="Normalized key" className="h-11 rounded-xl border border-border px-3 text-sm font-semibold text-primary outline-none focus:ring-4 focus:ring-primary/10" />
+            <input value={form.defaultUtmSource} onChange={(event) => setForm((current) => ({ ...current, defaultUtmSource: event.target.value }))} placeholder="Default UTM source" className="h-11 rounded-xl border border-border px-3 text-sm font-semibold text-primary outline-none focus:ring-4 focus:ring-primary/10" />
+            <input value={form.defaultUtmMedium} onChange={(event) => setForm((current) => ({ ...current, defaultUtmMedium: event.target.value }))} placeholder="Default UTM medium" className="h-11 rounded-xl border border-border px-3 text-sm font-semibold text-primary outline-none focus:ring-4 focus:ring-primary/10" />
+            <input value={form.owner} onChange={(event) => setForm((current) => ({ ...current, owner: event.target.value }))} placeholder="Owner" className="h-11 rounded-xl border border-border px-3 text-sm font-semibold text-primary outline-none focus:ring-4 focus:ring-primary/10" />
+            <select value={form.quality} onChange={(event) => setForm((current) => ({ ...current, quality: event.target.value as SourceQuality }))} className="h-11 rounded-xl border border-border px-3 text-sm font-semibold text-primary outline-none focus:ring-4 focus:ring-primary/10">
+              {sourceQualities.map((quality) => <option key={quality}>{quality}</option>)}
+            </select>
+            <select value={form.status} onChange={(event) => setForm((current) => ({ ...current, status: event.target.value as SourceStatus }))} className="h-11 rounded-xl border border-border px-3 text-sm font-semibold text-primary outline-none focus:ring-4 focus:ring-primary/10">
+              {sourceStatuses.map((status) => <option key={status}>{status}</option>)}
+            </select>
+            <input type="number" value={form.last30Change} onChange={(event) => handleNumberChange("last30Change", event.target.value)} placeholder="Last 30 change %" className="h-11 rounded-xl border border-border px-3 text-sm font-semibold text-primary outline-none focus:ring-4 focus:ring-primary/10" />
+            <input type="number" min="0" value={form.leads} onChange={(event) => handleNumberChange("leads", event.target.value)} placeholder="Leads" className="h-11 rounded-xl border border-border px-3 text-sm font-semibold text-primary outline-none focus:ring-4 focus:ring-primary/10" />
+            <input type="number" min="0" value={form.mql} onChange={(event) => handleNumberChange("mql", event.target.value)} placeholder="MQL" className="h-11 rounded-xl border border-border px-3 text-sm font-semibold text-primary outline-none focus:ring-4 focus:ring-primary/10" />
+            <input type="number" min="0" value={form.sql} onChange={(event) => handleNumberChange("sql", event.target.value)} placeholder="SQL" className="h-11 rounded-xl border border-border px-3 text-sm font-semibold text-primary outline-none focus:ring-4 focus:ring-primary/10" />
+            <input type="number" min="0" value={form.won} onChange={(event) => handleNumberChange("won", event.target.value)} placeholder="Won" className="h-11 rounded-xl border border-border px-3 text-sm font-semibold text-primary outline-none focus:ring-4 focus:ring-primary/10" />
+            <input value={form.nextAction} onChange={(event) => setForm((current) => ({ ...current, nextAction: event.target.value }))} placeholder="Next action" className="md:col-span-2 h-11 rounded-xl border border-border px-3 text-sm font-semibold text-primary outline-none focus:ring-4 focus:ring-primary/10" />
+          </div>
+          <div className="mt-5 flex justify-end">
+            <ActionButton icon={Plus} variant="primary" onClick={handleSave}>{editingId ? "Save Changes" : "Save Source"}</ActionButton>
+          </div>
+        </section>
+      ) : null}
 
       <section className="rounded-2xl border border-border bg-white p-6 shadow-sm">
         <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -412,18 +1167,35 @@ function SourcesView() {
           </div>
           <Badge tone="purple">Source Quality Score</Badge>
         </div>
+        <div className="mb-5 grid grid-cols-1 gap-3 lg:grid-cols-[minmax(0,1fr)_180px_180px]">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300" size={16} />
+            <input value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder="Search source, owner, UTM or key..." className="h-11 w-full rounded-xl border border-border bg-slate-50 pl-10 pr-3 text-sm font-semibold text-primary outline-none focus:ring-4 focus:ring-primary/10" />
+          </div>
+          <select value={typeFilter} onChange={(event) => setTypeFilter(event.target.value as "All" | SourceType)} className="h-11 rounded-xl border border-border bg-white px-3 text-sm font-semibold text-primary outline-none focus:ring-4 focus:ring-primary/10">
+            <option>All</option>
+            {sourceTypes.map((type) => <option key={type}>{type}</option>)}
+          </select>
+          <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as "All" | SourceStatus)} className="h-11 rounded-xl border border-border bg-white px-3 text-sm font-semibold text-primary outline-none focus:ring-4 focus:ring-primary/10">
+            <option>All</option>
+            {sourceStatuses.map((status) => <option key={status}>{status}</option>)}
+          </select>
+        </div>
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          {sources.map((source) => (
-            <div key={source.source} className="rounded-2xl border border-border bg-slate-50 p-5">
+          {filteredSources.map((source) => (
+            <div key={source.id} className="rounded-2xl border border-border bg-slate-50 p-5">
               <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                 <div>
                   <div className="flex items-center gap-2">
                     <MousePointerClick className="text-primary" size={18} />
                     <h4 className="font-black text-primary">{source.source}</h4>
                   </div>
-                  <p className="mt-2 text-xs font-semibold text-slate-500">Owner: {source.owner}</p>
+                  <p className="mt-2 text-xs font-semibold text-slate-500">{source.id} - {source.normalizedKey} - Owner: {source.owner}</p>
                 </div>
-                <Badge tone={source.tone as Tone}>{source.quality}</Badge>
+                <div className="flex flex-wrap gap-2">
+                  <Badge tone={sourceQualityTone(source.quality)}>{source.quality}</Badge>
+                  <Badge tone={sourceStatusTone(source.status)}>{source.status}</Badge>
+                </div>
               </div>
               <div className="mt-5 grid grid-cols-3 gap-3">
                 <div className="rounded-xl bg-white p-3">
@@ -431,21 +1203,52 @@ function SourcesView() {
                   <p className="mt-1 text-[10px] font-black uppercase tracking-widest text-slate-400">Leads</p>
                 </div>
                 <div className="rounded-xl bg-white p-3">
-                  <p className="text-lg font-black text-primary">{source.conversion}</p>
-                  <p className="mt-1 text-[10px] font-black uppercase tracking-widest text-slate-400">Conv.</p>
+                  <p className="text-lg font-black text-primary">{sourceConversion(source).toFixed(1)}%</p>
+                  <p className="mt-1 text-[10px] font-black uppercase tracking-widest text-slate-400">SQL Conv.</p>
                 </div>
                 <div className="rounded-xl bg-white p-3">
-                  <p className={`text-lg font-black ${source.last30.startsWith("+") ? "text-green-600" : "text-red-600"}`}>{source.last30}</p>
+                  <p className={`text-lg font-black ${source.last30Change >= 0 ? "text-green-600" : "text-red-600"}`}>{source.last30Change >= 0 ? "+" : ""}{source.last30Change}%</p>
                   <p className="mt-1 text-[10px] font-black uppercase tracking-widest text-slate-400">30 Days</p>
                 </div>
               </div>
+              <div className="mt-3 grid grid-cols-3 gap-3">
+                <div className="rounded-xl bg-white p-3">
+                  <p className="text-lg font-black text-primary">{source.mql}</p>
+                  <p className="mt-1 text-[10px] font-black uppercase tracking-widest text-slate-400">MQL</p>
+                </div>
+                <div className="rounded-xl bg-white p-3">
+                  <p className="text-lg font-black text-primary">{source.sql}</p>
+                  <p className="mt-1 text-[10px] font-black uppercase tracking-widest text-slate-400">SQL</p>
+                </div>
+                <div className="rounded-xl bg-white p-3">
+                  <p className="text-lg font-black text-primary">{source.won}</p>
+                  <p className="mt-1 text-[10px] font-black uppercase tracking-widest text-slate-400">Won</p>
+                </div>
+              </div>
+              <div className="mt-4 rounded-xl border border-border bg-white p-3">
+                <p className="text-xs font-black uppercase tracking-widest text-slate-400">Default Attribution</p>
+                <p className="mt-1 text-sm font-bold text-primary">{source.defaultUtmSource} / {source.defaultUtmMedium} - {source.type}</p>
+              </div>
               <div className="mt-4 rounded-xl border border-border bg-white p-3">
                 <p className="text-xs font-black uppercase tracking-widest text-slate-400">Next Action</p>
-                <p className="mt-1 text-sm font-bold text-primary">{source.action}</p>
+                <p className="mt-1 text-sm font-bold text-primary">{source.nextAction}</p>
+              </div>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <button type="button" onClick={() => handleEdit(source)} className="inline-flex h-9 items-center gap-2 rounded-xl border border-border bg-white px-3 text-[10px] font-black uppercase tracking-widest text-primary hover:bg-slate-50">
+                  <Edit3 size={14} /> Edit
+                </button>
+                <button type="button" onClick={() => handleArchiveToggle(source.id)} className="inline-flex h-9 items-center gap-2 rounded-xl border border-border bg-white px-3 text-[10px] font-black uppercase tracking-widest text-slate-600 hover:bg-slate-50">
+                  <Archive size={14} /> {source.status === "Archived" ? "Restore" : "Archive"}
+                </button>
               </div>
             </div>
           ))}
         </div>
+        {filteredSources.length === 0 ? (
+          <div className="mt-4 rounded-2xl border border-dashed border-border bg-slate-50 p-6 text-center text-xs font-black uppercase tracking-widest text-slate-400">
+            No lead sources match the selected filters
+          </div>
+        ) : null}
       </section>
 
       <section className="rounded-2xl border border-border bg-primary p-6 text-white shadow-sm">
@@ -497,18 +1300,11 @@ export default function MarketingHub({ activeView }: { activeView: MarketingView
             <p className="mt-1 max-w-3xl text-sm font-medium leading-6 text-slate-500">{description}</p>
           </div>
         </div>
-        <div className="flex flex-wrap gap-3">
-          <ActionButton icon={Download}>Export</ActionButton>
-          <ActionButton icon={Filter}>Filter</ActionButton>
-          <ActionButton icon={activeView === "campaigns" ? Plus : Send} variant="accent">
-            {activeView === "campaigns" ? "New Campaign" : activeView === "roi" ? "Send Report" : "Add Source"}
-          </ActionButton>
-        </div>
       </div>
 
-      {activeView === "campaigns" && <CampaignsView />}
-      {activeView === "roi" && <RoiView />}
-      {activeView === "sources" && <SourcesView />}
+      {activeView === "campaigns" && <CampaignsView campaigns={initialCampaigns} />}
+      {activeView === "roi" && <RoiView campaigns={initialCampaigns} />}
+      {activeView === "sources" && <SourcesView sources={initialSources} />}
     </div>
   );
 }
