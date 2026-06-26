@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type Dispatch, type SetStateAction } from "react";
 import { 
   Target, Users, Clock, TrendingUp, CheckCircle2, 
   ChevronLeft, Phone, Mail, MessageSquare, Eye, 
@@ -75,7 +75,7 @@ export default function LeadWizard() {
   const [isCompleted, setIsCompleted] = useState(false);
   const [leads, setLeads] = useState<LeadRecord[]>(mockLeads);
   
-  const [formData, setFormData] = useState<LeadDraft>(createLeadDraft);
+  const [formData, setFormData]: [LeadDraft, Dispatch<SetStateAction<LeadDraft>>] = useState<LeadDraft>(() => createLeadDraft());
 
   const updateFormData = (newData: Partial<LeadDraft>) => {
     setFormData(prev => ({ ...prev, ...newData }));
