@@ -59,7 +59,7 @@ export type LeadRecord = {
 
 export type LeadStepProps = {
   data?: LeadDraft;
-  updateData?: (newData: Partial<LeadDraft>) => void;
+  updateData?: (newData: unknown) => void;
   onNext: () => void;
   onPrev?: () => void;
   onComplete?: () => void;

@@ -77,8 +77,16 @@ export default function LeadWizard() {
   
   const [formData, setFormData]: [LeadDraft, Dispatch<SetStateAction<LeadDraft>>] = useState<LeadDraft>(() => createLeadDraft());
 
-  const updateFormData = (newData: Partial<LeadDraft>) => {
-    setFormData(prev => ({ ...prev, ...newData }));
+  const updateFormData = (newData: unknown) => {
+    setFormData((prev) => {
+      if (typeof newData === "function") {
+        return { ...prev, ...(newData as (current: LeadDraft) => Partial<LeadDraft>)(prev) };
+      }
+      if (newData && typeof newData === "object") {
+        return { ...prev, ...(newData as Partial<LeadDraft>) };
+      }
+      return prev;
+    });
   };
 
   const nextStep = () => setCurrentStep((prev) => Math.min(prev + 1, STEPS.length));
