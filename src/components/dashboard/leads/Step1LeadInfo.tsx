@@ -5,7 +5,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { ArrowRight } from "lucide-react";
 import { ActionButton, Field } from "../accounting/AccountingComponents";
-import type { LeadStepProps } from "./leadTypes";
+import { createLeadDraft, type LeadStepProps } from "./leadTypes";
 
 // --- Validation Schema (Simplified mandatory fields) ---
 const leadInfoSchema = z.object({
@@ -28,7 +28,7 @@ const leadInfoSchema = z.object({
 
 type LeadInfoFormData = z.input<typeof leadInfoSchema>;
 
-export default function Step1LeadInfo({ data, updateData, onNext }: LeadStepProps) {
+export default function Step1LeadInfo({ data = createLeadDraft(), updateData = () => undefined, onNext }: LeadStepProps) {
   const {
     register,
     handleSubmit,

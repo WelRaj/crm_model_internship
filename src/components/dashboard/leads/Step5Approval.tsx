@@ -31,7 +31,7 @@ const approvals: ApprovalCard[] = [
 
 type Step5Props = Pick<LeadStepProps, "data" | "updateData" | "onNext" | "onPrev">;
 
-export default function Step5Approval({ updateData, onNext, onPrev }: Step5Props) {
+export default function Step5Approval({ updateData = () => undefined, onNext, onPrev }: Step5Props) {
   const [decision, setDecision] = useState<"Approve" | "Reject">("Approve");
 
   const { register, handleSubmit } = useForm<ApprovalFormData>({

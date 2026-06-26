@@ -1,9 +1,10 @@
 export type LeadDraft = {
   leadId: string;
-  leadDate: string;
-  country: string;
-  currency: string;
-  status: string;
+  leadDate?: string;
+  country?: string;
+  currency?: string;
+  status?: string;
+  tags?: string;
   leadSource?: string;
   firstName?: string;
   lastName?: string;
@@ -57,8 +58,8 @@ export type LeadRecord = {
 };
 
 export type LeadStepProps = {
-  data: LeadDraft;
-  updateData: (newData: Partial<LeadDraft>) => void;
+  data?: LeadDraft;
+  updateData?: (newData: Partial<LeadDraft>) => void;
   onNext: () => void;
   onPrev?: () => void;
   onComplete?: () => void;

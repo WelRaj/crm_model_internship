@@ -91,7 +91,7 @@ export default function LeadWizard() {
     const expectedValue = Number(formData.expectedValue || 0);
     const newLeadRecord: LeadRecord = {
       id: formData.leadId,
-      date: new Date(formData.leadDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+      date: new Date(formData.leadDate || new Date().toISOString()).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
       name: fullName || "Unnamed Lead",
       company: formData.companyName || "Personal",
       mobile: formData.mobile || "N/A",
