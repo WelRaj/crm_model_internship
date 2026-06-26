@@ -7,6 +7,7 @@ export interface SelectProps
   error?: string;
   options: string[];
   showEditIcon?: boolean;
+  placeholder?: string;
 }
 
 const Select = React.forwardRef<HTMLSelectElement, SelectProps>(

@@ -14,7 +14,7 @@ const approvalSchema = z.object({
   comments: z.string().optional(),
 });
 
-type ApprovalFormData = z.infer<typeof approvalSchema>;
+type ApprovalFormData = z.input<typeof approvalSchema>;
 
 type ApprovalCard = {
   role: string;

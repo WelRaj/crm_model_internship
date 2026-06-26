@@ -16,7 +16,8 @@ const proposalSchema = z.object({
   remarks: z.string().optional(),
 });
 
-type ProposalFormData = z.infer<typeof proposalSchema>;
+type ProposalFormInput = z.input<typeof proposalSchema>;
+type ProposalFormData = z.output<typeof proposalSchema>;
 
 export default function Step4Proposal({ data, updateData, onNext, onPrev }: LeadStepProps) {
   const proposals = [
@@ -26,7 +27,7 @@ export default function Step4Proposal({ data, updateData, onNext, onPrev }: Lead
   const {
     register,
     handleSubmit,
-  } = useForm<ProposalFormData>({
+  } = useForm<ProposalFormInput, unknown, ProposalFormData>({
     resolver: zodResolver(proposalSchema),
     defaultValues: {
       ...data,

@@ -14,40 +14,17 @@ interface Document {
   remarks: string;
 }
 
-export default function Step4Verification({ data, onNext, onPrev }: any) {
-  const isExperienced = data?.category === "Experienced";
-  
-  const initialDocs: Document[] = [
-    { id: "1", name: "10th Marksheet", status: "Pending", date: "-", verifiedBy: "-", remarks: "" },
-    { id: "2", name: "12th Marksheet", status: "Pending", date: "-", verifiedBy: "-", remarks: "" },
-    { id: "3", name: "Graduation Degree / Certificate", status: "Pending", date: "-", verifiedBy: "-", remarks: "" },
-    ...(isExperienced ? [
-      { id: "4", name: "Present Company Offer Letter", status: "Pending", date: "-", verifiedBy: "-", remarks: "" },
-      { id: "5", name: "All Prev. Company Relieving Letters", status: "Pending", date: "-", verifiedBy: "-", remarks: "" },
-      { id: "6", name: "All Semester Marksheets", status: "Pending", date: "-", verifiedBy: "-", remarks: "" }
-    ] : [
-      { id: "7", name: "Final Degree / Provisional", status: "Pending", date: "-", verifiedBy: "-", remarks: "" }
-    ]),
-    { id: "8", name: "Aadhaar Card (Front + Back)", status: "Pending", date: "-", verifiedBy: "-", remarks: "" },
-    { id: "9", name: "PAN Card", status: "Pending", date: "-", verifiedBy: "-", remarks: "" },
-    { id: "10", name: "Passport Size Photo", status: "Pending", date: "-", verifiedBy: "-", remarks: "" },
-    { id: "11", name: "Resume / CV", status: "Pending", date: "-", verifiedBy: "-", remarks: "" },
-    { id: "12", name: "Bank Details (Cancelled Cheque / Passbook)", status: "Pending", date: "-", verifiedBy: "-", remarks: "" }
-  ];
-
-  const [documents, setDocuments] = useState<Document[]>(initialDocs);
+export default function Step4Verification({ data, documents, updateDocument, onNext, onPrev }: any) {
+  const docRows: Document[] = documents;
   const [selectedDoc, setSelectedDoc] = useState<Document | null>(null);
 
   const updateStatus = (id: string, newStatus: Document["status"], remarks: string = "") => {
-    setDocuments(docs => docs.map(doc =>
-      doc.id === id ? {
-        ...doc,
-        status: newStatus,
-        remarks,
-        date: new Date().toLocaleDateString(),
-        verifiedBy: "Admin (You)"
-      } : doc
-    ));
+    updateDocument(id, {
+      status: newStatus,
+      remarks,
+      date: new Date().toLocaleDateString("en-IN"),
+      verifiedBy: "Admin (You)",
+    });
     setSelectedDoc(null);
   };
 
@@ -60,7 +37,7 @@ export default function Step4Verification({ data, onNext, onPrev }: any) {
     }
   };
 
-  const progress = Math.round((documents.filter(d => d.status === "Verified").length / documents.length) * 100);
+  const progress = Math.round((docRows.filter(d => d.status === "Verified").length / docRows.length) * 100);
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
@@ -69,7 +46,7 @@ export default function Step4Verification({ data, onNext, onPrev }: any) {
         <div className="lg:col-span-2 space-y-4">
           <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 mb-4 flex items-center justify-between">
             <span className="text-xs font-black uppercase text-slate-500 tracking-widest">Verification for: {data.category || "Fresher"}</span>
-            <span className="text-[10px] font-bold text-primary px-2 py-1 bg-white rounded-lg shadow-sm border border-slate-100">{documents.length} Total Docs</span>
+            <span className="text-[10px] font-bold text-primary px-2 py-1 bg-white rounded-lg shadow-sm border border-slate-100">{docRows.length} Total Docs</span>
           </div>
           
           <div className="overflow-hidden rounded-xl border border-border bg-white shadow-sm">
@@ -82,7 +59,7 @@ export default function Step4Verification({ data, onNext, onPrev }: any) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {documents.map((doc) => (
+                {docRows.map((doc) => (
                   <tr
                     key={doc.id}
                     className={`text-sm hover:bg-slate-50 transition-colors cursor-pointer ${selectedDoc?.id === doc.id ? "bg-accent/5" : ""}`}
@@ -180,7 +157,7 @@ export default function Step4Verification({ data, onNext, onPrev }: any) {
           </div>
           <div>
             <p className="text-xs font-bold uppercase tracking-widest text-accent">Overall Progress</p>
-            <p className="text-sm font-medium opacity-90">{documents.filter(d => d.status === "Verified").length} of {documents.length} Documents Verified</p>
+            <p className="text-sm font-medium opacity-90">{docRows.filter(d => d.status === "Verified").length} of {docRows.length} Documents Verified</p>
           </div>
         </div>
         <AlertCircle className="text-accent opacity-50" size={24} />

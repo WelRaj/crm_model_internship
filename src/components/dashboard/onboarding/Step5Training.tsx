@@ -1,30 +1,16 @@
 "use client";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-import { useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { ArrowRight, ArrowLeft, CheckCircle, Circle } from "lucide-react";
 
-export default function Step5Training({ onNext, onPrev }: any) {
-  const [tasks, setTasks] = useState([
-    { id: 1, label: "Company Introduction", completed: true },
-    { id: 2, label: "Team Introduction", completed: true },
-    { id: 3, label: "Development Process Overview", completed: false },
-    { id: 4, label: "Coding Standards Document Shared", completed: false },
-    { id: 5, label: "Security Policy Explained", completed: false },
-    { id: 6, label: "Client Communication Guidelines Shared", completed: false },
-    { id: 7, label: "Product Training Completed", completed: false },
-    { id: 8, label: "Compliance / NDA Signed", completed: false },
-  ]);
-
-  const toggleTask = (id: number) => {
-    setTasks(tasks.map(t => t.id === id ? { ...t, completed: !t.completed } : t));
-  };
+export default function Step5Training({ tasks, toggleTask, onNext, onPrev }: any) {
+  const completed = tasks.filter((task: any) => task.completed).length;
 
   return (
     <div className="space-y-8">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {tasks.map((task) => (
+        {tasks.map((task: any) => (
           <div
             key={task.id}
             onClick={() => toggleTask(task.id)}
@@ -40,6 +26,10 @@ export default function Step5Training({ onNext, onPrev }: any) {
             </span>
           </div>
         ))}
+      </div>
+
+      <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm font-bold text-slate-600">
+        Training progress: <span className="text-primary">{completed}/{tasks.length}</span> tasks completed.
       </div>
 
       <div className="flex justify-between pt-8">

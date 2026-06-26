@@ -1,13 +1,15 @@
 ﻿"use client";
 
 import { 
-  Users, Truck, FileText, Receipt, IndianRupee, BellRing, 
+  Users, Truck, FileText, Receipt, BellRing,
   RotateCcw, Wallet, BarChart3, UserSquare2, Percent, 
   Calculator, LineChart, ShieldCheck, History, Lock, Landmark,
   TrendingUp, TrendingDown, ArrowUpRight, Plus
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
+import type { AccountingModuleId } from "./AccountingWizard";
 
-export default function AccountingDashboard({ onSelectModule }: { onSelectModule: (id: any) => void }) {
+export default function AccountingDashboard({ onSelectModule }: { onSelectModule: (id: AccountingModuleId) => void }) {
   const stats = [
     { label: "Total Receivables", value: "₹12,50,000", icon: ArrowUpRight, trend: "+12.5%", color: "text-emerald-600", bg: "bg-emerald-50" },
     { label: "Total Payables", value: "₹4,20,000", icon: TrendingDown, trend: "-2.4%", color: "text-rose-600", bg: "bg-rose-50" },
@@ -15,7 +17,7 @@ export default function AccountingDashboard({ onSelectModule }: { onSelectModule
     { label: "Tax Liability", value: "₹1,80,000", icon: ShieldCheck, trend: "GST/TDS", color: "text-amber-600", bg: "bg-amber-50" },
   ];
 
-  const modules = [
+  const modules: Array<{ id: AccountingModuleId; label: string; icon: LucideIcon }> = [
     { id: "accounting-clients",      label: "Client Master",              icon: Users },
     { id: "accounting-vendors",      label: "Vendor Master",              icon: Truck },
     { id: "accounting-quotations",   label: "Quotations",                 icon: FileText },

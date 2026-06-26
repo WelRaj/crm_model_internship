@@ -123,7 +123,7 @@ export default function Step2Employment({ data, updateData, onNext, onPrev }: an
           </datalist>
         </div>
 
-        <Input label="Official Company Email" type="email" name="officialEmail\" value={data.officialEmail} onChange={handleChange} />
+        <Input label="Official Company Email" type="email" name="officialEmail" value={data.officialEmail} onChange={handleChange} required />
 
         <Select
           label="Employee Status"

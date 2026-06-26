@@ -18,14 +18,15 @@ const leadStatusSchema = z.object({
   overallRemarks: z.string().optional(),
 });
 
-type LeadStatusFormData = z.infer<typeof leadStatusSchema>;
+type LeadStatusFormInput = z.input<typeof leadStatusSchema>;
+type LeadStatusFormData = z.output<typeof leadStatusSchema>;
 
 type Step6Props = Pick<LeadStepProps, "data" | "updateData" | "onPrev" | "onComplete">;
 
 export default function Step6LeadStatus({ updateData, onPrev, onComplete }: Step6Props) {
   const [isLoading, setIsLoading] = useState(false);
 
-  const { register, handleSubmit, control } = useForm<LeadStatusFormData>({
+  const { register, handleSubmit, control } = useForm<LeadStatusFormInput, unknown, LeadStatusFormData>({
     resolver: zodResolver(leadStatusSchema),
     defaultValues: {
       status: "Negotiation",

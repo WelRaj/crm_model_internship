@@ -26,7 +26,7 @@ const leadInfoSchema = z.object({
   country: z.string().default("India"),
 });
 
-type LeadInfoFormData = z.infer<typeof leadInfoSchema>;
+type LeadInfoFormData = z.input<typeof leadInfoSchema>;
 
 export default function Step1LeadInfo({ data, updateData, onNext }: LeadStepProps) {
   const {

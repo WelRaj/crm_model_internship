@@ -6,18 +6,12 @@ import { ArrowLeft, CheckCircle, Clock, Send } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-export default function Step6Approval({ onPrev }: any) {
+export default function Step6Approval({ approvals, updateApproval, onFinish, onPrev }: any) {
   const router = useRouter();
   const [isFinishing, setIsFinishing] = useState(false);
 
-  const approvals = [
-    { role: "HR Manager", status: "Approved", name: "Sunita Sharma", date: "2024-03-11 10:30 AM" },
-    { role: "Technical Manager", status: "Approved", name: "Vikram Rathore", date: "2024-03-11 02:15 PM" },
-    { role: "Finance Team", status: "Pending", name: "-", date: "-" },
-    { role: "Director", status: "Pending", name: "-", date: "-" },
-  ];
-
   const handleFinish = () => {
+    if (!onFinish()) return;
     setIsFinishing(true);
     setTimeout(() => {
       alert("Onboarding Complete! Welcome Email Sent.");
@@ -28,7 +22,7 @@ export default function Step6Approval({ onPrev }: any) {
   return (
     <div className="space-y-8">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {approvals.map((approval, i) => (
+        {approvals.map((approval: any, i: number) => (
           <div key={i} className="p-6 border border-border rounded-2xl bg-slate-50 relative overflow-hidden">
             <div className="flex justify-between items-start mb-4">
               <div>
@@ -36,15 +30,23 @@ export default function Step6Approval({ onPrev }: any) {
                 <p className="text-lg font-bold text-primary mt-1">{approval.name !== "-" ? approval.name : "Waiting..."}</p>
               </div>
               <div className={`${
-                approval.status === "Approved" ? "text-green-500" : "text-amber-500"
+                approval.status === "Approved" ? "text-green-500" : approval.status === "Rejected" ? "text-red-500" : "text-amber-500"
               }`}>
                 {approval.status === "Approved" ? <CheckCircle size={32} /> : <Clock size={32} />}
               </div>
             </div>
             
             <div className="flex justify-between items-center text-xs text-secondary pt-4 border-t border-slate-200">
-              <span>Status: <span className={`font-bold ${approval.status === "Approved" ? "text-green-600" : "text-amber-600"}`}>{approval.status}</span></span>
+              <span>Status: <span className={`font-bold ${approval.status === "Approved" ? "text-green-600" : approval.status === "Rejected" ? "text-red-600" : "text-amber-600"}`}>{approval.status}</span></span>
               <span>{approval.date}</span>
+            </div>
+            <div className="mt-4 flex gap-2">
+              <Button variant="outline" className="h-9 flex-1 text-xs border-green-600 text-green-600" onClick={() => updateApproval(approval.role, "Approved")}>
+                Approve
+              </Button>
+              <Button variant="outline" className="h-9 flex-1 text-xs border-red-600 text-red-600" onClick={() => updateApproval(approval.role, "Rejected")}>
+                Reject
+              </Button>
             </div>
           </div>
         ))}

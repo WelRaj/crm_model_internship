@@ -22,14 +22,15 @@ const requirementsSchema = z.object({
   paymentMode: z.string().optional(),
 });
 
-type RequirementsFormData = z.infer<typeof requirementsSchema>;
+type RequirementsFormInput = z.input<typeof requirementsSchema>;
+type RequirementsFormData = z.output<typeof requirementsSchema>;
 
 export default function Step2Requirements({ data, updateData, onNext, onPrev }: LeadStepProps) {
   const {
     register,
     handleSubmit,
     formState: { errors },
-  } = useForm<RequirementsFormData>({
+  } = useForm<RequirementsFormInput, unknown, RequirementsFormData>({
     resolver: zodResolver(requirementsSchema),
     defaultValues: data
   });

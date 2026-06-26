@@ -40,7 +40,7 @@ export const ProtectedModule = ({ moduleId, children }: { moduleId: string; chil
           <Lock size={40} />
         </div>
         <h3 className="text-2xl font-black text-primary">Access Denied</h3>
-        <p className="text-slate-500 font-bold mt-2">Role '{role}' is not authorized to access this module.</p>
+        <p className="text-slate-500 font-bold mt-2">Role &apos;{role}&apos; is not authorized to access this module.</p>
         <p className="text-xs font-black uppercase tracking-widest text-slate-400 mt-1">Contact Admin for permissions.</p>
       </div>
     );

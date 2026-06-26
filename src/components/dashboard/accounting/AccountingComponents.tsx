@@ -1,9 +1,16 @@
 ﻿"use client";
 
-import type { ReactNode } from "react";
+import type { ChangeEvent, ChangeEventHandler, ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
 
 type Tone = "slate" | "blue" | "green" | "amber" | "red" | "purple" | "cyan";
+type FieldElement = HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement;
+type BivariantFieldChangeHandler = {
+  bivarianceHack(event: ChangeEvent<FieldElement>): void;
+}["bivarianceHack"];
+type FieldRegister = Record<string, unknown> & {
+  onChange?: ChangeEventHandler<FieldElement>;
+};
 
 const toneStyles: Record<Tone, string> = {
   slate: "bg-slate-50 text-slate-700 border-slate-200",
@@ -92,7 +99,7 @@ export function MetricCard({
 }) {
   return (
     <div className="flex items-center gap-4 rounded-2xl border border-border bg-white p-5 shadow-sm">
-      <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-slate-100`}>
+      <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ${iconToneStyles[tone]}`}>
         <Icon size={21} />
       </div>
       <div className="min-w-0">
@@ -137,7 +144,24 @@ export function StatusBadge({ children, tone = "slate" }: { children: ReactNode;
 export function Field({
   label, placeholder, required, type = "text", options, multiline, error, register, onChange, defaultValue, ...rest
 }: {
-  label: string; placeholder?: string; required?: boolean; type?: string; options?: string[]; multiline?: boolean; error?: string; register?: any; onChange?: (e: any) => void; defaultValue?: any; [key: string]: any;
+  label: string;
+  placeholder?: string;
+  required?: boolean;
+  type?: string;
+  options?: string[];
+  multiline?: boolean;
+  error?: string;
+  register?: FieldRegister;
+  onChange?: BivariantFieldChangeHandler;
+  defaultValue?: string | number;
+  value?: string | number;
+  min?: string | number;
+  max?: string | number;
+  step?: string | number;
+  disabled?: boolean;
+  readOnly?: boolean;
+  name?: string;
+  [key: string]: unknown;
 }) {
   return (
     <label className="block space-y-1.5">
@@ -149,7 +173,7 @@ export function Field({
         <textarea
           {...register}
           defaultValue={defaultValue}
-          onChange={onChange || register?.onChange}
+          onChange={(onChange || register?.onChange) as ChangeEventHandler<HTMLTextAreaElement> | undefined}
           placeholder={placeholder}
           rows={3}
           {...rest}
@@ -161,7 +185,7 @@ export function Field({
         <select
           {...register}
           defaultValue={defaultValue}
-          onChange={onChange || register?.onChange}
+          onChange={(onChange || register?.onChange) as ChangeEventHandler<HTMLSelectElement> | undefined}
           {...rest}
           className={`h-11 w-full rounded-xl border border-border bg-white px-3 text-sm font-semibold text-primary outline-none transition-all focus:ring-4 focus:ring-primary/10 focus:border-primary ${
             error ? "border-red-500" : ""
@@ -177,7 +201,7 @@ export function Field({
           type={type}
           {...register}
           defaultValue={defaultValue}
-          onChange={onChange || register?.onChange}
+          onChange={(onChange || register?.onChange) as ChangeEventHandler<HTMLInputElement> | undefined}
           placeholder={placeholder}
           {...rest}
           className={`h-11 w-full rounded-xl border bg-white px-3 text-sm font-semibold text-primary outline-none transition-all placeholder:text-slate-300 focus:ring-4 focus:ring-primary/10 ${      

@@ -5,41 +5,17 @@ import { Button } from "@/components/ui/Button";
 import { ArrowRight, ArrowLeft, Upload, FileText, CheckCircle2 } from "lucide-react";
 
 interface DocType {
+  id: string;
   name: string;
   required: boolean;
   multiple?: boolean;
+  fileNames: string[];
 }
 
-export default function Step3Documents({ category, onNext, onPrev }: any) {
-  const fresherDocs: DocType[] = [
-    { name: "10th Marksheet", required: true },
-    { name: "12th Marksheet", required: true },
-    { name: "Graduation Degree / Certificate", required: true },
-    { name: "Internship Certificate (if applicable)", required: false },
-    { name: "Aadhaar Card (Front + Back)", required: true },
-    { name: "PAN Card", required: true },
-    { name: "Passport Size Photo", required: true },
-    { name: "Resume / CV", required: true },
-    { name: "Bank Details (Cancelled Cheque / Passbook)", required: true },
-  ];
-
-  const experiencedDocs: DocType[] = [
-    { name: "10th Marksheet", required: true },
-    { name: "12th Marksheet", required: true },
-    { name: "Graduation Degree / Certificate", required: true },
-    { name: "Present Company Offer Letter", required: true },
-    
-    { name: "All Prev. Company Relieving Letters", required: true, multiple: true },
-    { name: "All Semester Marksheets (Separate)", required: true, multiple: true },
-    { name: "Aadhaar Card (Front + Back)", required: true },
-    { name: "PAN Card", required: true },
-    { name: "Passport Size Photo", required: true },
-    { name: "Resume / CV", required: true },
-    { name: "Other Documents", required: false, multiple: true },
-    { name: "Bank Details (Cancelled Cheque / Passbook)", required: true },
-  ];
-
-  const docs = category === "Experienced" ? experiencedDocs : fresherDocs;
+export default function Step3Documents({ category, documents, updateDocument, onNext, onPrev }: any) {
+  const docs: DocType[] = documents;
+  const uploadedRequired = docs.filter((doc) => doc.required && doc.fileNames.length > 0).length;
+  const totalRequired = docs.filter((doc) => doc.required).length;
 
   return (
     <div className="space-y-8">
@@ -84,18 +60,32 @@ export default function Step3Documents({ category, onNext, onPrev }: any) {
               </div>
             </div>
 
-            <div className="mt-5 pt-4 border-t border-slate-50 flex items-center justify-between">
-               <span className="text-[11px] text-slate-400 italic">No file selected</span>
+            <div className="mt-5 pt-4 border-t border-slate-50 flex items-center justify-between gap-4">
+               <span className={`text-[11px] italic ${doc.fileNames.length ? "text-emerald-600 font-bold" : "text-slate-400"}`}>
+                {doc.fileNames.length ? doc.fileNames.join(", ") : "No file selected"}
+               </span>
                <label className="cursor-pointer">
-                <input type="file" className="hidden" multiple={doc.multiple} />
+                <input
+                  type="file"
+                  className="hidden"
+                  multiple={doc.multiple}
+                  onChange={(event) => {
+                    const files = Array.from(event.target.files || []).map((file) => file.name);
+                    updateDocument(doc.id, { fileNames: files, status: files.length ? "Under Review" : "Pending", remarks: files.length ? "Uploaded for HR review" : "" });
+                  }}
+                />
                 <div className="flex items-center space-x-2 bg-slate-900 text-white px-4 py-2 rounded-lg hover:bg-accent transition-all duration-300 text-xs font-bold shadow-sm active:scale-95">
                   <Upload size={14} />
-                  <span>Upload</span>
+                  <span>{doc.fileNames.length ? "Replace" : "Upload"}</span>
                 </div>
               </label>
             </div>
           </div>
         ))}
+      </div>
+
+      <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm font-bold text-slate-600">
+        Required documents uploaded: <span className="text-primary">{uploadedRequired}/{totalRequired}</span>
       </div>
 
       <div className="flex items-center justify-between pt-10 border-t border-slate-100">

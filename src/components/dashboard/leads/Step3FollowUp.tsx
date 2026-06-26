@@ -18,7 +18,7 @@ const followUpSchema = z.object({
   nextDate: z.string().optional(),
 });
 
-type FollowUpFormData = z.infer<typeof followUpSchema>;
+type FollowUpFormData = z.input<typeof followUpSchema>;
 
 type FollowUpRecord = FollowUpFormData & {
   id: number;
@@ -26,7 +26,7 @@ type FollowUpRecord = FollowUpFormData & {
   status: string;
 };
 
-type Step3Props = Pick<LeadStepProps, "onNext" | "onPrev">;
+type Step3Props = Pick<LeadStepProps, "data" | "updateData" | "onNext" | "onPrev">;
 
 export default function Step3FollowUp({ onNext, onPrev }: Step3Props) {
   const [followUps, setFollowUps] = useState<FollowUpRecord[]>([
@@ -111,7 +111,7 @@ export default function Step3FollowUp({ onNext, onPrev }: Step3Props) {
                   <span className="text-xs font-black text-primary">{log.date}</span>
                   <span className="text-[10px] text-slate-400 bg-slate-100 px-2 py-0.5 rounded uppercase font-bold">{log.time || "N/A"}</span>
                   <span className="flex items-center gap-1 text-[10px] text-primary font-bold bg-accent/30 px-2 py-0.5 rounded uppercase">
-                    {getModeIcon(log.mode)} {log.mode || "Other"}
+                    {getModeIcon(log.mode || "Other")} {log.mode || "Other"}
                   </span>
                 </div>
                 <div className="flex items-center gap-2">

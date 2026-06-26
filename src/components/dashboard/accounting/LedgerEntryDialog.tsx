@@ -15,6 +15,7 @@ export interface LedgerEntryData {
   expenses: string;
   expensesChecked: boolean;
   slabPercent: string;
+  gstTreatment: "Inclusive" | "Exclusive";
 }
 
 interface LedgerEntryDialogProps {
@@ -23,6 +24,7 @@ interface LedgerEntryDialogProps {
   onDelete?: () => void;
   initialEntry?: LedgerEntryData;
   mode?: "add" | "edit";
+  existingVoucherNos?: string[];
 }
 
 const INR = "\u20b9";
@@ -30,11 +32,25 @@ const today = () => new Date().toISOString().slice(0, 10);
 const parseNum = (v: string) => parseFloat(v) || 0;
 const onlyNums = (v: string) => v.replace(/[^0-9.]/g, "").replace(/(\..*)\./g, "$1");
 const fmt = (n: number) => INR + n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const calcTax = (amount: string, checked: boolean, slabPercent: string, gstTreatment: LedgerEntryData["gstTreatment"]) => {
+  if (!checked) return 0;
+  const value = parseNum(amount);
+  const rate = parseNum(slabPercent);
+  if (gstTreatment === "Inclusive") return rate > 0 ? (value * rate) / (100 + rate) : 0;
+  return (value * rate) / 100;
+};
 
-export default function LedgerEntryDialog({ onClose, onSave, onDelete, initialEntry, mode = "add" }: LedgerEntryDialogProps) {
+export default function LedgerEntryDialog({
+  onClose,
+  onSave,
+  onDelete,
+  initialEntry,
+  mode = "add",
+  existingVoucherNos = [],
+}: LedgerEntryDialogProps) {
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
-  const [entry, setEntry] = useState<LedgerEntryData>(initialEntry ?? {
+  const [entry, setEntry] = useState<LedgerEntryData>({
     date: today(),
     voucherNo: "",
     partyName: "",
@@ -47,15 +63,17 @@ export default function LedgerEntryDialog({ onClose, onSave, onDelete, initialEn
     expenses: "",
     expensesChecked: false,
     slabPercent: "",
+    gstTreatment: "Exclusive",
+    ...initialEntry,
   });
 
   const update = (patch: Partial<LedgerEntryData>) => {
     setErrors([]);
     setEntry(prev => ({ ...prev, ...patch }));
   };
-  const pgst = entry.purchaseChecked ? (parseNum(entry.purchase) * parseNum(entry.slabPercent)) / 100 : 0;
-  const sgst = entry.salesChecked ? (parseNum(entry.sales) * parseNum(entry.slabPercent)) / 100 : 0;
-  const tds = entry.expensesChecked ? (parseNum(entry.expenses) * parseNum(entry.slabPercent)) / 100 : 0;
+  const pgst = calcTax(entry.purchase, entry.purchaseChecked, entry.slabPercent, entry.gstTreatment);
+  const sgst = calcTax(entry.sales, entry.salesChecked, entry.slabPercent, entry.gstTreatment);
+  const tds = calcTax(entry.expenses, entry.expensesChecked, entry.slabPercent, entry.gstTreatment);
 
   const base: React.CSSProperties = {
     border: "none",
@@ -74,11 +92,36 @@ export default function LedgerEntryDialog({ onClose, onSave, onDelete, initialEn
     const sales = parseNum(entry.sales);
     const expenses = parseNum(entry.expenses);
     const slab = parseNum(entry.slabPercent);
+    const amountValues = [entry.purchase, entry.sales, entry.expenses].filter(Boolean);
+    const normalizedVoucher = entry.voucherNo.trim().toLowerCase();
 
+    if (!entry.date) nextErrors.push("Date is required.");
+    if (entry.date && entry.date > today()) nextErrors.push("Future-dated ledger entries are not allowed.");
+    if (!entry.voucherNo.trim()) nextErrors.push("Reference number is required.");
+    if (normalizedVoucher && existingVoucherNos.some((voucher) => voucher.trim().toLowerCase() === normalizedVoucher)) {
+      nextErrors.push("Reference number already exists in the active ledger.");
+    }
+    if (!entry.partyName.trim()) nextErrors.push("Party name is required.");
+    if (!entry.category) nextErrors.push("Category is required.");
     if (!entry.description.trim()) nextErrors.push("Description is required.");
     if (purchase + sales + expenses <= 0) nextErrors.push("Enter at least one purchase, sales, or expense amount.");
     if (purchase < 0 || sales < 0 || expenses < 0) nextErrors.push("Amount cannot be negative.");
-    if (slab < 0 || slab > 100) nextErrors.push("Slab percent must be between 0 and 100.");
+    if (amountValues.some((value) => !/^\d+(\.\d{1,2})?$/.test(value))) {
+      nextErrors.push("Amounts can have a maximum of two decimal places.");
+    }
+    if (entry.category === "Sales" && sales <= 0) nextErrors.push("Sales category requires a sales amount.");
+    if (entry.category === "Purchase" && purchase <= 0) nextErrors.push("Purchase category requires a purchase amount.");
+    if (entry.category === "Expense" && expenses <= 0) nextErrors.push("Expense category requires an expense amount.");
+    if (slab < 0 || slab > 100) nextErrors.push("GST/TDS percent must be between 0 and 100.");
+    if (entry.slabPercent && !/^\d+(\.\d{1,2})?$/.test(entry.slabPercent)) {
+      nextErrors.push("GST/TDS percent can have a maximum of two decimal places.");
+    }
+    if ((entry.purchaseChecked || entry.salesChecked || entry.expensesChecked) && slab <= 0) {
+      nextErrors.push("GST/TDS percent is required when tax is enabled.");
+    }
+    if (entry.purchaseChecked && purchase <= 0) nextErrors.push("Purchase tax cannot be enabled without a purchase amount.");
+    if (entry.salesChecked && sales <= 0) nextErrors.push("Sales tax cannot be enabled without a sales amount.");
+    if (entry.expensesChecked && expenses <= 0) nextErrors.push("Expense tax/TDS cannot be enabled without an expense amount.");
 
     setErrors(nextErrors);
     return nextErrors.length === 0;
@@ -136,7 +179,8 @@ export default function LedgerEntryDialog({ onClose, onSave, onDelete, initialEn
                   { label: `Purchase (${INR})`, align: "right", color: "#64748b" },
                   { label: `Sales (${INR})`, align: "right", color: "#64748b" },
                   { label: `Expenses (${INR})`, align: "right", color: "#64748b" },
-                  { label: "Slab %", align: "center", color: "#64748b" },
+                  { label: "GST/TDS %", align: "center", color: "#64748b" },
+                  { label: "GST Basis", align: "center", color: "#64748b" },
                   { label: `PGST (${INR})`, align: "right", color: "#f59e0b" },
                   { label: `SGST (${INR})`, align: "right", color: "#06b6d4" },
                   { label: `TDS (${INR})`, align: "right", color: "#8b5cf6" },
@@ -265,6 +309,16 @@ export default function LedgerEntryDialog({ onClose, onSave, onDelete, initialEn
                     onChange={e => update({ slabPercent: onlyNums(e.target.value) })}
                   />
                 </td>
+                <td style={{ padding: "10px 12px", textAlign: "center", minWidth: 105 }}>
+                  <select
+                    style={{ ...base, color: "#64748b", textAlign: "center" }}
+                    value={entry.gstTreatment}
+                    onChange={e => update({ gstTreatment: e.target.value as LedgerEntryData["gstTreatment"] })}
+                  >
+                    <option value="Exclusive">Exclusive</option>
+                    <option value="Inclusive">Inclusive</option>
+                  </select>
+                </td>
                 <td style={{ padding: "10px 12px", textAlign: "right", minWidth: 90, color: "#f59e0b", fontWeight: 700 }}>
                   {entry.purchaseChecked ? fmt(pgst) : fmt(0)}
                 </td>
@@ -319,6 +373,7 @@ export default function LedgerEntryDialog({ onClose, onSave, onDelete, initialEn
                 <td style={{ padding: "12px 12px", textAlign: "right", fontWeight: 700, color: "#0f172a" }}>{fmt(parseNum(entry.purchase))}</td>
                 <td style={{ padding: "12px 12px", textAlign: "right", fontWeight: 700, color: "#0f172a" }}>{fmt(parseNum(entry.sales))}</td>
                 <td style={{ padding: "12px 12px", textAlign: "right", fontWeight: 700, color: "#0f172a" }}>{fmt(parseNum(entry.expenses))}</td>
+                <td />
                 <td />
                 <td style={{ padding: "12px 12px", textAlign: "right", fontWeight: 700, color: "#f59e0b" }}>{fmt(pgst)}</td>
                 <td style={{ padding: "12px 12px", textAlign: "right", fontWeight: 700, color: "#06b6d4" }}>{fmt(sgst)}</td>

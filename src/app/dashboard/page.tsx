@@ -20,7 +20,6 @@ import {
   Settings,
   Shield,
   ShieldCheck,
-  MoreVertical,
   Calendar,
   Filter,
   HelpCircle,
@@ -37,8 +36,6 @@ import {
   Menu,
   ChevronLeft
 } from "lucide-react";
-
-import { Button } from "@/components/ui/Button";
 
 // Existing Wizards
 import AdministrationHub from "@/components/dashboard/administration/AdministrationHub";
@@ -304,6 +301,7 @@ export default function Dashboard() {
   const [activeTab, setActiveTab] = useState("overview");
   const [showNotif, setShowNotif] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
+  const [showCalendar, setShowCalendar] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [showSignOut, setShowSignOut] = useState(false);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
@@ -365,6 +363,7 @@ export default function Dashboard() {
         if (headerRef.current && !headerRef.current.contains(event.target as Node)) {
             setShowNotif(false);
             setShowCreate(false);
+            setShowCalendar(false);
             setShowProfile(false);
         }
     }
@@ -442,8 +441,8 @@ export default function Dashboard() {
       items: [
         { id: "users", label: "Users", icon: Users },
         { id: "roles", label: "Roles", icon: Shield },
-        { id: "logs", label: "Audit Logs", icon: History },
-        { id: "approvals", label: "Approvals", icon: CheckCircle2 },
+        { id: "logs", label: "System Audit Trail", icon: History },
+        { id: "approvals", label: "Approval Center", icon: CheckCircle2 },
         { id: "settings", label: "Settings", icon: Settings },
       ]
     },
@@ -456,7 +455,7 @@ export default function Dashboard() {
   ];
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] flex relative">
+    <div className="relative flex min-h-screen overflow-x-hidden bg-[#F8FAFC]">
       {/* --- COLLAPSIBLE SIDEBAR --- */}
       <aside
         onWheel={handleSidebarWheel}
@@ -531,9 +530,9 @@ export default function Dashboard() {
       </aside>
 
       {/* --- MAIN CONTENT AREA --- */}
-      <div className={`min-w-0 flex-1 transition-all duration-500 ease-in-out ${isSidebarVisible ? "ml-[19rem]" : "ml-0"} flex flex-col`}>
-        <header className="h-24 w-full bg-white/80 backdrop-blur-md border-b border-slate-100 flex items-center justify-between gap-6 px-12 sticky top-0 z-40 shadow-sm">
-          <div className="flex items-center gap-6">
+      <div className={`flex min-w-0 flex-col transition-all duration-500 ease-in-out ${isSidebarVisible ? "ml-[19rem] w-[calc(100%-19rem)]" : "ml-0 w-full"}`}>
+        <header className="sticky top-0 z-40 flex min-h-24 w-full items-center justify-between gap-4 border-b border-slate-100 bg-white/80 px-6 py-4 shadow-sm backdrop-blur-md xl:px-12">
+          <div className="flex min-w-0 items-center gap-4 xl:gap-6">
             {/* TOGGLE BUTTON - PERMANENTLY VISIBLE */}
             <button 
               onClick={() => setIsSidebarVisible(!isSidebarVisible)}
@@ -543,7 +542,7 @@ export default function Dashboard() {
               {isSidebarVisible ? <ChevronLeft size={24} /> : <Menu size={24} />}
             </button>
             
-            <div className="relative w-[32rem]">
+            <div className="relative hidden w-[min(32rem,42vw)] lg:block">
               <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-300" size={20} />
               <input 
                 type="text" 
@@ -553,46 +552,264 @@ export default function Dashboard() {
             </div>
           </div>
 
-          <div className="flex shrink-0 items-center gap-4" ref={headerRef}>
+          <div className="flex min-w-0 shrink-0 items-center gap-2 xl:gap-4" ref={headerRef}>
             <div className="relative">
-                <button onClick={() => setShowNotif(!showNotif)} className="relative p-3 bg-slate-50 text-slate-400 rounded-xl hover:text-primary transition-all hover:shadow-md">
+                <button
+                  onClick={() => {
+                    setShowNotif((current) => !current);
+                    setShowCreate(false);
+                    setShowCalendar(false);
+                    setShowProfile(false);
+                  }}
+                  className="relative p-3 bg-slate-50 text-slate-400 rounded-xl hover:text-primary transition-all hover:shadow-md"
+                  title="Notifications"
+                >
                     <Bell size={22} />
                     <span className="absolute top-2.5 right-2.5 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white"></span>
                 </button>
+                {showNotif && (
+                  <div className="absolute right-0 top-[calc(100%+0.75rem)] z-50 w-80 overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-2xl shadow-slate-200/80">
+                    <div className="border-b border-slate-100 p-4">
+                      <p className="text-xs font-black uppercase tracking-widest text-slate-400">Notifications</p>
+                      <p className="mt-1 text-sm font-black text-[#1E293B]">3 items need attention</p>
+                    </div>
+                    <div className="divide-y divide-slate-100">
+                      {[
+                        { title: "Approval pending", detail: "7 control requests need review", tab: "approvals", tone: "bg-amber-50 text-amber-600" },
+                        { title: "Deadline risk", detail: "3 project deadlines are close", tab: "deadlines", tone: "bg-red-50 text-red-600" },
+                        { title: "Payment follow-up", detail: "Receivable queue has overdue invoices", tab: "accounting-payments", tone: "bg-blue-50 text-blue-600" },
+                      ].map((item) => (
+                        <button
+                          key={item.title}
+                          onClick={() => {
+                            setActiveTab(item.tab);
+                            setShowNotif(false);
+                          }}
+                          className="flex w-full items-start gap-3 p-4 text-left transition-colors hover:bg-slate-50"
+                        >
+                          <span className={`mt-0.5 h-9 w-9 shrink-0 rounded-xl ${item.tone} flex items-center justify-center`}>
+                            <Bell size={16} />
+                          </span>
+                          <span className="min-w-0">
+                            <span className="block text-sm font-black text-[#1E293B]">{item.title}</span>
+                            <span className="mt-1 block text-xs font-semibold leading-5 text-slate-500">{item.detail}</span>
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
             </div>
 
-            <button className="flex items-center gap-2 px-5 py-3 bg-slate-50 rounded-2xl text-xs font-black text-slate-600 hover:bg-slate-100 transition-all uppercase tracking-widest">
-               <Calendar size={16} /> June 2024 <ChevronDown size={14}/>
-            </button>
+            <div className="relative hidden md:block">
+              <button
+                onClick={() => {
+                  setShowCalendar((current) => !current);
+                  setShowNotif(false);
+                  setShowCreate(false);
+                  setShowProfile(false);
+                }}
+                className="flex items-center gap-2 rounded-2xl bg-slate-50 px-5 py-3 text-xs font-black uppercase tracking-widest text-slate-600 transition-all hover:bg-slate-100"
+                title="Calendar shortcuts"
+              >
+                 <Calendar size={16} /> June 2024 <ChevronDown size={14}/>
+              </button>
+              {showCalendar && (
+                <div className="absolute right-0 top-[calc(100%+0.75rem)] z-50 w-72 rounded-2xl border border-slate-100 bg-white p-4 shadow-2xl shadow-slate-200/80">
+                  <p className="text-xs font-black uppercase tracking-widest text-slate-400">Calendar</p>
+                  <div className="mt-3 rounded-2xl bg-slate-50 p-4">
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-black text-[#1E293B]">June 2024</p>
+                      <span className="rounded-full bg-emerald-50 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-emerald-600">Active</span>
+                    </div>
+                    <div className="mt-4 grid grid-cols-7 gap-1 text-center text-[10px] font-black text-slate-400">
+                      {["M", "T", "W", "T", "F", "S", "S"].map((day, index) => <span key={`${day}-${index}`}>{day}</span>)}
+                      {Array.from({ length: 30 }, (_, index) => index + 1).map((day) => (
+                        <button
+                          key={day}
+                          onClick={() => setShowCalendar(false)}
+                          className={`h-7 rounded-lg text-xs font-bold transition-colors ${day === 26 ? "bg-primary text-white" : "text-slate-600 hover:bg-white"}`}
+                        >
+                          {day}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="mt-3 grid grid-cols-2 gap-2">
+                    {[
+                      { label: "Deadlines", tab: "deadlines" },
+                      { label: "Attendance", tab: "attendance" },
+                    ].map((item) => (
+                      <button
+                        key={item.label}
+                        onClick={() => {
+                          setActiveTab(item.tab);
+                          setShowCalendar(false);
+                        }}
+                        className="rounded-xl border border-slate-100 px-3 py-2 text-xs font-black text-slate-600 transition-colors hover:bg-slate-50"
+                      >
+                        {item.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
 
             <div className="relative">
-                <button onClick={() => setShowCreate(!showCreate)} className="flex items-center gap-2 px-5 py-3 bg-accent text-primary rounded-2xl text-xs font-black hover:shadow-lg transition-all uppercase tracking-widest">
+                <button
+                  onClick={() => {
+                    setShowCreate((current) => !current);
+                    setShowNotif(false);
+                    setShowCalendar(false);
+                    setShowProfile(false);
+                  }}
+                  className="flex items-center gap-2 rounded-2xl bg-accent px-4 py-3 text-xs font-black uppercase tracking-widest text-primary transition-all hover:shadow-lg xl:px-5"
+                  title="Create new record"
+                >
                    <Plus size={16} /> Create New <ChevronDown size={14}/>
                 </button>
+                {showCreate && (
+                  <div className="absolute right-0 top-[calc(100%+0.75rem)] z-50 w-72 overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-2xl shadow-slate-200/80">
+                    <div className="border-b border-slate-100 p-4">
+                      <p className="text-xs font-black uppercase tracking-widest text-slate-400">Create New</p>
+                      <p className="mt-1 text-sm font-black text-[#1E293B]">Start a working module flow</p>
+                    </div>
+                    <div className="p-2">
+                      {[
+                        { label: "Lead", detail: "Capture a new sales lead", tab: "leads", icon: Target },
+                        { label: "Project", detail: "Open project register", tab: "projects", icon: Briefcase },
+                        { label: "Invoice", detail: "Create accounting invoice", tab: "accounting-invoices", icon: FileText },
+                        { label: "Expense", detail: "Record business expense", tab: "accounting-expenses", icon: Wallet },
+                        { label: "User", detail: "Invite portal user", tab: "users", icon: UserPlus },
+                      ].map((item) => (
+                        <button
+                          key={item.label}
+                          onClick={() => {
+                            setActiveTab(item.tab);
+                            setShowCreate(false);
+                          }}
+                          className="flex w-full items-center justify-between rounded-xl p-3 text-left transition-colors hover:bg-slate-50"
+                        >
+                          <span className="flex min-w-0 items-center gap-3">
+                            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-50 text-primary">
+                              <item.icon size={18} />
+                            </span>
+                            <span className="min-w-0">
+                              <span className="block text-sm font-black text-[#1E293B]">{item.label}</span>
+                              <span className="mt-0.5 block truncate text-xs font-semibold text-slate-500">{item.detail}</span>
+                            </span>
+                          </span>
+                          <ChevronRight size={16} className="shrink-0 text-slate-300" />
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
             </div>
 
-            <div className="relative pl-6 border-l border-slate-100">
+            <div className="relative border-l border-slate-100 pl-3 xl:pl-6">
               <button
-                onClick={() => setShowProfile(!showProfile)}
+                onClick={() => {
+                  setShowProfile((current) => !current);
+                  setShowNotif(false);
+                  setShowCreate(false);
+                  setShowCalendar(false);
+                }}
                 className={`flex items-center gap-4 rounded-[1.6rem] p-2 pl-4 transition-all ${
                   showProfile ? "bg-slate-50 shadow-sm" : "hover:bg-slate-50"
                 }`}
+                title="Profile menu"
               >
-                <div className="text-right">
+                <div className="hidden text-right xl:block">
                     <p className="text-sm font-black text-[#1E293B] leading-none">Rajkumar Rathore</p>
                     <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">Super Admin</p>
                 </div>
                 <div className="relative">
-                    <div className="w-14 h-14 rounded-[1.25rem] bg-gradient-to-br from-[#1D4ED8] via-primary to-[#0F172A] flex items-center justify-center text-white font-black text-xl shadow-xl">
-                      RR
-                    </div>
+                    {avatarPreview ? (
+                      <div
+                        aria-label="Rajkumar Rathore"
+                        className="h-14 w-14 rounded-[1.25rem] bg-cover bg-center shadow-xl"
+                        style={{ backgroundImage: `url(${avatarPreview})` }}
+                      />
+                    ) : (
+                      <div className="w-14 h-14 rounded-[1.25rem] bg-gradient-to-br from-[#1D4ED8] via-primary to-[#0F172A] flex items-center justify-center text-white font-black text-xl shadow-xl">
+                        RR
+                      </div>
+                    )}
                 </div>
               </button>
+              {showProfile && (
+                <div className="absolute right-0 top-[calc(100%+0.75rem)] z-50 w-80 overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-2xl shadow-slate-200/80">
+                  <div className="border-b border-slate-100 p-5">
+                    <div className="flex items-center gap-4">
+                      {avatarPreview ? (
+                        <div
+                          aria-label="Rajkumar Rathore"
+                          className="h-14 w-14 rounded-2xl bg-cover bg-center"
+                          style={{ backgroundImage: `url(${avatarPreview})` }}
+                        />
+                      ) : (
+                        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary text-lg font-black text-white">RR</div>
+                      )}
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-black text-[#1E293B]">Rajkumar Rathore</p>
+                        <p className="mt-1 text-[10px] font-black uppercase tracking-widest text-slate-400">Super Admin</p>
+                      </div>
+                    </div>
+                  </div>
+                  <input ref={avatarInputRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarChange} />
+                  <div className="p-2">
+                    {[
+                      { label: "My Profile", detail: "Open user administration", icon: User, action: "users" },
+                      { label: "Change Photo", detail: "Upload local avatar preview", icon: Camera, action: "photo" },
+                      { label: "Settings", detail: "Company configuration", icon: Settings, action: "settings" },
+                      { label: "Support", detail: "Open help module", icon: MessageSquare, action: "support" },
+                    ].map((item) => (
+                      <button
+                        key={item.label}
+                        onClick={() => {
+                          if (item.action === "photo") {
+                            avatarInputRef.current?.click();
+                            return;
+                          }
+                          setActiveTab(item.action);
+                          setShowProfile(false);
+                        }}
+                        className="flex w-full items-center gap-3 rounded-xl p-3 text-left transition-colors hover:bg-slate-50"
+                      >
+                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-50 text-primary">
+                          <item.icon size={18} />
+                        </span>
+                        <span className="min-w-0">
+                          <span className="block text-sm font-black text-[#1E293B]">{item.label}</span>
+                          <span className="mt-0.5 block text-xs font-semibold text-slate-500">{item.detail}</span>
+                        </span>
+                      </button>
+                    ))}
+                    <button
+                      onClick={() => {
+                        setShowProfile(false);
+                        setShowSignOut(true);
+                      }}
+                      className="mt-2 flex w-full items-center gap-3 rounded-xl border border-red-100 bg-red-50 p-3 text-left text-red-600 transition-colors hover:bg-red-100"
+                    >
+                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white">
+                        <LogOut size={18} />
+                      </span>
+                      <span>
+                        <span className="block text-sm font-black">Sign Out</span>
+                        <span className="mt-0.5 block text-xs font-semibold text-red-500">Confirm before leaving</span>
+                      </span>
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </header>
 
-        <main className="w-full min-w-0 flex-1 p-12">
+        <main className="w-full min-w-0 flex-1 p-6 xl:p-12">
           <div className="mx-auto w-full max-w-[1600px] min-w-0 transition-all duration-500">
             {activeTab === "overview" && <DashboardOverview />}
             {activeTab === "onboarding" && <OnboardingWizard />}
@@ -630,6 +847,31 @@ export default function Dashboard() {
           </div>
         </main>
       </div>
+
+      {showSignOut && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs font-black uppercase tracking-widest text-slate-400">Session</p>
+                <h3 className="mt-2 text-xl font-black text-[#1E293B]">Sign out?</h3>
+                <p className="mt-2 text-sm font-semibold leading-6 text-slate-500">You will return to the sign-in screen. Unsaved local form changes should be saved before leaving.</p>
+              </div>
+              <button onClick={() => setShowSignOut(false)} className="rounded-xl bg-slate-50 p-2 text-slate-400 transition-colors hover:text-primary">
+                <X size={18} />
+              </button>
+            </div>
+            <div className="mt-6 flex justify-end gap-3">
+              <button onClick={() => setShowSignOut(false)} className="rounded-xl border border-slate-200 px-4 py-3 text-xs font-black uppercase tracking-widest text-slate-600 transition-colors hover:bg-slate-50">
+                Cancel
+              </button>
+              <button onClick={() => { window.location.href = "/auth/signin"; }} className="rounded-xl bg-red-600 px-4 py-3 text-xs font-black uppercase tracking-widest text-white transition-colors hover:bg-red-700">
+                Sign Out
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

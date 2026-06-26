@@ -3,8 +3,8 @@
 import React from 'react';
 import type { ComponentType } from 'react';
 import type { LucideIcon } from 'lucide-react';
-import { 
-  Users, Truck, FileText, Receipt, ReceiptText, IndianRupee, BellRing, 
+import {
+  Users, Truck, FileText, Receipt, BellRing,
   RotateCcw, Wallet, BarChart3, UserSquare2, Percent, 
   Calculator, LineChart, ShieldCheck, History, Lock, Landmark ,TrendingDown} from 'lucide-react';
 import AccountingDashboard from './AccountingDashboard';
@@ -17,7 +17,7 @@ import Step4Invoices from './Step4Invoices';
 import Step5Payments from './Step5Payments';
 import Step6Reminders from './Step6Reminders';
 import Step7CreditNotes from './Step7CreditNotes';
-import Step8expenses from './Step8expenses';
+import Step8expenses from './Step8Expenses';
 import Step9Budgets from './Step9Budgets';
 import Step10Salary from './Step10Salary';
 import Step11GST from './Step11GST';
@@ -52,7 +52,7 @@ type AccountingModule = {
   id: AccountingModuleId;
   label: string;
   icon: LucideIcon;
-  component: ComponentType<any>;
+  component: ComponentType;
 };
 
 export const ACCOUNTING_MODULES: AccountingModule[] = [
