@@ -1,98 +1,110 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
+import { Select } from "@/components/ui/Select";
 import IndianMobileInput, { isValidIndianMobile } from "@/components/auth/IndianMobileInput";
-import { CheckCircle } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 export default function SignupForm() {
-  const [phoneNumber, setPhoneNumber] = useState("");
-  const [phoneError, setPhoneError] = useState("");
+  const [step, setStep] = useState<"details" | "otp">("details");
   const [isLoading, setIsLoading] = useState(false);
-  const [isSuccess, setIsSuccess] = useState(false);
-  const phoneInputRef = useRef<HTMLInputElement>(null);
+  const [phoneError, setPhoneError] = useState("");
   const router = useRouter();
+  const phoneInputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    const timer = window.setTimeout(() => phoneInputRef.current?.focus(), 50);
-    return () => window.clearTimeout(timer);
-  }, []);
+  const [formData, setFormData] = useState({
+    firstName: "",
+    lastName: "",
+    email: "",
+    phone: "",
+    category: "",
+  });
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleDetailsSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (!isValidIndianMobile(phoneNumber)) {
+    if (!isValidIndianMobile(formData.phone)) {
       setPhoneError("Enter a valid 10-digit Indian mobile number.");
       phoneInputRef.current?.focus();
       return;
     }
-
     setPhoneError("");
     setIsLoading(true);
-    
-    // Simulating API Call
+    // Simulate OTP sending
     setTimeout(() => {
       setIsLoading(false);
-      setIsSuccess(true);
-      // Redirect to signin after 2 seconds
-      setTimeout(() => router.push("/auth/signin"), 2000);
-    }, 1500);
+      setStep("otp");
+    }, 1000);
   };
 
-  if (isSuccess) {
+  const handleOtpSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
+    // Simulate OTP verification
+    setTimeout(() => {
+      setIsLoading(false);
+      router.push("/dashboard");
+    }, 1000);
+  };
+
+  if (step === "otp") {
     return (
-      <div className="w-full max-w-md text-center space-y-4 bg-white p-12 rounded-xl shadow-lg border border-border">
-        <div className="flex justify-center">
-          <CheckCircle className="h-16 w-16 text-accent animate-bounce" />
+      <div className="w-full max-w-md space-y-6 bg-surface p-8 rounded-2xl shadow-sm border border-border">
+        <div className="text-center">
+          <h2 className="text-2xl font-black text-text">Verify OTP</h2>
+          <p className="mt-2 text-sm text-text-muted">Enter the 6-digit code sent to +91 {formData.phone}</p>
         </div>
-        <h2 className="text-2xl font-bold text-primary">Registration Successful!</h2>
-        <p className="text-secondary">Welcome to the premium CRM. Redirecting to login...</p>
+        <form onSubmit={handleOtpSubmit} className="space-y-6">
+          <Input label="OTP" placeholder="000000" required type="text" maxLength={6} />
+          <Button className="w-full" isLoading={isLoading}>Verify & Register</Button>
+        </form>
       </div>
     );
   }
 
   return (
-    <div className="w-full max-w-md space-y-8 bg-white p-8 rounded-xl shadow-lg border border-border">
+    <div className="w-full max-w-md space-y-8 bg-surface p-8 rounded-2xl shadow-sm border border-border">
       <div className="text-center">
-        <h2 className="text-3xl font-bold tracking-tight text-primary">Create Account</h2>
-        <p className="mt-2 text-sm text-secondary">Join our premium CRM platform</p>
+        <h2 className="text-3xl font-black text-text tracking-tight">Create Account</h2>
+        <p className="mt-2 text-sm text-text-muted">Join our premium CRM platform</p>
       </div>
 
-      <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
-        <div className="space-y-4">
-          <Input label="Full Name" placeholder="John Doe" required type="text" />
-          <Input label="Email Address" placeholder="john@example.com" required type="email" />
-          <IndianMobileInput
+      <form className="mt-8 space-y-6" onSubmit={handleDetailsSubmit}>
+        <div className="grid grid-cols-2 gap-4">
+          <Input label="First Name" placeholder="John" required type="text" onChange={(e) => setFormData({...formData, firstName: e.target.value})} />
+          <Input label="Last Name" placeholder="Doe" required type="text" onChange={(e) => setFormData({...formData, lastName: e.target.value})} />
+        </div>
+        <Input label="Email Address" placeholder="john@example.com" required type="email" onChange={(e) => setFormData({...formData, email: e.target.value})} />
+        
+        <IndianMobileInput
             ref={phoneInputRef}
-            value={phoneNumber}
+            value={formData.phone}
             error={phoneError}
-            autoFocus
             onChange={(value) => {
-              setPhoneNumber(value);
+              setFormData({...formData, phone: value});
               if (phoneError && isValidIndianMobile(value)) {
                 setPhoneError("");
               }
             }}
-          />
-          
-          <div className="flex items-start space-x-2 py-2">
-            <input id="terms" type="checkbox" className="mt-1 h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary" required />
-            <label htmlFor="terms" className="text-sm text-secondary leading-tight">
-              I agree to the <Link href="#" className="text-accent font-medium hover:underline">Terms & Conditions</Link>
-            </label>
-          </div>
-        </div>
+        />
+        
+        <Select 
+          label="Department Category" 
+          required 
+          options={["Lead", "Onboarding", "Accounting", "Marketing", "Projects", "Administration"]} 
+          onChange={(e) => setFormData({...formData, category: e.target.value})}
+        />
 
         <Button className="w-full" isLoading={isLoading}>
-          Create Account
+          Continue to OTP <ArrowRight className="ml-2 h-4 w-4" />
         </Button>
       </form>
 
-      <p className="text-center text-sm text-secondary">
-        Already have an account? <Link href="/auth/signin" className="font-semibold text-primary hover:underline">Sign In</Link>
+      <p className="text-center text-sm text-text-muted">
+        Already have an account? <Link href="/auth/signin" className="font-black text-primary hover:underline">Sign In</Link>
       </p>
     </div>
   );

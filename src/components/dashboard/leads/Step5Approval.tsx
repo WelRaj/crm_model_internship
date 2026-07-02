@@ -6,7 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { ArrowLeft, Shield, ThumbsDown, ThumbsUp, UserCheck } from "lucide-react";
 import { ActionButton, Field, Panel, StatusBadge } from "../accounting/AccountingComponents";
-import type { LeadStepProps } from "./leadTypes";
+import { createLeadDraft, mergeLeadDraft, type LeadStepProps } from "./leadTypes";
 
 const approvalSchema = z.object({
   decision: z.string().optional(),
@@ -29,21 +29,18 @@ const approvals: ApprovalCard[] = [
   { role: "Senior Manager / Director", status: "Pending", name: "-", date: "-", remarks: "" },
 ];
 
-type Step5Props = Pick<LeadStepProps, "data" | "updateData" | "onNext" | "onPrev">;
+type Step5Props = Pick<LeadStepProps, "onNext" | "onPrev"> & Partial<Pick<LeadStepProps, "data" | "updateData">>;
 
-export default function Step5Approval({ updateData = () => undefined, onNext, onPrev }: Step5Props) {
+export default function Step5Approval({ data = createLeadDraft(), updateData = () => undefined, onNext, onPrev }: Step5Props) {
   const [decision, setDecision] = useState<"Approve" | "Reject">("Approve");
 
   const { register, handleSubmit } = useForm<ApprovalFormData>({
     resolver: zodResolver(approvalSchema),
-    defaultValues: {
-      reviewerRole: "Finance Manager",
-      decision: "Approve",
-    },
+    defaultValues: data,
   });
 
   const onSubmit = (values: ApprovalFormData) => {
-    updateData({ ...values, decision });
+    updateData(mergeLeadDraft({ ...values, decision }));
     onNext();
   };
 

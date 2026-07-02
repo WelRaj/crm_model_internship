@@ -20,9 +20,17 @@ module.exports = {
           DEFAULT: "#10b981",
           foreground: "#ffffff",
         },
-        background: "#f8fafc",
+        background: "#f8fafc", // slate-50
+        surface: {
+          DEFAULT: "#ffffff",
+          muted: "#f1f5f9", // slate-100
+        },
         foreground: "#0f172a",
-        border: "#e2e8f0",
+        text: {
+          DEFAULT: "#0f172a",
+          muted: "#64748b", // slate-500
+        },
+        border: "#e2e8f0", // slate-200
       },
     },
   },

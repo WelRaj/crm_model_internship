@@ -1,153 +1,165 @@
 "use client";
 
 import { useState } from "react";
-import { Search, Filter, Plus, Target, Users, Clock, TrendingUp, MoreHorizontal } from "lucide-react";
-import { Button } from "@/components/ui/Button";
-import LeadWizard from "./LeadWizard";
+import { Briefcase, Headphones, Target } from "lucide-react";
+import ProjectLeadStepWizard from "./ProjectLeadStepWizard";
+import TradingLeadCreate from "./TradingLeadCreate";
+import { projectLeadSeedData, tradingLeadSeedData, type ProjectLead, type TradingLead } from "./leadTypes";
+
+type CreateMode = "home" | "project" | "trading";
 
 export default function LeadHub() {
-  const [showWizard, setShowWizard] = useState(false);
-  const [activeTab, setActiveTab] = useState("all");
+  const [mode, setMode] = useState<CreateMode>("home");
+  const [projectCreated, setProjectCreated] = useState<ProjectLead[]>(projectLeadSeedData);
+  const [tradingCreated, setTradingCreated] = useState<TradingLead[]>(tradingLeadSeedData);
+  const [recentLeadIds, setRecentLeadIds] = useState<string[]>([]);
 
-  const stats = [
-    { label: "Total Leads", value: "482", icon: Target, color: "text-blue-600", bg: "bg-blue-50" },
-    { label: "Warm Leads", value: "124", icon: TrendingUp, color: "text-orange-600", bg: "bg-orange-50" },
-    { label: "Converted", value: "64", icon: Users, color: "text-green-600", bg: "bg-green-50" },
-    { label: "Lost", value: "12", icon: Clock, color: "text-red-600", bg: "bg-red-50" },
-  ];
+  const addProjectLead = (lead: ProjectLead) => {
+    setProjectCreated((current) => [lead, ...current]);
+    setRecentLeadIds((current) => [lead.id, ...current]);
+  };
 
-  const leads = [
-    { id: "LEAD-101", name: "Rahul Sharma", company: "Tech Mahindra", source: "LinkedIn", status: "Warm", assigned: "Amit", date: "2 hours ago" },
-    { id: "LEAD-102", name: "Sarah Jones", company: "Acme Corp", source: "Website", status: "Cold", assigned: "Sonia", date: "5 hours ago" },
-    { id: "LEAD-103", name: "Vikram Singh", company: "HDFC Bank", source: "Referral", status: "Closed", assigned: "Raj", date: "Yesterday" },
-  ];
+  const addTradingLead = (lead: TradingLead) => {
+    setTradingCreated((current) => [lead, ...current]);
+    setRecentLeadIds((current) => [lead.id, ...current]);
+  };
 
-  if (showWizard) {
-    return (
-      <div className="space-y-6">
-        <div className="flex items-center gap-4">
-          <Button variant="outline" onClick={() => setShowWizard(false)} className="rounded-xl">
-            Back to Hub
-          </Button>
-          <h2 className="text-xl font-black text-primary">Lead Generation Wizard</h2>
-        </div>
-        <LeadWizard />
-      </div>
-    );
+  if (mode === "project") {
+    return <ProjectLeadStepWizard onBack={() => setMode("home")} onSave={addProjectLead} />;
+  }
+
+  if (mode === "trading") {
+    return <TradingLeadCreate onBack={() => setMode("home")} onSave={addTradingLead} />;
   }
 
   return (
-    <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-700">
-      {/* Header Section */}
-      <div className="flex justify-between items-end">
+    <div className="space-y-8 animate-in fade-in duration-500">
+      <div>
+        <p className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-400">CRM Leads</p>
+        <h2 className="mt-2 text-3xl font-black tracking-tight text-primary">Create Lead</h2>
+        <p className="mt-1 text-sm font-semibold text-secondary">Sirf lead create karne ka screen. Extra lead pages/sidebar removed.</p>
+      </div>
+
+      <div className="grid gap-5 lg:grid-cols-2">
+        <button onClick={() => setMode("project")} className="rounded-[2rem] border border-border bg-white p-8 text-left shadow-sm transition-all hover:border-primary hover:shadow-xl">
+          <div className="mb-6 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary text-white">
+            <Briefcase size={26} />
+          </div>
+          <h3 className="text-2xl font-black text-primary">Add New Project Lead</h3>
+          <p className="mt-2 text-sm font-semibold leading-6 text-secondary">Bada software/project enquiry. Purane step flow me lead create hogi.</p>
+          <div className="mt-5 rounded-xl bg-slate-50 px-4 py-3 text-xs font-black uppercase tracking-widest text-slate-500">Total project lead data: {projectCreated.length}</div>
+        </button>
+
+        <button onClick={() => setMode("trading")} className="rounded-[2rem] border border-border bg-white p-8 text-left shadow-sm transition-all hover:border-primary hover:shadow-xl">
+          <div className="mb-6 flex h-14 w-14 items-center justify-center rounded-2xl bg-accent text-slate-950">
+            <Headphones size={26} />
+          </div>
+          <h3 className="text-2xl font-black text-primary">Add New Trading / Calling Lead</h3>
+          <p className="mt-2 text-sm font-semibold leading-6 text-secondary">Account opening, app/site issue, telecaller assignment, call note aur follow-up add hoga.</p>
+          <div className="mt-5 rounded-xl bg-slate-50 px-4 py-3 text-xs font-black uppercase tracking-widest text-slate-500">Total trading lead data: {tradingCreated.length}</div>
+        </button>
+      </div>
+
+      <div className="rounded-2xl border border-border bg-white p-5 shadow-sm">
+        <div className="flex items-start gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/5 text-primary">
+            <Target size={18} />
+          </div>
+          <div>
+            <h3 className="text-sm font-black uppercase tracking-widest text-primary">Lead Module Simplified</h3>
+            <p className="mt-1 text-sm font-semibold text-secondary">Lead ke andar ab bas create flow hai. Follow-ups, Clients & Contacts, Project Agreements CRM sidebar me alag same rahenge.</p>
+          </div>
+        </div>
+      </div>
+
+      <LeadViewTable projectLeads={projectCreated} tradingLeads={tradingCreated} recentLeadIds={recentLeadIds} />
+    </div>
+  );
+}
+
+function LeadViewTable({ projectLeads, tradingLeads, recentLeadIds }: { projectLeads: ProjectLead[]; tradingLeads: TradingLead[]; recentLeadIds: string[] }) {
+  const rows = [
+    ...projectLeads.map((lead) => ({
+      id: lead.id,
+      type: "Project",
+      name: `${lead.firstName} ${lead.lastName}`,
+      mobile: lead.mobile,
+      source: lead.source,
+      assignedTo: lead.assignedTo,
+      status: lead.status,
+      detail: lead.projectType,
+    })),
+    ...tradingLeads.map((lead) => ({
+      id: lead.id,
+      type: "Trading",
+      name: `${lead.firstName} ${lead.lastName}`,
+      mobile: lead.mobile,
+      source: lead.source,
+      assignedTo: lead.assignedTo,
+      status: lead.status,
+      detail: lead.issueType || lead.tradingInterest,
+    })),
+  ].sort((first, second) => {
+    const firstRecent = recentLeadIds.indexOf(first.id);
+    const secondRecent = recentLeadIds.indexOf(second.id);
+    if (firstRecent === -1 && secondRecent === -1) return 0;
+    if (firstRecent === -1) return 1;
+    if (secondRecent === -1) return -1;
+    return firstRecent - secondRecent;
+  });
+
+  return (
+    <div className="rounded-2xl border border-border bg-white p-5 shadow-sm">
+      <div className="mb-5 flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
         <div>
-          <h2 className="text-3xl font-black text-primary tracking-tight">Leads Management</h2>
-          <p className="text-secondary font-medium mt-1">Monitor and convert your sales pipeline.</p>
+          <p className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-400">Lead View</p>
+          <h3 className="mt-1 text-xl font-black text-primary">All Leads</h3>
+          <p className="mt-1 text-xs font-semibold text-secondary">Add New Project Lead ya Add New Trading Lead se jo lead banegi, woh yahin top par dikhegi.</p>
         </div>
-        <div className="flex gap-3">
-           <button className="flex items-center gap-2 px-6 py-3 bg-white border border-border rounded-2xl text-xs font-black text-secondary hover:bg-slate-50 transition-all">
-              <Filter size={16} /> Advanced Filters
-           </button>
-           <button onClick={() => setShowWizard(true)} className="flex items-center gap-2 px-6 py-3 bg-accent text-primary rounded-2xl text-xs font-black shadow-lg hover:shadow-accent/10 transition-all">
-              <Plus size={18} /> Create New Lead
-           </button>
+        <div className="rounded-xl bg-slate-50 px-4 py-3 text-xs font-black uppercase tracking-widest text-slate-500">
+          Total Leads: {rows.length}
         </div>
       </div>
 
-      {/* Stats Section */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {stats.map((stat, i) => (
-          <div key={i} className="bg-white p-6 rounded-[2rem] border border-border shadow-sm flex items-center gap-5">
-            <div className={`w-14 h-14 ${stat.bg} ${stat.color} rounded-2xl flex items-center justify-center`}>
-              <stat.icon size={24} />
-            </div>
-            <div>
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{stat.label}</p>
-              <p className="text-2xl font-black text-primary mt-0.5">{stat.value}</p>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* Lead List Table */}
-      <div className="bg-white rounded-[2.5rem] border border-border shadow-sm overflow-hidden">
-        <div className="p-8 border-b border-slate-50 flex flex-col md:flex-row justify-between items-center gap-6">
-          <div className="flex gap-2 p-1 bg-slate-50 rounded-xl">
-            {["all", "warm", "cold", "closed"].map(tab => (
-              <button
-                key={tab}
-                onClick={() => setActiveTab(tab)}
-                className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
-                  activeTab === tab ? "bg-white text-primary shadow-sm ring-1 ring-slate-100" : "text-slate-400 hover:text-secondary"
-                }`}
-              >
-                {tab}
-              </button>
-            ))}
-          </div>
-          <div className="relative w-full md:w-80">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
-            <input 
-              type="text"
-              placeholder="Search leads by name or company..."
-              className="w-full pl-12 pr-4 py-3 bg-slate-50/50 border border-border rounded-2xl text-xs font-medium outline-none focus:ring-4 focus:ring-accent/10 transition-all"
-            />
-          </div>
-        </div>
-
-        <div className="overflow-x-auto">
-          <table className="w-full text-left">
-            <thead className="bg-slate-50/50">
-              <tr>
-                <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Lead Detail</th>
-                <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Source</th>
-                <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Assigned</th>
-                <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Status</th>
-                <th className="p-6 text-right text-[10px] font-black text-slate-400 uppercase tracking-widest">Actions</th>
+      <div className="overflow-x-auto rounded-xl border border-slate-100">
+        <table className="w-full min-w-[900px] text-left text-sm">
+          <thead className="bg-slate-50 text-[10px] font-black uppercase tracking-widest text-slate-400">
+            <tr>
+              <th className="px-4 py-3">Lead ID</th>
+              <th className="px-4 py-3">Type</th>
+              <th className="px-4 py-3">Name</th>
+              <th className="px-4 py-3">Mobile</th>
+              <th className="px-4 py-3">Source</th>
+              <th className="px-4 py-3">Assigned</th>
+              <th className="px-4 py-3">Status</th>
+              <th className="px-4 py-3">Detail</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {rows.map((lead) => {
+              const isRecent = recentLeadIds.includes(lead.id);
+              return (
+              <tr key={lead.id} className={isRecent ? "bg-emerald-50/70" : "hover:bg-slate-50/70"}>
+                <td className="px-4 py-4 font-black text-primary">{lead.id}</td>
+                <td className="px-4 py-4">
+                  <span className={`rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-widest ${lead.type === "Project" ? "bg-blue-50 text-blue-600" : "bg-amber-50 text-amber-700"}`}>
+                    {lead.type}
+                  </span>
+                </td>
+                <td className="px-4 py-4 font-bold text-primary">
+                  {lead.name}
+                  {isRecent ? <span className="ml-2 rounded-full bg-emerald-100 px-2 py-1 text-[9px] font-black uppercase tracking-widest text-emerald-700">New</span> : null}
+                </td>
+                <td className="px-4 py-4 font-semibold text-secondary">{lead.mobile}</td>
+                <td className="px-4 py-4 font-semibold text-secondary">{lead.source}</td>
+                <td className="px-4 py-4 font-semibold text-secondary">{lead.assignedTo}</td>
+                <td className="px-4 py-4 font-semibold text-secondary">{lead.status}</td>
+                <td className="px-4 py-4 font-semibold text-secondary">{lead.detail}</td>
               </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-50">
-              {leads.map((lead) => (
-                <tr key={lead.id} className="group hover:bg-slate-50/30 transition-all">
-                  <td className="p-6">
-                    <div className="flex items-center gap-4">
-                      <div className="w-10 h-10 bg-primary/5 text-primary rounded-xl flex items-center justify-center font-black text-xs group-hover:bg-primary group-hover:text-white transition-all">
-                        {lead.name.split(" ").map(n => n[0]).join("")}
-                      </div>
-                      <div>
-                        <p className="font-bold text-primary text-sm">{lead.name}</p>
-                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{lead.company}</p>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="p-6">
-                    <span className="px-2 py-1 bg-slate-100 text-slate-500 rounded text-[10px] font-black uppercase tracking-tighter">{lead.source}</span>
-                  </td>
-                  <td className="p-6">
-                    <div className="flex items-center gap-2">
-                       <div className="w-2 h-2 rounded-full bg-accent"></div>
-                       <span className="text-xs font-bold text-secondary">{lead.assigned}</span>
-                    </div>
-                  </td>
-                  <td className="p-6">
-                    <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border ${
-                      lead.status === "Warm" ? "bg-orange-50 text-orange-600 border-orange-100" :
-                      lead.status === "Closed" ? "bg-green-50 text-green-600 border-green-100" : "bg-slate-50 text-slate-500 border-slate-100"
-                    }`}>
-                      {lead.status}
-                    </span>
-                  </td>
-                  <td className="p-6 text-right">
-                    <button className="p-2 text-slate-300 hover:text-primary transition-all"><MoreHorizontal size={20} /></button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        <div className="p-6 bg-slate-50/50 border-t border-slate-50 text-center">
-           <button className="text-[10px] font-black text-primary uppercase tracking-widest hover:underline">Load More Leads</button>
-        </div>
+              );
+            })}
+          </tbody>
+        </table>
       </div>
     </div>
   );

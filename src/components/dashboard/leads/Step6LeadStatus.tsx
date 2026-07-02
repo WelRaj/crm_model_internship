@@ -6,7 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { ArrowLeft, Trophy, XCircle, Send, Landmark } from "lucide-react";
 import { ActionButton, Field } from "../accounting/AccountingComponents";
-import type { LeadStepProps } from "./leadTypes";
+import { createLeadDraft, mergeLeadDraft, type LeadStepProps } from "./leadTypes";
 
 const leadStatusSchema = z.object({
   status: z.string().optional(),
@@ -21,18 +21,14 @@ const leadStatusSchema = z.object({
 type LeadStatusFormInput = z.input<typeof leadStatusSchema>;
 type LeadStatusFormData = z.output<typeof leadStatusSchema>;
 
-type Step6Props = Pick<LeadStepProps, "data" | "updateData" | "onPrev" | "onComplete">;
+type Step6Props = Pick<LeadStepProps, "onPrev"> & Partial<Pick<LeadStepProps, "data" | "updateData" | "onComplete">>;
 
-export default function Step6LeadStatus({ updateData = () => undefined, onPrev, onComplete }: Step6Props) {
+export default function Step6LeadStatus({ data = createLeadDraft(), updateData = () => undefined, onPrev, onComplete }: Step6Props) {
   const [isLoading, setIsLoading] = useState(false);
 
   const { register, handleSubmit, control } = useForm<LeadStatusFormInput, unknown, LeadStatusFormData>({
     resolver: zodResolver(leadStatusSchema),
-    defaultValues: {
-      status: "Negotiation",
-      priority: "Medium",
-      expectedValue: 0,
-    },
+    defaultValues: data,
   });
 
   const watchedStatus = useWatch({ control, name: "status" });
@@ -40,7 +36,7 @@ export default function Step6LeadStatus({ updateData = () => undefined, onPrev, 
   const onSubmit = (values: LeadStatusFormData) => {
     setIsLoading(true);
     setTimeout(() => {
-      updateData(values);
+      updateData(mergeLeadDraft(values));
       onComplete?.();
       setIsLoading(false);
     }, 1500);

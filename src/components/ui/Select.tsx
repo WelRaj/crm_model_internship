@@ -15,14 +15,14 @@ const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
     return (
       <div className="w-full space-y-1.5">
         {label && (
-          <label className="text-sm font-medium text-secondary flex items-center gap-1.5">
+          <label className="text-sm font-black uppercase tracking-widest text-text-muted flex items-center gap-1.5">
             {label}
             {showEditIcon && <Edit3 className="h-3.5 w-3.5 text-primary" />}
             {props.required && <span className="text-red-500 ml-1">*</span>}
           </label>
         )}
         <select
-          className={`flex h-11 w-full rounded-md border border-border bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary disabled:cursor-not-allowed disabled:opacity-50 transition-all hover:border-primary/50 ${className}`}
+          className={`flex h-11 w-full rounded-xl border border-border bg-surface px-3 py-2 text-sm text-text focus:outline-none focus:ring-2 focus:ring-primary disabled:cursor-not-allowed disabled:opacity-50 transition-all hover:border-primary/50 ${className}`}
           ref={ref}
           {...props}
         >
@@ -33,7 +33,7 @@ const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
             </option>
           ))}
         </select>
-        {error && <p className="text-xs text-red-500 font-medium">{error}</p>}
+        {error && <p className="text-xs text-red-500 font-black uppercase tracking-widest">{error}</p>}
       </div>
     );
   }

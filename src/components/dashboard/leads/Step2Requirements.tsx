@@ -5,7 +5,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { ArrowRight, ArrowLeft } from "lucide-react";
 import { ActionButton, Field } from "../accounting/AccountingComponents";
-import { createLeadDraft, type LeadStepProps } from "./leadTypes";
+import { mergeLeadDraft, type LeadStepProps } from "./leadTypes";
 
 // --- Validation Schema (Simplified mandatory fields) ---
 const requirementsSchema = z.object({
@@ -25,7 +25,7 @@ const requirementsSchema = z.object({
 type RequirementsFormInput = z.input<typeof requirementsSchema>;
 type RequirementsFormData = z.output<typeof requirementsSchema>;
 
-export default function Step2Requirements({ data = createLeadDraft(), updateData = () => undefined, onNext, onPrev }: LeadStepProps) {
+export default function Step2Requirements({ data, updateData, onNext, onPrev }: LeadStepProps) {
   const {
     register,
     handleSubmit,
@@ -36,7 +36,7 @@ export default function Step2Requirements({ data = createLeadDraft(), updateData
   });
 
   const onSubmit = (values: RequirementsFormData) => {
-    updateData(values);
+    updateData(mergeLeadDraft(values));
     onNext();
   };
 

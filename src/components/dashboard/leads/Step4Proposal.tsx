@@ -5,7 +5,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { ArrowRight, ArrowLeft, Upload, FileText } from "lucide-react";
 import { ActionButton, Field, Panel, StatusBadge, DataTable } from "../accounting/AccountingComponents";
-import { createLeadDraft, type LeadStepProps } from "./leadTypes";
+import { createLeadDraft, mergeLeadDraft, type LeadStepProps } from "./leadTypes";
 
 // --- Validation Schema (Simplified) ---
 const proposalSchema = z.object({
@@ -18,8 +18,9 @@ const proposalSchema = z.object({
 
 type ProposalFormInput = z.input<typeof proposalSchema>;
 type ProposalFormData = z.output<typeof proposalSchema>;
+type Step4Props = Pick<LeadStepProps, "onNext" | "onPrev"> & Partial<Pick<LeadStepProps, "data" | "updateData">>;
 
-export default function Step4Proposal({ data = createLeadDraft(), updateData = () => undefined, onNext, onPrev }: LeadStepProps) {
+export default function Step4Proposal({ data = createLeadDraft(), updateData = () => undefined, onNext, onPrev }: Step4Props) {
   const proposals = [
     { id: "PROP-2024-001", date: "2024-03-15", amount: "75,000", currency: "INR", status: "Revision Required", sentBy: "Vikram Rathore" },
   ];
@@ -37,7 +38,7 @@ export default function Step4Proposal({ data = createLeadDraft(), updateData = (
   });
 
   const onSubmit = (values: ProposalFormData) => {
-    updateData(values);
+    updateData(mergeLeadDraft(values));
     onNext();
   };
 

@@ -26,9 +26,9 @@ type FollowUpRecord = FollowUpFormData & {
   status: string;
 };
 
-type Step3Props = Pick<LeadStepProps, "data" | "updateData" | "onNext" | "onPrev">;
+type Step3Props = Pick<LeadStepProps, "onNext" | "onPrev"> & Partial<Pick<LeadStepProps, "data" | "updateData">>;
 
-export default function Step3FollowUp({ onNext, onPrev }: Step3Props) {
+export default function Step3FollowUp({ data, updateData, onNext, onPrev }: Step3Props) {
   const [followUps, setFollowUps] = useState<FollowUpRecord[]>([
     { id: 1, date: "2024-03-12", time: "11:00 AM", mode: "Call", staff: "Vikram Rathore", response: "Interested", summary: "Discussed website features. Client asked for quote.", status: "Done" },
     { id: 2, date: "2024-03-14", time: "02:30 PM", mode: "WhatsApp", staff: "Vikram Rathore", response: "Call Back", summary: "Shared portfolio links. Client will review tonight.", status: "Done" },

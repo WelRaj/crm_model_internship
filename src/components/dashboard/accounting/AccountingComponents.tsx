@@ -46,10 +46,10 @@ export function AccountingPage({
           </div>
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-3">
-              <h2 className="text-3xl font-black tracking-tight text-[#1E293B]">{title}</h2>
+              <h2 className="text-3xl font-black tracking-tight text-text">{title}</h2>
               {badge ? <StatusBadge tone="blue">{badge}</StatusBadge> : null}
             </div>
-            <p className="mt-1 max-w-3xl text-sm font-medium leading-6 text-slate-500">{description}</p>
+            <p className="mt-1 max-w-3xl text-sm font-medium leading-6 text-text-muted">{description}</p>
           </div>
         </div>
         {actions ? <div className="flex shrink-0 flex-wrap justify-start gap-3 xl:justify-end">{actions}</div> : null}

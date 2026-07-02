@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, type Dispatch, type SetStateAction } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { 
-  Target, Users, Clock, TrendingUp, CheckCircle2, 
+  Target, Users, Clock, TrendingUp, CheckCircle2,
   ChevronLeft, Phone, Mail, MessageSquare, Eye, 
   Search, Filter, Download, Briefcase
 } from "lucide-react";
@@ -69,37 +69,116 @@ const mockLeads: LeadRecord[] = [
   },
 ];
 
+const statusOptions = ["All", "Interested", "Proposal Sent", "Negotiation", "Won", "Lost", "On Hold"];
+
+function formatLeadDate(date: string) {
+  const parsedDate = date ? new Date(`${date}T00:00:00`) : new Date();
+  if (Number.isNaN(parsedDate.getTime())) {
+    return new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+  }
+
+  return parsedDate.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+}
+
+function formatLeadValue(data: LeadDraft) {
+  const amount =
+    Number(data.finalValue || 0) ||
+    Number(data.expectedValue || 0) ||
+    Number(data.amount || 0) ||
+    Number(data.maxBudget || 0) ||
+    Number(data.minBudget || 0);
+
+  if (!amount) return "TBD";
+  if (amount >= 100000) return `INR ${(amount / 100000).toFixed(1)}L`;
+
+  return `INR ${new Intl.NumberFormat("en-IN", { maximumFractionDigits: 0 }).format(amount)}`;
+}
+
+function getStatusTone(status: string): "blue" | "green" | "amber" | "red" | "slate" {
+  if (status === "Won") return "green";
+  if (status === "Lost") return "red";
+  if (status === "Interested") return "blue";
+  if (status === "On Hold") return "slate";
+  return "amber";
+}
+
+function phoneDigits(phone: string) {
+  return phone.replace(/\D/g, "");
+}
+
+function csvEscape(value: string) {
+  return `"${value.replace(/"/g, '""')}"`;
+}
+
 export default function LeadWizard() {
   const [showWizard, setShowWizard] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
   const [isCompleted, setIsCompleted] = useState(false);
   const [leads, setLeads] = useState<LeadRecord[]>(mockLeads);
-  
-  const [formData, setFormData]: [LeadDraft, Dispatch<SetStateAction<LeadDraft>>] = useState<LeadDraft>(() => createLeadDraft());
+  const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState("All");
+  const [selectedLead, setSelectedLead] = useState<LeadRecord | null>(null);
+  const resetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const updateFormData = (newData: unknown) => {
-    setFormData((prev) => {
-      if (typeof newData === "function") {
-        return { ...prev, ...(newData as (current: LeadDraft) => Partial<LeadDraft>)(prev) };
+  const [formData, setFormData] = useState<LeadDraft>(() => createLeadDraft());
+
+  useEffect(() => {
+    return () => {
+      if (resetTimerRef.current) {
+        clearTimeout(resetTimerRef.current);
       }
-      if (newData && typeof newData === "object") {
-        return { ...prev, ...(newData as Partial<LeadDraft>) };
-      }
-      return prev;
-    });
-  };
+    };
+  }, []);
 
   const nextStep = () => setCurrentStep((prev) => Math.min(prev + 1, STEPS.length));
   const prevStep = () => setCurrentStep((prev) => Math.max(prev - 1, 1));
-  const goToStep = (stepId: number) => setCurrentStep(stepId);
+  const goToStep = (stepId: number) => setCurrentStep(Math.min(Math.max(stepId, 1), STEPS.length));
+
+  const filteredLeads = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+
+    return leads.filter((lead) => {
+      const matchesStatus = statusFilter === "All" || lead.status === statusFilter;
+      const matchesSearch =
+        !query ||
+        lead.id.toLowerCase().includes(query) ||
+        lead.name.toLowerCase().includes(query) ||
+        lead.company.toLowerCase().includes(query) ||
+        lead.mobile.toLowerCase().includes(query) ||
+        lead.email.toLowerCase().includes(query) ||
+        lead.service.toLowerCase().includes(query);
+
+      return matchesStatus && matchesSearch;
+    });
+  }, [leads, searchQuery, statusFilter]);
+
+  const stats = useMemo(() => {
+    const total = leads.length;
+    const converted = leads.filter((lead) => lead.status === "Won").length;
+    const lost = leads.filter((lead) => lead.status === "Lost").length;
+    const active = leads.filter((lead) => !["Won", "Lost"].includes(lead.status)).length;
+    const dropRate = total ? `${Math.round((lost / total) * 100)}%` : "0%";
+
+    return { total, active, converted, dropRate };
+  }, [leads]);
+
+  const closeWizard = () => {
+    if (resetTimerRef.current) {
+      clearTimeout(resetTimerRef.current);
+      resetTimerRef.current = null;
+    }
+    setShowWizard(false);
+    setIsCompleted(false);
+    setCurrentStep(1);
+    setFormData(createLeadDraft());
+  };
 
   const handleComplete = () => {
     setIsCompleted(true);
     const fullName = [formData.firstName, formData.lastName].filter(Boolean).join(" ").trim();
-    const expectedValue = Number(formData.expectedValue || 0);
     const newLeadRecord: LeadRecord = {
       id: formData.leadId,
-      date: new Date(formData.leadDate || new Date().toISOString()).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+      date: formatLeadDate(formData.leadDate),
       name: fullName || "Unnamed Lead",
       company: formData.companyName || "Personal",
       mobile: formData.mobile || "N/A",
@@ -109,17 +188,59 @@ export default function LeadWizard() {
       source: formData.leadSource || "Direct",
       status: formData.status || "New",
       assigned: formData.assignedTo || "Unassigned",
-      value: expectedValue > 0 ? `INR ${(expectedValue / 100000).toFixed(1)}L` : "TBD"
+      value: formatLeadValue(formData)
     };
 
     setLeads(prev => [newLeadRecord, ...prev]);
 
-    setTimeout(() => {
-      setShowWizard(false);
-      setIsCompleted(false);
-      setCurrentStep(1);
-      setFormData(createLeadDraft());
+    if (resetTimerRef.current) {
+      clearTimeout(resetTimerRef.current);
+    }
+
+    resetTimerRef.current = setTimeout(() => {
+      closeWizard();
     }, 3000);
+  };
+
+  const exportLeads = () => {
+    const headers = ["Lead ID", "Date", "Name", "Company", "Mobile", "Email", "Service", "Platform", "Source", "Status", "Assigned", "Value"];
+    const rows = leads.map((lead) =>
+      [
+        lead.id,
+        lead.date,
+        lead.name,
+        lead.company,
+        lead.mobile,
+        lead.email,
+        lead.service,
+        lead.platform,
+        lead.source,
+        lead.status,
+        lead.assigned,
+        lead.value,
+      ]
+        .map(csvEscape)
+        .join(","),
+    );
+    const blob = new Blob([[headers.map(csvEscape).join(","), ...rows].join("\n")], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = "lead-wizard-leads.csv";
+    anchor.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const openCall = (lead: LeadRecord) => {
+    const digits = phoneDigits(lead.mobile);
+    if (!digits) return;
+    window.open(`tel:${digits}`, "_self");
+  };
+
+  const openWhatsApp = (lead: LeadRecord) => {
+    const digits = phoneDigits(lead.mobile);
+    if (!digits) return;
+    window.open(`https://wa.me/91${digits.slice(-10)}`, "_blank", "noopener,noreferrer");
   };
 
   const renderStep = () => {
@@ -136,12 +257,12 @@ export default function LeadWizard() {
     }
 
     switch (currentStep) {
-      case 1: return <Step1LeadInfo data={formData} updateData={updateFormData} onNext={nextStep} />;
-      case 2: return <Step2Requirements data={formData} updateData={updateFormData} onNext={nextStep} onPrev={prevStep} />;
-      case 3: return <Step3FollowUp data={formData} updateData={updateFormData} onNext={nextStep} onPrev={prevStep} />;
-      case 4: return <Step4Proposal data={formData} updateData={updateFormData} onNext={nextStep} onPrev={prevStep} />;
-      case 5: return <Step5Approval data={formData} updateData={updateFormData} onNext={nextStep} onPrev={prevStep} />;
-      case 6: return <Step6LeadStatus data={formData} updateData={updateFormData} onPrev={prevStep} onComplete={handleComplete} />;
+      case 1: return <Step1LeadInfo data={formData} updateData={setFormData} onNext={nextStep} onPrev={prevStep} />;
+      case 2: return <Step2Requirements data={formData} updateData={setFormData} onNext={nextStep} onPrev={prevStep} />;
+      case 3: return <Step3FollowUp data={formData} updateData={setFormData} onNext={nextStep} onPrev={prevStep} />;
+      case 4: return <Step4Proposal data={formData} updateData={setFormData} onNext={nextStep} onPrev={prevStep} />;
+      case 5: return <Step5Approval data={formData} updateData={setFormData} onNext={nextStep} onPrev={prevStep} />;
+      case 6: return <Step6LeadStatus data={formData} updateData={setFormData} onPrev={prevStep} onComplete={handleComplete} />;
       default: return null;
     }
   };
@@ -152,7 +273,7 @@ export default function LeadWizard() {
         {/* Header */}
         <div className="flex items-center justify-between border-b border-slate-100 pb-6">
           <div className="flex items-center gap-5">
-             <button onClick={() => setShowWizard(false)} className="flex h-12 w-12 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-400 hover:text-primary transition-all shadow-sm">
+             <button onClick={closeWizard} className="flex h-12 w-12 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-400 hover:text-primary transition-all shadow-sm">
                 <ChevronLeft size={24} />
              </button>
              <div>
@@ -193,7 +314,7 @@ export default function LeadWizard() {
                       isDone ? "border-emerald-500 bg-emerald-500 text-white" :
                       "border-slate-100 group-hover:border-slate-200"
                     }`}>
-                      {isDone ? "✓" : step.id}
+                      {isDone ? <CheckCircle2 size={14} /> : step.id}
                     </div>
                     <div>
                       <p className="text-xs font-black uppercase tracking-widest leading-none">{step.title}</p>
@@ -223,7 +344,7 @@ export default function LeadWizard() {
           <p className="text-slate-500 font-medium mt-1 text-lg">Sales & Development unified pipeline management.</p>
         </div>
         <div className="flex gap-4">
-          <ActionButton icon={Download} label="Export Leads" variant="outline" />
+          <ActionButton onClick={exportLeads} icon={Download} label="Export Leads" variant="outline" />
           <ActionButton 
             onClick={() => setShowWizard(true)}
             icon={Target}
@@ -236,10 +357,10 @@ export default function LeadWizard() {
       {/* Stats Dashboard */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {[
-          { l: "Total Leads", v: String(leads.length + 479), c: "blue" as const },
-          { l: "Active Pipeline", v: "12", c: "amber" as const },
-          { l: "Converted", v: "64", c: "green" as const },
-          { l: "Drop Rate", v: "8%", c: "red" as const }
+          { l: "Total Leads", v: String(stats.total), c: "blue" as const },
+          { l: "Active Pipeline", v: String(stats.active), c: "amber" as const },
+          { l: "Converted", v: String(stats.converted), c: "green" as const },
+          { l: "Drop Rate", v: stats.dropRate, c: "red" as const }
         ].map((s, i) => (
           <MetricCard key={i} label={s.l} value={s.v} icon={Target} tone={s.c} />
         ))}
@@ -253,14 +374,31 @@ export default function LeadWizard() {
           <div className="flex gap-3">
              <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300" size={14} />
-                <input type="text" placeholder="Search by name/company..." className="pl-9 pr-4 py-2 bg-slate-50 border border-slate-100 rounded-xl text-xs font-bold outline-none focus:ring-4 focus:ring-primary/5 w-64" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(event) => setSearchQuery(event.target.value)}
+                  placeholder="Search by name/company..."
+                  className="pl-9 pr-4 py-2 bg-slate-50 border border-slate-100 rounded-xl text-xs font-bold outline-none focus:ring-4 focus:ring-primary/5 w-64"
+                />
              </div>
-             <button className="p-2 bg-slate-50 rounded-xl text-slate-400 hover:text-primary"><Filter size={18} /></button>
+             <label className="flex items-center gap-2 rounded-xl bg-slate-50 px-3 py-2 text-slate-400">
+                <Filter size={16} />
+                <select
+                  value={statusFilter}
+                  onChange={(event) => setStatusFilter(event.target.value)}
+                  className="bg-transparent text-xs font-black uppercase tracking-widest text-primary outline-none"
+                >
+                  {statusOptions.map((status) => (
+                    <option key={status} value={status}>{status}</option>
+                  ))}
+                </select>
+             </label>
           </div>
         }
       >
         <DataTable columns={["Lead ID & Date", "Client Details", "Project Scope", "Source", "Status", "Connect / View"]}>
-          {leads.map((lead) => (
+          {filteredLeads.map((lead) => (
             <tr key={lead.id} className="group hover:bg-slate-50 transition-colors">
               <td className="px-4 py-5">
                  <p className="font-black text-primary">{lead.id}</p>
@@ -288,22 +426,67 @@ export default function LeadWizard() {
                  <p className="text-[10px] font-bold text-slate-400 mt-1">Assigned: {lead.assigned}</p>
               </td>
               <td className="px-4 py-5">
-                 <StatusBadge tone={lead.status === "Won" ? "green" : lead.status === "Interested" ? "blue" : "amber"}>
+                 <StatusBadge tone={getStatusTone(lead.status)}>
                    {lead.status}
                  </StatusBadge>
                  <p className="text-xs font-black text-primary mt-1">{lead.value}</p>
               </td>
               <td className="px-4 py-5">
                  <div className="flex items-center gap-2">
-                    <button title="Call Client" className="w-9 h-9 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center hover:bg-emerald-600 hover:text-white transition-all"><Phone size={16} /></button>
-                    <button title="WhatsApp" className="w-9 h-9 bg-green-50 text-green-600 rounded-xl flex items-center justify-center hover:bg-green-600 hover:text-white transition-all"><MessageSquare size={16} /></button>
-                    <button title="View Requirements" className="w-9 h-9 bg-primary/5 text-primary rounded-xl flex items-center justify-center hover:bg-primary hover:text-white transition-all ml-2"><Eye size={16} /></button>
+                    <button type="button" onClick={() => openCall(lead)} title="Call Client" className="w-9 h-9 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center hover:bg-emerald-600 hover:text-white transition-all"><Phone size={16} /></button>
+                    <button type="button" onClick={() => openWhatsApp(lead)} title="WhatsApp" className="w-9 h-9 bg-green-50 text-green-600 rounded-xl flex items-center justify-center hover:bg-green-600 hover:text-white transition-all"><MessageSquare size={16} /></button>
+                    <a href={`mailto:${lead.email}`} title="Email Client" className="w-9 h-9 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center hover:bg-blue-600 hover:text-white transition-all"><Mail size={16} /></a>
+                    <button type="button" onClick={() => setSelectedLead(lead)} title="View Requirements" className="w-9 h-9 bg-primary/5 text-primary rounded-xl flex items-center justify-center hover:bg-primary hover:text-white transition-all ml-2"><Eye size={16} /></button>
                  </div>
               </td>
             </tr>
           ))}
+          {filteredLeads.length === 0 ? (
+            <tr>
+              <td colSpan={6} className="px-4 py-10 text-center text-sm font-bold text-slate-400">
+                No leads match the current search or filter.
+              </td>
+            </tr>
+          ) : null}
         </DataTable>
       </Panel>
+
+      {selectedLead ? (
+        <Panel
+          title="Selected Lead Detail"
+          description="Quick view for sales, telecaller and development handoff."
+          actions={
+            <button
+              type="button"
+              onClick={() => setSelectedLead(null)}
+              className="rounded-xl bg-slate-50 px-4 py-2 text-xs font-black uppercase tracking-widest text-slate-500 hover:text-primary"
+            >
+              Close
+            </button>
+          }
+        >
+          <div className="grid gap-4 md:grid-cols-3">
+            <div className="rounded-xl bg-slate-50 p-4">
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Client</p>
+              <p className="mt-2 text-lg font-black text-primary">{selectedLead.name}</p>
+              <p className="text-sm font-semibold text-slate-500">{selectedLead.company}</p>
+            </div>
+            <div className="rounded-xl bg-slate-50 p-4">
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Project Scope</p>
+              <p className="mt-2 text-lg font-black text-primary">{selectedLead.service}</p>
+              <p className="text-sm font-semibold text-slate-500">{selectedLead.platform}</p>
+            </div>
+            <div className="rounded-xl bg-slate-50 p-4">
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Pipeline</p>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <StatusBadge tone={getStatusTone(selectedLead.status)}>{selectedLead.status}</StatusBadge>
+                <span className="text-sm font-black text-primary">{selectedLead.value}</span>
+              </div>
+              <p className="mt-2 text-xs font-semibold text-slate-500">Assigned: {selectedLead.assigned}</p>
+            </div>
+          </div>
+        </Panel>
+      ) : null}
     </div>
   );
 }
