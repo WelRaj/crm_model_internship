@@ -38,13 +38,14 @@ type AgreementRecord = {
   date: string;
   value: string;
   status: string;
+  attachmentName: string;
 };
 
 const clientOptions = ["Apex Finserve Pvt Ltd", "Nexa Retail Cloud", "Bluebird Logistics"];
 
 const initialAgreements: AgreementRecord[] = [
-  { id: "AGR-2024-001", client: "Nexa Retail Cloud", project: "E-commerce Mobile App", type: "MSA", date: "12 Jun 2024", value: "INR 12.5L", status: "Active" },
-  { id: "AGR-2024-002", client: "Apex Finserve Pvt Ltd", project: "Loan CRM Web App", type: "SOW", date: "15 Jun 2024", value: "INR 8.4L", status: "Under Review" },
+  { id: "AGR-2024-001", client: "Nexa Retail Cloud", project: "E-commerce Mobile App", type: "MSA", date: "12 Jun 2024", value: "INR 12.5L", status: "Active", attachmentName: "AGR-2024-001-signed.pdf" },
+  { id: "AGR-2024-002", client: "Apex Finserve Pvt Ltd", project: "Loan CRM Web App", type: "SOW", date: "15 Jun 2024", value: "INR 8.4L", status: "Under Review", attachmentName: "Pending upload" },
 ];
 
 export default function ProjectAgreement() {
@@ -53,6 +54,7 @@ export default function ProjectAgreement() {
   const [successMsg, setSuccessMsg] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [clientEntryMode, setClientEntryMode] = useState<"existing" | "manual">("existing");
+  const [selectedFileName, setSelectedFileName] = useState("");
 
   const {
     register,
@@ -77,6 +79,7 @@ export default function ProjectAgreement() {
       date: new Date(data.effectiveDate).toLocaleDateString("en-GB", { day: '2-digit', month: 'short', year: 'numeric' }),
       value: data.contractValue ? `INR ${(data.contractValue/100000).toFixed(1)}L` : "TBD",
       status: data.status,
+      attachmentName: selectedFileName || "Pending upload",
     };
 
     setAgreements((current) => [newAgreement, ...current]);
@@ -85,6 +88,7 @@ export default function ProjectAgreement() {
       setSuccessMsg(false);
       setShowForm(false);
       reset();
+      setSelectedFileName("");
       setClientEntryMode("existing");
     }, 2000);
   };
@@ -105,7 +109,7 @@ export default function ProjectAgreement() {
 
   const handleExport = () => {
     const csvRows = [
-      ["Agreement ID", "Client", "Project", "Type", "Effective Date", "Value", "Status"],
+      ["Agreement ID", "Client", "Project", "Type", "Effective Date", "Value", "Status", "Attachment"],
       ...filteredAgreements.map((agreement) => [
         agreement.id,
         agreement.client,
@@ -114,6 +118,7 @@ export default function ProjectAgreement() {
         agreement.date,
         agreement.value,
         agreement.status,
+        agreement.attachmentName,
       ]),
     ];
     const csv = csvRows.map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(",")).join("\n");
@@ -136,6 +141,7 @@ export default function ProjectAgreement() {
       `Effective Date: ${agreement.date}`,
       `Value: ${agreement.value}`,
       `Status: ${agreement.status}`,
+      `Attachment: ${agreement.attachmentName}`,
     ].join("\n");
     const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
     const url = URL.createObjectURL(blob);
@@ -175,7 +181,10 @@ export default function ProjectAgreement() {
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 animate-in fade-in duration-200">
           <div className="w-full max-w-5xl max-h-[90vh] overflow-y-auto bg-white rounded-[2.5rem] shadow-2xl border border-slate-100 p-10 relative animate-in zoom-in-95 duration-300">
             <button 
-              onClick={() => setShowForm(false)}
+              onClick={() => {
+                setShowForm(false);
+                setSelectedFileName("");
+              }}
               className="absolute right-8 top-8 p-2 hover:bg-slate-50 rounded-full text-slate-400 hover:text-primary transition-all"
             >
               <X size={24} />
@@ -243,12 +252,22 @@ export default function ProjectAgreement() {
                        </Panel>
 
                        <Panel title="Legal Attachment" description="Upload the signed agreement PDF.">
-                          <div className="p-6 border-2 border-dashed border-slate-200 rounded-[2rem] bg-slate-50 flex flex-col items-center justify-center text-center group hover:border-primary transition-all cursor-pointer h-full">
+                          <label className="p-6 border-2 border-dashed border-slate-200 rounded-[2rem] bg-slate-50 flex flex-col items-center justify-center text-center group hover:border-primary transition-all cursor-pointer h-full">
+                             <input
+                               type="file"
+                               accept="application/pdf"
+                               className="sr-only"
+                               onChange={(event) => setSelectedFileName(event.target.files?.[0]?.name || "")}
+                             />
                              <Upload className="text-primary mb-3" size={32} />
                              <p className="text-[10px] font-black text-primary uppercase tracking-widest">Signed PDF Upload</p>
-                             <p className="text-[10px] text-slate-400 mt-1 font-bold">PDF, MAX 15MB</p>
-                             <button type="button" className="mt-4 px-4 py-2 bg-white border border-slate-200 rounded-xl text-[10px] font-black uppercase text-primary hover:shadow-md transition-all">Browse File</button>
-                          </div>
+                             <p className={`mt-1 text-[10px] font-bold ${selectedFileName ? "text-emerald-600" : "text-slate-400"}`}>
+                               {selectedFileName || "PDF, MAX 15MB"}
+                             </p>
+                             <span className="mt-4 px-4 py-2 bg-white border border-slate-200 rounded-xl text-[10px] font-black uppercase text-primary group-hover:shadow-md transition-all">
+                               {selectedFileName ? "Replace File" : "Browse File"}
+                             </span>
+                          </label>
                        </Panel>
                     </div>
                   </div>
@@ -265,7 +284,7 @@ export default function ProjectAgreement() {
 
                         <div className="flex flex-col gap-3">
                           <ActionButton label="Secure Record" variant="accent" type="submit" />
-                          <ActionButton label="Save as Draft" variant="outline" onClick={() => setShowForm(false)} />
+                          <ActionButton label="Save as Draft" variant="outline" onClick={() => { setShowForm(false); setSelectedFileName(""); }} />
                         </div>
                       </div>
                     </Panel>
@@ -295,7 +314,7 @@ export default function ProjectAgreement() {
           </div>
         }
       >
-        <DataTable columns={["Agreement ID", "Client & Project", "Type", "Effective Date", "Value", "Status", "Actions"]}>
+        <DataTable columns={["Agreement ID", "Client & Project", "Type", "Effective Date", "Value", "Status", "Attachment", "Actions"]}>
           {filteredAgreements.map((note) => (
             <tr key={note.id} className="text-sm group hover:bg-slate-50 transition-colors">
               <td className="px-4 py-4">
@@ -313,6 +332,11 @@ export default function ProjectAgreement() {
               <td className="px-4 py-4 font-black text-primary">{note.value}</td>
               <td className="px-4 py-4">
                 <StatusBadge tone={note.status === "Active" ? "green" : "amber"}>{note.status}</StatusBadge>
+              </td>
+              <td className="px-4 py-4">
+                <p className={`max-w-[180px] truncate text-xs font-bold ${note.attachmentName === "Pending upload" ? "text-amber-600" : "text-slate-600"}`}>
+                  {note.attachmentName}
+                </p>
               </td>
               <td className="px-4 py-4 text-right">
                 <button type="button" onClick={() => handleDownloadAgreement(note)} className="text-primary hover:underline font-black text-[10px] uppercase tracking-widest flex items-center justify-end gap-2 ml-auto">

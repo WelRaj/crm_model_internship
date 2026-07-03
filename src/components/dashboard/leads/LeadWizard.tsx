@@ -173,24 +173,26 @@ export default function LeadWizard() {
     setFormData(createLeadDraft());
   };
 
-  const handleComplete = () => {
+  const handleComplete = (finalData: Partial<LeadDraft> = {}) => {
     setIsCompleted(true);
-    const fullName = [formData.firstName, formData.lastName].filter(Boolean).join(" ").trim();
+    const completedData = { ...formData, ...finalData };
+    const fullName = [completedData.firstName, completedData.lastName].filter(Boolean).join(" ").trim();
     const newLeadRecord: LeadRecord = {
-      id: formData.leadId,
-      date: formatLeadDate(formData.leadDate),
+      id: completedData.leadId,
+      date: formatLeadDate(completedData.leadDate),
       name: fullName || "Unnamed Lead",
-      company: formData.companyName || "Personal",
-      mobile: formData.mobile || "N/A",
-      email: formData.personalEmail || formData.officialEmail || "N/A",
-      service: formData.serviceRequired || "TBD",
-      platform: formData.platformRequired || "TBD",
-      source: formData.leadSource || "Direct",
-      status: formData.status || "New",
-      assigned: formData.assignedTo || "Unassigned",
-      value: formatLeadValue(formData)
+      company: completedData.companyName || "Personal",
+      mobile: completedData.mobile || "N/A",
+      email: completedData.personalEmail || completedData.officialEmail || "N/A",
+      service: completedData.serviceRequired || "TBD",
+      platform: completedData.platformRequired || "TBD",
+      source: completedData.leadSource || "Direct",
+      status: completedData.status || "New",
+      assigned: completedData.assignedTo || "Unassigned",
+      value: formatLeadValue(completedData)
     };
 
+    setFormData(completedData);
     setLeads(prev => [newLeadRecord, ...prev]);
 
     if (resetTimerRef.current) {

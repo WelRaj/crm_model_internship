@@ -41,35 +41,37 @@ export default function ProjectLeadStepWizard({ onBack, onSave }: { onBack: () =
   const nextStep = () => setCurrentStep((prev) => Math.min(prev + 1, PROJECT_STEPS.length));
   const prevStep = () => setCurrentStep((prev) => Math.max(prev - 1, 1));
 
-  const handleComplete = () => {
-    const selectedTelecaller = telecallers.find((caller) => caller.name === formData.assignedTo) || telecallers[0];
+  const handleComplete = (finalData: Partial<LeadDraft> = {}) => {
+    const completedData = { ...formData, ...finalData, department: "Projects" as const };
+    const selectedTelecaller = telecallers.find((caller) => caller.name === completedData.assignedTo) || telecallers[0];
     const projectLead: ProjectLead = {
-      id: formData.leadId.replace("LEAD", "PRJ"),
-      firstName: formData.firstName || "Unnamed",
-      lastName: formData.lastName || "",
-      mobile: formData.mobile || "N/A",
-      email: formData.personalEmail || formData.officialEmail || "N/A",
-      source: formatLeadSource(formData.leadSource, formData.sourceDetail),
-      status: normalizeProjectStatus(formData.status),
-      assignedTo: formData.assignedTo || selectedTelecaller.name,
+      id: completedData.leadId.replace("LEAD", "PRJ"),
+      firstName: completedData.firstName || "Unnamed",
+      lastName: completedData.lastName || "",
+      mobile: completedData.mobile || "N/A",
+      email: completedData.personalEmail || completedData.officialEmail || "N/A",
+      source: formatLeadSource(completedData.leadSource, completedData.sourceDetail),
+      status: normalizeProjectStatus(completedData.status),
+      assignedTo: completedData.assignedTo || selectedTelecaller.name,
       currentOwnerId: selectedTelecaller.id,
       teamLeaderId: "TL-1",
       transferHistory: [],
-      remarks: formData.overallRemarks || formData.remarks || formData.projectDescription || "Project lead created from step wizard.",
-      followUpDate: formData.closeDate || formData.leadDate,
+      remarks: completedData.overallRemarks || completedData.remarks || completedData.projectDescription || "Project lead created from step wizard.",
+      followUpDate: completedData.closeDate || completedData.leadDate,
       department: "Projects",
-      projectType: formData.projectType || formData.serviceRequired || "Project Enquiry",
-      requirementSummary: formData.projectDescription || formData.serviceRequired || "Requirement discussion pending.",
-      budget: Number(formData.expectedValue || formData.maxBudget || formData.minBudget || formData.amount || 0),
-      timeline: formData.timeline || "To be discussed",
-      proposalStatus: normalizeProposalStatus(formData.status),
-      quotationStatus: formData.amount ? "Sent" : "Draft",
-      meetingDate: formData.proposalDate || formData.leadDate,
-      developmentStatus: "Not Started",
-      developmentProgress: 0,
-      developmentOwner: "Development Team",
+      projectType: completedData.projectType || completedData.serviceRequired || "Project Enquiry",
+      requirementSummary: completedData.projectDescription || completedData.serviceRequired || "Requirement discussion pending.",
+      budget: Number(completedData.finalValue || completedData.expectedValue || completedData.maxBudget || completedData.minBudget || completedData.amount || 0),
+      timeline: completedData.timeline || "To be discussed",
+      proposalStatus: normalizeProposalStatus(completedData.status),
+      quotationStatus: completedData.amount ? "Sent" : "Draft",
+      meetingDate: completedData.proposalDate || completedData.leadDate,
+      developmentStatus: completedData.status === "Won" ? "Discovery" : "Not Started",
+      developmentProgress: completedData.status === "Won" ? 10 : 0,
+      developmentOwner: completedData.status === "Won" ? "Development Team" : "Unassigned",
     };
 
+    setFormData(completedData);
     onSave(projectLead);
     setIsCompleted(true);
     setTimeout(onBack, 1200);

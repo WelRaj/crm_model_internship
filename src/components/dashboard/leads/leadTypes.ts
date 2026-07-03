@@ -228,7 +228,7 @@ export type LeadStepProps = {
   updateData: LeadDraftUpdater;
   onNext: () => void;
   onPrev: () => void;
-  onComplete?: () => void;
+  onComplete?: (finalData?: Partial<LeadDraft>) => void;
 };
 
 export function createLeadDraft(): LeadDraft {

@@ -37,7 +37,7 @@ export default function Step6LeadStatus({ data = createLeadDraft(), updateData =
     setIsLoading(true);
     setTimeout(() => {
       updateData(mergeLeadDraft(values));
-      onComplete?.();
+      onComplete?.(values);
       setIsLoading(false);
     }, 1500);
   };
