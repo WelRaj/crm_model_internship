@@ -629,7 +629,7 @@ export default function Dashboard() {
         <div className="relative flex-1 min-h-0 min-w-[19rem]">
           <nav className="h-full px-6 space-y-10 overflow-y-auto pb-10">
             {activeTab !== "overview" && (
-              <button onClick={() => openTab("overview")} className="w-full flex items-center gap-4 px-5 py-4 rounded-2xl text-accent hover:bg-white/5 transition-all">
+              <button onClick={() => openTab("overview")} className="w-full flex items-center gap-4 px-5 py-4 rounded-2xl bg-accent text-white shadow-lg shadow-accent/20 transition-all hover:bg-accent/90">
                 <ChevronLeft size={20} />
                 <span className="text-sm font-black uppercase tracking-widest">Back to Dashboard</span>
               </button>
