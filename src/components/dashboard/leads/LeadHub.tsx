@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Briefcase, Headphones, Target } from "lucide-react";
 import ProjectLeadStepWizard from "./ProjectLeadStepWizard";
 import TradingLeadCreate from "./TradingLeadCreate";
-import { projectLeadSeedData, tradingLeadSeedData, type ProjectLead, type TradingLead } from "./leadTypes";
+import { projectLeadSeedData, tradingLeadSeedData, wonProjectLeadStorageKey, type ProjectLead, type TradingLead } from "./leadTypes";
 
 type CreateMode = "home" | "project" | "trading";
 
@@ -17,6 +17,9 @@ export default function LeadHub() {
   const addProjectLead = (lead: ProjectLead) => {
     setProjectCreated((current) => [lead, ...current]);
     setRecentLeadIds((current) => [lead.id, ...current]);
+    if (lead.status === "Won" || lead.status === "Project Created") {
+      syncWonProjectLead(lead);
+    }
   };
 
   const addTradingLead = (lead: TradingLead) => {
@@ -35,9 +38,9 @@ export default function LeadHub() {
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
       <div>
-        <p className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-400">CRM Leads</p>
-        <h2 className="mt-2 text-3xl font-black tracking-tight text-primary">Create Lead</h2>
-        <p className="mt-1 text-sm font-semibold text-secondary">Sirf lead create karne ka screen. Extra lead pages/sidebar removed.</p>
+        <p className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-400">Client Operations</p>
+        <h2 className="mt-2 text-3xl font-black tracking-tight text-primary">Lead Desk</h2>
+        <p className="mt-1 text-sm font-semibold text-secondary">Capture software enquiries, trading account interest, platform support requests, and client follow-up ownership.</p>
       </div>
 
       <div className="grid gap-5 lg:grid-cols-2">
@@ -45,18 +48,18 @@ export default function LeadHub() {
           <div className="mb-6 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary text-white">
             <Briefcase size={26} />
           </div>
-          <h3 className="text-2xl font-black text-primary">Add New Project Lead</h3>
-          <p className="mt-2 text-sm font-semibold leading-6 text-secondary">Bada software/project enquiry. Purane step flow me lead create hogi.</p>
-          <div className="mt-5 rounded-xl bg-slate-50 px-4 py-3 text-xs font-black uppercase tracking-widest text-slate-500">Total project lead data: {projectCreated.length}</div>
+          <h3 className="text-2xl font-black text-primary">Software Project Enquiry</h3>
+          <p className="mt-2 text-sm font-semibold leading-6 text-secondary">Create a structured lead for custom software, automation, CRM, ERP, or delivery projects.</p>
+          <div className="mt-5 rounded-xl bg-slate-50 px-4 py-3 text-xs font-black uppercase tracking-widest text-slate-500">Project Leads: {projectCreated.length}</div>
         </button>
 
         <button onClick={() => setMode("trading")} className="rounded-[2rem] border border-border bg-white p-8 text-left shadow-sm transition-all hover:border-primary hover:shadow-xl">
           <div className="mb-6 flex h-14 w-14 items-center justify-center rounded-2xl bg-accent text-slate-950">
             <Headphones size={26} />
           </div>
-          <h3 className="text-2xl font-black text-primary">Add New Trading / Calling Lead</h3>
-          <p className="mt-2 text-sm font-semibold leading-6 text-secondary">Account opening, app/site issue, telecaller assignment, call note aur follow-up add hoga.</p>
-          <div className="mt-5 rounded-xl bg-slate-50 px-4 py-3 text-xs font-black uppercase tracking-widest text-slate-500">Total trading lead data: {tradingCreated.length}</div>
+          <h3 className="text-2xl font-black text-primary">Trading Client Enquiry</h3>
+          <p className="mt-2 text-sm font-semibold leading-6 text-secondary">Capture account opening interest, trading platform support, strategy enquiries, call notes, and follow-up ownership.</p>
+          <div className="mt-5 rounded-xl bg-slate-50 px-4 py-3 text-xs font-black uppercase tracking-widest text-slate-500">Trading Leads: {tradingCreated.length}</div>
         </button>
       </div>
 
@@ -66,8 +69,8 @@ export default function LeadHub() {
             <Target size={18} />
           </div>
           <div>
-            <h3 className="text-sm font-black uppercase tracking-widest text-primary">Lead Module Simplified</h3>
-            <p className="mt-1 text-sm font-semibold text-secondary">Lead ke andar ab bas create flow hai. Follow-ups, Clients & Contacts, Project Agreements CRM sidebar me alag same rahenge.</p>
+            <h3 className="text-sm font-black uppercase tracking-widest text-primary">Lead Desk Scope</h3>
+            <p className="mt-1 text-sm font-semibold text-secondary">Create and qualify leads here. Follow-ups, Clients & Contacts, and Project Agreements continue in Client Operations.</p>
           </div>
         </div>
       </div>
@@ -75,6 +78,20 @@ export default function LeadHub() {
       <LeadViewTable projectLeads={projectCreated} tradingLeads={tradingCreated} recentLeadIds={recentLeadIds} />
     </div>
   );
+}
+
+function syncWonProjectLead(lead: ProjectLead) {
+  if (typeof window === "undefined") return;
+
+  try {
+    const existing = JSON.parse(window.localStorage.getItem(wonProjectLeadStorageKey) || "[]") as ProjectLead[];
+    const withoutCurrent = existing.filter((item) => item.id !== lead.id);
+    window.localStorage.setItem(wonProjectLeadStorageKey, JSON.stringify([lead, ...withoutCurrent]));
+    window.dispatchEvent(new Event("crm-won-project-leads-updated"));
+  } catch {
+    window.localStorage.setItem(wonProjectLeadStorageKey, JSON.stringify([lead]));
+    window.dispatchEvent(new Event("crm-won-project-leads-updated"));
+  }
 }
 
 function LeadViewTable({ projectLeads, tradingLeads, recentLeadIds }: { projectLeads: ProjectLead[]; tradingLeads: TradingLead[]; recentLeadIds: string[] }) {
@@ -112,9 +129,9 @@ function LeadViewTable({ projectLeads, tradingLeads, recentLeadIds }: { projectL
     <div className="rounded-2xl border border-border bg-white p-5 shadow-sm">
       <div className="mb-5 flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
         <div>
-          <p className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-400">Lead View</p>
-          <h3 className="mt-1 text-xl font-black text-primary">All Leads</h3>
-          <p className="mt-1 text-xs font-semibold text-secondary">Add New Project Lead ya Add New Trading Lead se jo lead banegi, woh yahin top par dikhegi.</p>
+          <p className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-400">Lead Register</p>
+          <h3 className="mt-1 text-xl font-black text-primary">Lead Pipeline</h3>
+          <p className="mt-1 text-xs font-semibold text-secondary">New software project and trading client enquiries appear at the top after creation.</p>
         </div>
         <div className="rounded-xl bg-slate-50 px-4 py-3 text-xs font-black uppercase tracking-widest text-slate-500">
           Total Leads: {rows.length}

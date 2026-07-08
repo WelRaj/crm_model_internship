@@ -75,7 +75,7 @@ export default function PayrollView() {
         <MetricCard label="Approved" value={String(payroll.filter((row) => row.status === "Approved").length)} helper="Bank-ready rows" icon={CheckCircle2} tone="amber" />
       </div>
 
-      <Panel title="Payroll Register" description="Standalone HRMS payroll register kept for compatibility; dashboard payroll uses HRMSHub.">
+      <Panel title="Payroll Register" description="Standalone payroll register kept for compatibility; dashboard payroll uses People Operations.">
         <div className="mb-5 flex justify-end">
           <ActionButton icon={Download} label="Export" variant="outline" onClick={exportCsv} />
         </div>

@@ -34,7 +34,7 @@ export default function Step6Approval({ data, approvals, updateApproval, onFinis
           </div>
           <h3 className="text-2xl font-black text-primary">Onboarding Completed</h3>
           <p className="mx-auto mt-2 max-w-2xl text-sm font-medium text-secondary">
-            {employeeName} ka employee profile activate ho gaya hai. Welcome email aur approval confirmation UI me mark kar diya gaya hai.
+            {employeeName} has been activated successfully. Welcome email and approval confirmation are marked in the UI.
           </p>
         </div>
 
@@ -123,7 +123,7 @@ export default function Step6Approval({ data, approvals, updateApproval, onFinis
 
       <div className="bg-primary text-white p-8 rounded-2xl flex flex-col md:flex-row items-center justify-between gap-6">
         <div className="text-center md:text-left">
-          <h3 className="text-2xl font-bold">Ready to Launch?</h3>
+          <h3 className="text-2xl font-bold">Ready for Activation?</h3>
           <p className="text-primary-foreground/70 text-sm mt-1">Once all approvals are received, the employee dashboard will be activated.</p>
         </div>
         <Button 

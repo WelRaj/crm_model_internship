@@ -67,7 +67,7 @@ const initialInvoices: InvoiceReceivable[] = [
     id: "INV-2026-085",
     clientId: "CL-24001",
     clientName: "Apex Finserve Pvt Ltd",
-    projectName: "Loan CRM Web App",
+    projectName: "Loan Automation Platform",
     currency: "INR",
     totalAmount: 590000,
     cashReceived: 0,

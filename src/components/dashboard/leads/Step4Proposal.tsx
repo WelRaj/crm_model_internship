@@ -8,17 +8,14 @@ import { ArrowRight, ArrowLeft, Upload, FileText } from "lucide-react";
 import { ActionButton, Field, Panel, StatusBadge, DataTable } from "../accounting/AccountingComponents";
 import { createLeadDraft, mergeLeadDraft, type LeadStepProps } from "./leadTypes";
 
-const optionalNumber = z.preprocess((value) => {
-  if (value === "" || value === null || value === undefined) return undefined;
-  return value;
-}, z.coerce.number().positive("Amount must be greater than 0").optional());
-
-// --- Validation Schema (Simplified) ---
 const proposalSchema = z.object({
-  proposalNo: z.string().optional(),
-  proposalDate: z.string().optional(),
+  proposalNo: z.string().min(1, "Proposal number required"),
+  proposalDate: z.string().min(1, "Proposal date required"),
   currency: z.string().default("INR"),
-  amount: optionalNumber,
+  amount: z.preprocess((value) => {
+    if (value === "" || value === null || value === undefined) return undefined;
+    return value;
+  }, z.coerce.number({ message: "Proposal amount required" }).positive("Amount must be greater than 0")),
   remarks: z.string().optional(),
 });
 
@@ -28,9 +25,9 @@ type Step4Props = Pick<LeadStepProps, "onNext" | "onPrev"> & Partial<Pick<LeadSt
 
 export default function Step4Proposal({ data = createLeadDraft(), updateData = () => undefined, onNext, onPrev }: Step4Props) {
   const [selectedFileName, setSelectedFileName] = useState("");
-  const proposals = [
-    { id: "PROP-2024-001", date: "2024-03-15", amount: "75,000", currency: "INR", status: "Revision Required", sentBy: "Vikram Rathore" },
-  ];
+  const proposals = data.proposalNo && data.amount
+    ? [{ id: data.proposalNo, date: data.proposalDate, amount: data.amount, currency: data.currency, status: "Draft", sentBy: data.assignedTo || "Current Owner" }]
+    : [];
 
   const {
     register,
@@ -54,11 +51,11 @@ export default function Step4Proposal({ data = createLeadDraft(), updateData = (
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <Field label="Proposal No" register={register("proposalNo")} error={errors.proposalNo?.message} />
-        <Field label="Proposal Date" type="date" register={register("proposalDate")} error={errors.proposalDate?.message} />
+        <Field label="Proposal No" required register={register("proposalNo")} error={errors.proposalNo?.message} />
+        <Field label="Proposal Date" required type="date" register={register("proposalDate")} error={errors.proposalDate?.message} />
         <div className="grid grid-cols-3 gap-2">
            <div className="col-span-1"><Field label="Currency" options={["INR", "USD"]} register={register("currency")} error={errors.currency?.message} /></div>
-           <div className="col-span-2"><Field label="Amount" type="number" min={1} register={register("amount")} error={errors.amount?.message} /></div>
+           <div className="col-span-2"><Field label="Amount" required type="number" min={1} register={register("amount")} error={errors.amount?.message} /></div>
         </div>
       </div>
 
@@ -86,7 +83,7 @@ export default function Step4Proposal({ data = createLeadDraft(), updateData = (
                 <p className="font-black text-primary">{p.id}</p>
                 <p className="text-[10px] text-slate-400 font-bold uppercase">{p.date} • {p.sentBy}</p>
               </td>
-              <td className="px-4 py-4 font-black text-primary">{p.currency} {p.amount}</td>
+              <td className="px-4 py-4 font-black text-primary">{p.currency} {new Intl.NumberFormat("en-IN").format(Number(p.amount))}</td>
               <td className="px-4 py-4">
                 <StatusBadge tone="amber">{p.status}</StatusBadge>
               </td>
@@ -97,12 +94,19 @@ export default function Step4Proposal({ data = createLeadDraft(), updateData = (
               </td>
             </tr>
           ))}
+          {proposals.length === 0 ? (
+            <tr>
+              <td colSpan={4} className="px-4 py-8 text-center text-sm font-bold text-slate-400">
+                No previous proposal versions for this lead.
+              </td>
+            </tr>
+          ) : null}
         </DataTable>
       </Panel>
 
       <div className="flex justify-between pt-8 border-t border-slate-50">
         <ActionButton label="Back" variant="outline" icon={ArrowLeft} onClick={onPrev} />
-        <ActionButton type="submit" label="Save & Continue" icon={ArrowRight} variant="accent" />
+        <ActionButton type="submit" label="Continue" icon={ArrowRight} variant="accent" />
       </div>
     </form>
   );

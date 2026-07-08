@@ -122,13 +122,13 @@ function makeDocuments(category: string): OnboardingDocument[] {
 }
 
 const defaultTrainingTasks: TrainingTask[] = [
-  { id: 1, label: "Company Introduction", completed: true },
-  { id: 2, label: "Team Introduction", completed: true },
-  { id: 3, label: "Development Process Overview", completed: false },
-  { id: 4, label: "Coding Standards Document Shared", completed: false },
-  { id: 5, label: "Security Policy Explained", completed: false },
+  { id: 1, label: "Company Overview Completed", completed: true },
+  { id: 2, label: "Reporting Team Introduced", completed: true },
+  { id: 3, label: "Software Delivery Process Reviewed", completed: false },
+  { id: 4, label: "Engineering Standards Shared", completed: false },
+  { id: 5, label: "Information Security Policy Explained", completed: false },
   { id: 6, label: "Client Communication Guidelines Shared", completed: false },
-  { id: 7, label: "Product Training Completed", completed: false },
+  { id: 7, label: "Trading Software Product Training Completed", completed: false },
   { id: 8, label: "Compliance / NDA Signed", completed: false },
 ];
 
@@ -140,11 +140,11 @@ const defaultApprovals: ApprovalRecord[] = [
 ];
 
 const STEPS = [
-  { id: 1, title: "Registration", description: "Personal & Address details", icon: UserPlus },
-  { id: 2, title: "Employment", description: "Department & Role details", icon: Briefcase },
+  { id: 1, title: "Registration", description: "Personal and address details", icon: UserPlus },
+  { id: 2, title: "Employment", description: "Department and role details", icon: Briefcase },
   { id: 3, title: "Documents", description: "Upload KYC & Certificates", icon: FileText },
   { id: 4, title: "Verification", description: "HR Document Review", icon: ClipboardCheck },
-  { id: 5, title: "Training", description: "Company Orientation", icon: GraduationCap },
+  { id: 5, title: "Training", description: "Company and product orientation", icon: GraduationCap },
   { id: 6, title: "Approval", description: "Final Management Sign-off", icon: Shield },
 ];
 

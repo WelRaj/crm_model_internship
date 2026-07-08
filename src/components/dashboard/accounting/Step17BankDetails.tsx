@@ -89,8 +89,8 @@ const initialCompanyAccounts: BankAccount[] = [
   {
     id: "CB-001",
     ownerType: "company",
-    ownerReference: "WelRaj Panel Services Pvt Ltd",
-    accountName: "WelRaj Panel Services Pvt Ltd",
+    ownerReference: "DeMatade Algo Technology Solutions Pvt Ltd",
+    accountName: "DeMatade Algo Technology Solutions Pvt Ltd",
     accountNumber: "918273645544",
     bankName: "HDFC Bank",
     ifscCode: "HDFC0001234",
@@ -108,8 +108,8 @@ const initialCompanyAccounts: BankAccount[] = [
   {
     id: "CB-002",
     ownerType: "company",
-    ownerReference: "WelRaj Panel Services Pvt Ltd",
-    accountName: "WelRaj Panel Services Pvt Ltd",
+    ownerReference: "DeMatade Algo Technology Solutions Pvt Ltd",
+    accountName: "DeMatade Algo Technology Solutions Pvt Ltd",
     accountNumber: "112233445566",
     bankName: "ICICI Bank",
     ifscCode: "ICIC0009876",
@@ -244,7 +244,7 @@ export default function Step17BankDetails() {
   } = useForm<BankFormInput, unknown, BankFormData>({
     resolver: zodResolver(bankSchema),
     defaultValues: {
-      ownerReference: "WelRaj Panel Services Pvt Ltd",
+      ownerReference: "DeMatade Algo Technology Solutions Pvt Ltd",
       accountName: "",
       accountNumber: "",
       confirmAccountNumber: "",
@@ -318,8 +318,8 @@ export default function Step17BankDetails() {
     setEditingId(null);
     setFormError("");
     reset({
-      ownerReference: activeTab === "company" ? "WelRaj Panel Services Pvt Ltd" : "",
-      accountName: activeTab === "company" ? "WelRaj Panel Services Pvt Ltd" : "",
+      ownerReference: activeTab === "company" ? "DeMatade Algo Technology Solutions Pvt Ltd" : "",
+      accountName: activeTab === "company" ? "DeMatade Algo Technology Solutions Pvt Ltd" : "",
       accountNumber: "",
       confirmAccountNumber: "",
       bankName: "",

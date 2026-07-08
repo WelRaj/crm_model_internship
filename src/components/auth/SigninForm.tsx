@@ -80,7 +80,7 @@ export default function SigninForm() {
       <div className="w-full max-w-md text-center space-y-4 bg-white p-12 rounded-xl shadow-lg border border-border animate-in zoom-in-95">
         <CheckCircle className="h-16 w-16 text-accent mx-auto animate-bounce" />
         <h2 className="text-2xl font-bold text-primary">Login Successful!</h2>
-        <p className="text-secondary font-medium">Accessing your premium dashboard...</p>
+        <p className="text-secondary font-medium">Accessing your operations dashboard...</p>
       </div>
     );
   }

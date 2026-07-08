@@ -12,16 +12,16 @@ export default function Step2Employment({ data, updateData, onNext, onPrev }: an
     updateData({ ...data, [name]: value });
   };
 
-  const departments = ["Development", "UI-UX", "QA", "HR", "Sales", "Finance", "Marketing"];
+  const departments = ["Product Engineering", "Design", "Quality Assurance", "People Operations", "Client Growth", "Finance", "Growth Marketing"];
 
   const designationMapping: Record<string, string[]> = {
-    "Development": ["Frontend Developer", "Backend Developer", "Full Stack Developer", "Mobile App Developer", "DevOps Engineer"],
-    "UI-UX": ["UI Designer", "UX Designer", "Product Designer", "Graphic Designer"],
-    "QA": ["Manual Tester", "Automation Engineer", "QA Lead", "Security Tester"],
-    "HR": ["HR Manager", "Recruiter", "HR Executive", "Operations Manager"],
-    "Sales": ["Sales Executive", "Business Development Manager", "Account Manager"],
+    "Product Engineering": ["Frontend Developer", "Backend Developer", "Full Stack Developer", "Mobile App Developer", "DevOps Engineer"],
+    "Design": ["UI Designer", "UX Designer", "Product Designer", "Graphic Designer"],
+    "Quality Assurance": ["Manual Tester", "Automation Engineer", "QA Lead", "Security Tester"],
+    "People Operations": ["People Operations Manager", "Recruiter", "HR Executive", "Operations Manager"],
+    "Client Growth": ["Sales Executive", "Business Development Manager", "Account Manager"],
     "Finance": ["Accountant", "Finance Controller", "Billing Executive"],
-    "Marketing": ["Digital Marketer", "SEO Specialist", "Content Writer", "Social Media Manager"]
+    "Growth Marketing": ["Digital Marketer", "SEO Specialist", "Content Writer", "Social Media Manager"]
   };
 
   const employeeTypes = ["Permanent", "Contract", "Intern"];
@@ -41,7 +41,7 @@ export default function Step2Employment({ data, updateData, onNext, onPrev }: an
             name="department"
             value={data.department}
             list="departments-list"
-            placeholder="Enter or select Department"
+            placeholder="Enter or select department"
             showEditIcon={true}
             onChange={(e) => {
               handleChange(e);
@@ -62,7 +62,7 @@ export default function Step2Employment({ data, updateData, onNext, onPrev }: an
             name="designation"
             value={data.designation}
             list="designations-list"
-            placeholder="Enter or select Designation"
+            placeholder="Enter or select designation"
             showEditIcon={true}
             onChange={handleChange}
             required
@@ -111,7 +111,7 @@ export default function Step2Employment({ data, updateData, onNext, onPrev }: an
             name="probationPeriod"
             value={data.probationPeriod}
             list="probations-list"
-            placeholder="Enter or select Probation"
+            placeholder="Enter or select probation"
             showEditIcon={true}
             onChange={handleChange}
             required

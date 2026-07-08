@@ -30,7 +30,7 @@ const clientOptions = [
 ];
 
 const projectOptions = [
-  { id: "PRJ-001", clientId: "CL-24001", name: "Loan CRM Web App" },
+  { id: "PRJ-001", clientId: "CL-24001", name: "Loan Automation Platform" },
   { id: "PRJ-002", clientId: "CL-24002", name: "E-commerce Mobile App" },
   { id: "PRJ-003", clientId: "CL-24003", name: "Logistics Control Tower" },
 ];
@@ -168,7 +168,7 @@ const initialInvoices: InvoiceRecord[] = [
     clientId: "CL-24001",
     clientName: "Apex Finserve Pvt Ltd",
     projectId: "PRJ-001",
-    projectName: "Loan CRM Web App",
+    projectName: "Loan Automation Platform",
     invoiceDate: "2026-06-11",
     dueDate: "2026-06-26",
     terms: "Net 15",

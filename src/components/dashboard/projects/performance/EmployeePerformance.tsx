@@ -141,7 +141,7 @@ const initialEmployees: EmployeePerformanceRecord[] = [
     lastReviewDate: "2026-04-01",
     nextReviewDate: "2026-07-01",
     managerNotes: "Consistently delivers high-quality work and unblocks backend decisions early.",
-    improvementPlan: "Prepare him for tech lead ownership on the next CRM release.",
+    improvementPlan: "Prepare him for tech lead ownership on the next platform release.",
     metrics: [
       { label: "Sprint Delivery", score: 98, weight: 25 },
       { label: "Code Quality", score: 95, weight: 20 },
@@ -150,7 +150,7 @@ const initialEmployees: EmployeePerformanceRecord[] = [
     ],
     okrs: [
       {
-        objective: "Scale CRM Infrastructure",
+        objective: "Scale Platform Infrastructure",
         progress: 85,
         keyResults: [
           { title: "Reduce API latency by 20%", progress: 90 },
@@ -262,7 +262,7 @@ const initialEmployees: EmployeePerformanceRecord[] = [
     career: {
       promotionReadiness: 58,
       attritionRisk: "Medium",
-      recommendedTraining: ["Performance Analytics", "CRM Attribution Basics"],
+      recommendedTraining: ["Performance Analytics", "Lead Attribution Basics"],
     },
   },
   {
@@ -342,7 +342,7 @@ const initialEmployees: EmployeePerformanceRecord[] = [
     ],
     okrs: [
       {
-        objective: "Improve CRM usability for repeated workflows",
+        objective: "Improve platform usability for repeated workflows",
         progress: 82,
         keyResults: [
           { title: "Ship reusable workflow patterns", progress: 86 },
@@ -353,7 +353,7 @@ const initialEmployees: EmployeePerformanceRecord[] = [
     feedback: {
       manager: "Ishita is ready for larger product ownership.",
       peer: "Thoughtful designer with practical tradeoffs.",
-      self: "I want to lead the next CRM workflow design cycle end to end.",
+      self: "I want to lead the next workflow design cycle end to end.",
     },
     career: {
       promotionReadiness: 88,

@@ -298,7 +298,7 @@ export default function Step10Salary() {
     };
     if (editingId) {
       setPayroll((current) => current.map((row) => row.id === editingId ? { ...row, ...common } : row));
-      setSuccessMsg(effectiveStatus === "Hold" ? "Payroll updated and held for HRMS reconciliation" : "Payroll updated");
+      setSuccessMsg(effectiveStatus === "Hold" ? "Payroll updated and held for People Operations reconciliation" : "Payroll updated");
     } else {
       const nextNumber = Math.max(3, ...payroll.map((row) => Number(row.id.split("-").pop()) || 0)) + 1;
       setPayroll((current) => [{
@@ -381,10 +381,10 @@ export default function Step10Salary() {
 
   return (
     <AccountingPage
-      title="Salary & Payroll"
-      description="Validate HRMS payroll readiness, process statutory deductions, approve net salary, and reconcile bank payouts."
+      title="Payroll Register"
+      description="Validate People Operations payroll readiness, process statutory deductions, approve net salary, and reconcile bank payouts."
       icon={UserSquare2}
-      badge="HR + Finance"
+      badge="People + Finance"
       actions={
         <>
           <ActionButton icon={Download} label="Export Salary Sheet" variant="outline" onClick={exportPayroll} />
@@ -414,7 +414,7 @@ export default function Step10Salary() {
               <form onSubmit={submitHrReview} className="space-y-8">
                 <div className="border-b border-slate-100 pb-6">
                   <h3 className="text-2xl font-black text-primary">{editingId ? "Edit Payroll Draft" : "Generate Payroll"}</h3>
-                  <p className="mt-1 text-sm font-semibold text-slate-500">Employee readiness comes from the HRMS attendance and leave snapshot.</p>
+                  <p className="mt-1 text-sm font-semibold text-slate-500">Employee readiness comes from the People Operations attendance and leave snapshot.</p>
                 </div>
                 <div className="grid grid-cols-1 gap-8 lg:grid-cols-4">
                   <div className="space-y-8 lg:col-span-3">
@@ -434,7 +434,7 @@ export default function Step10Salary() {
                         <Field label="Payable Days" type="number" step="0.5" required register={register("payableDays")} error={errors.payableDays?.message} />
                         {selectedEmployee ? (
                           <div className={`rounded-xl border p-4 ${selectedEmployee.readiness === "Ready" ? "border-emerald-100 bg-emerald-50" : "border-amber-100 bg-amber-50"}`}>
-                            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">HRMS Readiness</p>
+                            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">People Operations Readiness</p>
                             <p className="mt-1 text-sm font-black text-primary">{selectedEmployee.readiness}</p>
                             <p className="text-xs font-semibold text-slate-500">Bank: {selectedEmployee.bankStatus}</p>
                           </div>
@@ -516,7 +516,7 @@ export default function Step10Salary() {
         </div>
       ) : null}
 
-      <Panel title="Monthly Payroll Register" description="HRMS readiness, salary calculation, approval, payment, and reconciliation status.">
+      <Panel title="Monthly Payroll Register" description="People Operations readiness, salary calculation, approval, payment, and reconciliation status.">
         <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-[1fr_180px_190px]">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300" size={15} />

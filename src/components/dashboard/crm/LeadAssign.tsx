@@ -69,19 +69,19 @@ const teamLeaders = ["Rajkumar Rathore (TL-1)", "CRM Manager", "Project Team Lea
 const telecallerProfiles: Record<TelecallerId, { knowledge: string[]; bestFor: string; shift: string; quality: string }> = {
   "Tele-1": {
     knowledge: ["Account Opening", "KYC", "Trading App Support"],
-    bestFor: "Trading issue aur account opening leads",
+    bestFor: "Trading support and account opening leads",
     shift: "10:00 AM - 7:00 PM",
     quality: "Fast issue closure",
   },
   "Tele-2": {
     knowledge: ["Project Discovery", "Requirement Calls", "Proposal Follow-up"],
-    bestFor: "Project lead qualification aur requirement discussion",
+    bestFor: "Project lead qualification and requirement discussion",
     shift: "11:00 AM - 8:00 PM",
     quality: "Strong requirement notes",
   },
   "Tele-3": {
     knowledge: ["WhatsApp Leads", "Callback Handling", "Payment Queries"],
-    bestFor: "Busy customers, callbacks aur social media leads",
+    bestFor: "Busy customers, callbacks and social media leads",
     shift: "9:30 AM - 6:30 PM",
     quality: "High callback recovery",
   },
@@ -174,7 +174,7 @@ function makeInitialRows(): AssignmentRow[] {
       priority,
       followUpDate: lead.followUpDate,
       createdBy: index % 2 === 0 ? "Website/API" : "Marketing",
-      note: waiting ? "Fresh trading lead waiting for telecaller assignment." : "Assigned for account opening, app support, or trading query.",
+      note: waiting ? "Fresh trading lead waiting for calling owner assignment." : "Assigned for account opening, app support, or trading query.",
       lastActivity: waiting ? "Lead created, assignment pending" : `Assigned to ${telecallerAssignmentLabel(lead.assignedTo, lead.currentOwnerId)}`,
     };
   });
@@ -441,7 +441,7 @@ export default function LeadAssign() {
   };
 
   const exportAssignments = () => {
-    const header = ["Lead ID", "Type", "Customer", "Source", "Status", "Telecaller", "Telecaller ID", "Employee ID", "Assigned By", "Project Owner", "Priority", "Follow Up", "Note"];
+    const header = ["Lead ID", "Type", "Customer", "Source", "Status", "Calling Owner", "Owner ID", "Employee ID", "Assigned By", "Project Owner", "Priority", "Follow Up", "Note"];
     const csvRows = rows.map((lead) =>
       [
         lead.id,
@@ -474,10 +474,10 @@ export default function LeadAssign() {
     <div className="space-y-6 animate-in fade-in duration-500">
       <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
         <div>
-          <p className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-400">CRM Workflow</p>
+          <p className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-400">Client Operations</p>
           <h2 className="mt-2 text-3xl font-black tracking-tight text-primary">Lead Assignment</h2>
           <p className="mt-1 max-w-3xl text-sm font-semibold leading-6 text-secondary">
-            Lead create hone ke baad manager/team leader yahin se telecaller ko assign karega. Project/contact detail lead create ke time wali hi rahegi.
+            Assign each project or trading enquiry to the right calling owner, manager, and follow-up priority without changing the original lead details.
           </p>
         </div>
 
@@ -488,7 +488,7 @@ export default function LeadAssign() {
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <MetricCard label="Waiting Assignment" value={String(metrics.waiting)} helper="Leader action required" icon={Clock} tone="bg-amber-50 text-amber-700" />
-        <MetricCard label="Assigned Leads" value={String(metrics.assigned)} helper="Telecaller queue ready" icon={UserCheck} tone="bg-emerald-50 text-emerald-700" />
+        <MetricCard label="Assigned Leads" value={String(metrics.assigned)} helper="Calling queue ready" icon={UserCheck} tone="bg-emerald-50 text-emerald-700" />
         <MetricCard label="Escalated" value={String(metrics.escalated)} helper="Manager review" icon={AlertTriangle} tone="bg-rose-50 text-rose-700" />
         <MetricCard label="High Priority" value={String(metrics.highPriority)} helper="Call first" icon={CalendarClock} tone="bg-blue-50 text-blue-700" />
       </div>
@@ -571,7 +571,7 @@ export default function LeadAssign() {
             {filteredRows.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-slate-200 p-8 text-center">
                 <p className="text-sm font-black text-primary">No lead found</p>
-                <p className="mt-1 text-xs font-semibold text-secondary">Filter ya search change karo.</p>
+                <p className="mt-1 text-xs font-semibold text-secondary">Change the filter or search term.</p>
               </div>
             ) : null}
           </div>
@@ -628,7 +628,7 @@ export default function LeadAssign() {
                   value={form.teamLeader}
                   onChange={(event) => setForm((current) => ({ ...current, teamLeader: event.target.value }))}
                   list="team-leader-name-options"
-                  placeholder="Team leader ya manager ka naam type karo"
+                  placeholder="Type team leader or manager name"
                   className="w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm font-semibold outline-none focus:border-primary"
                 />
                 <datalist id="team-leader-name-options">
@@ -636,10 +636,10 @@ export default function LeadAssign() {
                     <option key={leader} value={leader} />
                   ))}
                 </datalist>
-                <p className="mt-2 text-[11px] font-semibold text-slate-500">Suggestion se choose karo ya manual team leader naam type karo.</p>
+                <p className="mt-2 text-[11px] font-semibold text-slate-500">Choose a suggestion or type a team leader name manually.</p>
               </Field>
 
-              <Field label="Assign Telecaller">
+              <Field label="Assign Calling Owner">
                 <input
                   value={form.telecallerName}
                   onChange={(event) => {
@@ -653,7 +653,7 @@ export default function LeadAssign() {
                     }));
                   }}
                   list="telecaller-name-options"
-                  placeholder="Telecaller ka naam type karo"
+                  placeholder="Type calling owner name"
                   className="w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm font-semibold outline-none focus:border-primary"
                 />
                 <datalist id="telecaller-name-options">
@@ -668,11 +668,11 @@ export default function LeadAssign() {
                   ))}
                 </datalist>
                 <p className="mt-2 text-[11px] font-semibold text-slate-500">
-                  Suggestion se choose karo ya manual naam type karo. Linked: {form.telecallerId || "Manual"} {form.telecallerEmployeeId ? `| ${form.telecallerEmployeeId}` : "| Employee ID not linked"}
+                  Choose a suggestion or type a name manually. Linked: {form.telecallerId || "Manual"} {form.telecallerEmployeeId ? `| ${form.telecallerEmployeeId}` : "| Employee ID not linked"}
                 </p>
                 <div className="mt-3 grid gap-2 rounded-xl border border-slate-100 bg-slate-50 p-3 text-[11px] font-black uppercase tracking-widest text-slate-500 sm:grid-cols-3">
                   <span>Name: {form.telecallerName.trim() || "Pending"}</span>
-                  <span>Tele ID: {form.telecallerId || "Manual"}</span>
+                  <span>Owner ID: {form.telecallerId || "Manual"}</span>
                   <span>Emp ID: {form.telecallerEmployeeId || "Not Linked"}</span>
                 </div>
               </Field>
@@ -725,7 +725,7 @@ export default function LeadAssign() {
           </div>
 
           <div className="rounded-2xl border border-border bg-white p-5 shadow-sm">
-            <p className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-400">Telecaller Load</p>
+            <p className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-400">Calling Owner Load</p>
             <h3 className="mt-1 text-xl font-black text-primary">Team Capacity</h3>
             <div className="mt-4 space-y-3">
               {workload.map((member) => (
@@ -747,7 +747,7 @@ export default function LeadAssign() {
             <div className="mt-5 border-t border-slate-100 pt-5">
             <div className="mb-4 flex items-start justify-between gap-3">
               <div>
-                <p className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-400">Telecaller Intelligence</p>
+                <p className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-400">Calling Owner Intelligence</p>
                 <h3 className="mt-1 text-xl font-black text-primary">Availability & Knowledge</h3>
               </div>
               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/5 text-primary">

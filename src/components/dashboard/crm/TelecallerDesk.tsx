@@ -105,7 +105,7 @@ function makeTelecallerRows(): TelecallerLead[] {
     issueStatus: lead.status === "Project Created" || lead.status === "Won" ? "Resolved" : index % 7 === 0 ? "Escalated" : "Pending",
     attempts: (index % 4) + 1,
     lastOutcome: index % 4 === 0 ? "Connected" : index % 4 === 1 ? "No Answer" : index % 4 === 2 ? "Callback Requested" : "Interested",
-    lastNote: "Requirement discussion pending. Telecaller ko next call note update karna hai.",
+    lastNote: "Requirement discussion pending. The calling owner must update the next call note.",
     lastUpdated: index % 2 === 0 ? "Today" : "Yesterday",
   }));
 
@@ -128,7 +128,7 @@ function makeTelecallerRows(): TelecallerLead[] {
     issueStatus: lead.accountStatus === "Issue Resolved" || lead.status === "Converted" ? "Resolved" : index % 6 === 0 ? "Escalated" : "Pending",
     attempts: (index % 5) + 1,
     lastOutcome: index % 5 === 0 ? "No Answer" : index % 5 === 1 ? "Busy" : index % 5 === 2 ? "Connected" : index % 5 === 3 ? "Callback Requested" : "Interested",
-    lastNote: lead.lastCallNote || "Customer issue/update pending after telecaller call.",
+    lastNote: lead.lastCallNote || "Customer issue/update pending after the owner call.",
     lastUpdated: index % 2 === 0 ? "Today" : "Yesterday",
   }));
 
@@ -276,7 +276,7 @@ export default function TelecallerDesk() {
               issueStatus: form.issueStatus,
               nextFollowUp: form.nextFollowUp,
               nextFollowUpTime: form.nextFollowUpTime,
-              lastNote: form.note || "Manual call log updated by telecaller.",
+              lastNote: form.note || "Manual call log updated by the calling owner.",
               attempts: lead.attempts + 1,
               lastUpdated: "Today",
             }
@@ -293,7 +293,7 @@ export default function TelecallerDesk() {
         outcome: form.outcome,
         issueStatus: form.issueStatus,
         nextFollowUp: `${form.nextFollowUp} ${form.nextFollowUpTime}`,
-        note: form.note || "Manual call log updated by telecaller.",
+        note: form.note || "Manual call log updated by the calling owner.",
         time: nowLabel(),
       },
       ...current,
@@ -313,7 +313,7 @@ export default function TelecallerDesk() {
   };
 
   const exportCalls = () => {
-    const header = ["Lead ID", "Customer", "Telecaller", "Outcome", "Issue Status", "Next Follow-up", "Note", "Time"];
+    const header = ["Lead ID", "Customer", "Calling Owner", "Outcome", "Issue Status", "Next Follow-up", "Note", "Time"];
     const csvRows = filteredActivity.map((item) =>
       [item.leadId, item.customer, item.telecaller, item.outcome, item.issueStatus, item.nextFollowUp, item.note, item.time]
         .map((value) => `"${String(value).replace(/"/g, '""')}"`)
@@ -323,7 +323,7 @@ export default function TelecallerDesk() {
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;
-    anchor.download = "telecaller-call-log.csv";
+    anchor.download = "calling-owner-call-log.csv";
     anchor.click();
     URL.revokeObjectURL(url);
   };
@@ -332,10 +332,10 @@ export default function TelecallerDesk() {
     <div className="space-y-6 animate-in fade-in duration-500">
       <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
         <div>
-          <p className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-400">Manual Calling Workflow</p>
-          <h2 className="mt-2 text-3xl font-black tracking-tight text-primary">Telecaller Desk</h2>
+          <p className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-400">Calling Operations</p>
+          <h2 className="mt-2 text-3xl font-black tracking-tight text-primary">Calling Desk</h2>
           <p className="mt-1 max-w-3xl text-sm font-semibold leading-6 text-secondary">
-            Sidebar se telecaller apni manual queue open karega, call outcome likhega, customer availability update karega, issue resolve/escalate karega aur next follow-up set karega.
+            Calling owners manage their assigned queue, update call outcomes, record customer availability, resolve or escalate issues, and schedule the next follow-up.
           </p>
         </div>
 
@@ -348,7 +348,7 @@ export default function TelecallerDesk() {
         <div className="mb-4 flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
           <div>
             <p className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-400">Manual Login Switch</p>
-            <h3 className="mt-1 text-xl font-black text-primary">Select Telecaller</h3>
+            <h3 className="mt-1 text-xl font-black text-primary">Select Calling Owner</h3>
           </div>
           <span className="rounded-full bg-slate-100 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-slate-500">Assigned by {teamLeader}</span>
         </div>
@@ -394,7 +394,7 @@ export default function TelecallerDesk() {
             <div>
               <p className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-400">Assigned Queue</p>
               <h3 className="mt-1 text-xl font-black text-primary">{selectedMember?.name} Calling Queue</h3>
-              <p className="mt-1 text-xs font-semibold text-secondary">Manager/team leader se assigned lead yahan manual call ke liye aayegi.</p>
+              <p className="mt-1 text-xs font-semibold text-secondary">Assigned leads from the manager or team leader appear here for manual calling.</p>
             </div>
             <div className="relative w-full lg:max-w-xs">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
@@ -462,7 +462,7 @@ export default function TelecallerDesk() {
             {filteredRows.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-slate-200 p-8 text-center">
                 <p className="text-sm font-black text-primary">No lead in this queue</p>
-                <p className="mt-1 text-xs font-semibold text-secondary">Filter ya telecaller change karo.</p>
+                <p className="mt-1 text-xs font-semibold text-secondary">Change the filter or calling owner.</p>
               </div>
             ) : null}
           </div>
@@ -538,12 +538,12 @@ export default function TelecallerDesk() {
               </div>
             </div>
 
-            <Field label="Call Note / Customer Baat">
+            <Field label="Call Note">
               <textarea
                 value={form.note}
                 onChange={(event) => setForm((current) => ({ ...current, note: event.target.value }))}
                 rows={5}
-                placeholder="Customer ne kya bola, issue kya hai, kya resolve hua, next step..."
+                placeholder="Record customer response, issue status, resolution details, and next step..."
                 className="mt-2 w-full resize-none rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm font-semibold leading-6 outline-none focus:border-primary"
               />
             </Field>
@@ -579,7 +579,7 @@ export default function TelecallerDesk() {
             <input
               value={callSearch}
               onChange={(event) => setCallSearch(event.target.value)}
-              placeholder="Search lead, customer, telecaller, outcome, note..."
+              placeholder="Search lead, customer, calling owner, outcome, note..."
               className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 pl-11 pr-4 text-sm font-semibold outline-none focus:border-primary focus:bg-white"
             />
           </div>
@@ -603,7 +603,7 @@ export default function TelecallerDesk() {
             <thead className="bg-slate-50 text-[10px] font-black uppercase tracking-widest text-slate-400">
               <tr>
                 <th className="px-4 py-3">Lead</th>
-                <th className="px-4 py-3">Telecaller</th>
+                <th className="px-4 py-3">Calling Owner</th>
                 <th className="px-4 py-3">Outcome</th>
                 <th className="px-4 py-3">Issue Status</th>
                 <th className="px-4 py-3">Next Follow-up</th>

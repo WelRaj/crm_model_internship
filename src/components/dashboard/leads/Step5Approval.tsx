@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -9,12 +8,12 @@ import { ActionButton, Field, Panel, StatusBadge } from "../accounting/Accountin
 import { createLeadDraft, mergeLeadDraft, type LeadStepProps } from "./leadTypes";
 
 const approvalSchema = z.object({
-  decision: z.string().optional(),
-  reviewerRole: z.string().optional(),
-  comments: z.string().optional(),
+  decision: z.enum(["Approve", "Reject", "Need Revision"], { message: "Decision required" }),
+  reviewerRole: z.string().min(1, "Reviewer designation required"),
+  comments: z.string().min(10, "Add clear review comments"),
 });
 
-type ApprovalFormData = z.input<typeof approvalSchema>;
+type ApprovalFormData = z.output<typeof approvalSchema>;
 
 type ApprovalCard = {
   role: string;
@@ -24,23 +23,36 @@ type ApprovalCard = {
   remarks: string;
 };
 
-const approvals: ApprovalCard[] = [
-  { role: "Sales Manager", status: "Approved", name: "Vikram Rathore", date: "2024-03-16", remarks: "Deal looks solid, proceed with negotiation." },
-  { role: "Senior Manager / Director", status: "Pending", name: "-", date: "-", remarks: "" },
-];
-
 type Step5Props = Pick<LeadStepProps, "onNext" | "onPrev"> & Partial<Pick<LeadStepProps, "data" | "updateData">>;
 
 export default function Step5Approval({ data = createLeadDraft(), updateData = () => undefined, onNext, onPrev }: Step5Props) {
-  const [decision, setDecision] = useState<"Approve" | "Reject">("Approve");
+  const approvals: ApprovalCard[] = [
+    {
+      role: "Sales Manager",
+      status: data.decision ? "Approved" : "Pending",
+      name: data.assignedTo || "-",
+      date: data.proposalDate || "-",
+      remarks: data.comments,
+    },
+    { role: "Senior Manager / Director", status: "Pending", name: "-", date: "-", remarks: "" },
+  ];
 
-  const { register, handleSubmit } = useForm<ApprovalFormData>({
+  const {
+    register,
+    handleSubmit,
+    setValue,
+    formState: { errors },
+  } = useForm<ApprovalFormData>({
     resolver: zodResolver(approvalSchema),
-    defaultValues: data,
+    defaultValues: {
+      decision: data.decision === "Reject" || data.decision === "Need Revision" ? data.decision : "Approve",
+      reviewerRole: data.reviewerRole,
+      comments: data.comments,
+    },
   });
 
   const onSubmit = (values: ApprovalFormData) => {
-    updateData(mergeLeadDraft({ ...values, decision }));
+    updateData(mergeLeadDraft(values));
     onNext();
   };
 
@@ -76,17 +88,17 @@ export default function Step5Approval({ data = createLeadDraft(), updateData = (
       <Panel title="Management Review & Authorization" description="Review proposal financials and previous follow-ups to approve this deal.">
         <div className="space-y-6">
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-            <Field label="Reviewer Designation" options={["Finance Manager", "Director", "Managing Partner"]} register={register("reviewerRole")} />
-            <Field label="Final Decision" options={["Approve", "Reject", "Need Revision"]} register={register("decision")} onChange={(e) => setDecision(e.target.value as "Approve" | "Reject")} />
+            <Field label="Reviewer Designation" required options={["Finance Manager", "Director", "Managing Partner"]} register={register("reviewerRole")} error={errors.reviewerRole?.message} />
+            <Field label="Final Decision" required options={["Approve", "Reject", "Need Revision"]} register={register("decision")} error={errors.decision?.message} />
           </div>
-            <Field label="Review Audit Comments" multiline placeholder="Describe the reason for your decision..." register={register("comments")} />
+            <Field label="Review Audit Comments" required multiline placeholder="Describe the reason for your decision..." register={register("comments")} error={errors.comments?.message} />
         </div>
       </Panel>
 
       <div className="flex justify-between border-t border-slate-50 pt-8">
         <ActionButton label="Back" variant="outline" icon={ArrowLeft} onClick={onPrev} />
         <div className="flex gap-3">
-          <button type="submit" onClick={() => setDecision("Reject")} className="flex h-11 items-center gap-2 rounded-xl border border-red-100 bg-red-50 px-6 text-xs font-black uppercase tracking-widest text-red-600 transition-all hover:bg-red-100">
+          <button type="submit" onClick={() => setValue("decision", "Reject")} className="flex h-11 items-center gap-2 rounded-xl border border-red-100 bg-red-50 px-6 text-xs font-black uppercase tracking-widest text-red-600 transition-all hover:bg-red-100">
             <ThumbsDown size={16} /> Reject
           </button>
           <ActionButton type="submit" label="Approve & Next" icon={ThumbsUp} variant="accent" />

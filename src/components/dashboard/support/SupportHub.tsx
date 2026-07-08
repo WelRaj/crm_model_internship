@@ -34,33 +34,33 @@ const initialTickets: SupportTicket[] = [
   {
     id: "SUP-2401",
     subject: "Lead assignment rule review",
-    module: "CRM",
-    requester: "Sales Lead",
+    module: "Client Operations",
+    requester: "Lead Desk",
     priority: "High",
     status: "In Progress",
     channel: "Internal",
     owner: "Admin Desk",
     createdAt: "2026-07-01 10:20",
     responseDue: "Today 05:00 PM",
-    description: "Need to verify telecaller routing and follow-up ownership for new project enquiries.",
+    description: "Need to verify calling owner routing and follow-up ownership for new project enquiries.",
   },
   {
     id: "SUP-2402",
     subject: "Payroll export format",
-    module: "HRMS",
-    requester: "Finance Team",
+    module: "People Operations",
+    requester: "Finance Control",
     priority: "Medium",
     status: "Waiting",
     channel: "Email",
-    owner: "HR Ops",
+    owner: "People Ops",
     createdAt: "2026-07-02 12:15",
     responseDue: "Tomorrow 11:00 AM",
-    description: "Confirm column order before sending payroll CSV to accounts.",
+    description: "Confirm column order before sending payroll CSV to Finance Control.",
   },
   {
     id: "SUP-2403",
     subject: "Invoice approval clarification",
-    module: "Accounting",
+    module: "Finance Control",
     requester: "Accounts Executive",
     priority: "Critical",
     status: "Open",
@@ -74,7 +74,7 @@ const initialTickets: SupportTicket[] = [
 
 const blankTicket = {
   subject: "",
-  module: "CRM",
+  module: "Client Operations",
   requester: "",
   priority: "Medium" as TicketPriority,
   channel: "Internal",
@@ -159,10 +159,10 @@ export default function SupportHub() {
     <div className="space-y-8 animate-in fade-in duration-500">
       <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
         <div>
-          <p className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-400">Support Center</p>
-          <h2 className="mt-2 text-3xl font-black tracking-tight text-primary">Help & Support</h2>
+          <p className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-400">Support Desk</p>
+          <h2 className="mt-2 text-3xl font-black tracking-tight text-primary">Internal Support Desk</h2>
           <p className="mt-1 max-w-3xl text-sm font-semibold leading-6 text-slate-500">
-            Internal CRM support queue for user issues, module questions, approvals, and operational help.
+            Internal support queue for user issues, module questions, approvals, and operational help.
           </p>
         </div>
         <button
@@ -262,7 +262,7 @@ export default function SupportHub() {
               <div className="mt-5 grid gap-4">
                 <Input label="Subject" value={form.subject} onChange={(value) => setForm((current) => ({ ...current, subject: value }))} />
                 <Input label="Requester" value={form.requester} onChange={(value) => setForm((current) => ({ ...current, requester: value }))} />
-                <Select label="Module" value={form.module} options={["CRM", "Leads", "Projects", "HRMS", "Accounting", "Marketing", "Administration"]} onChange={(value) => setForm((current) => ({ ...current, module: value }))} />
+                <Select label="Module" value={form.module} options={["Client Operations", "Lead Desk", "Delivery Projects", "People Operations", "Finance Control", "Growth Marketing", "Admin Control"]} onChange={(value) => setForm((current) => ({ ...current, module: value }))} />
                 <Select label="Priority" value={form.priority} options={["Low", "Medium", "High", "Critical"]} onChange={(value) => setForm((current) => ({ ...current, priority: value as TicketPriority }))} />
                 <Select label="Channel" value={form.channel} options={["Internal", "Phone", "Email", "WhatsApp"]} onChange={(value) => setForm((current) => ({ ...current, channel: value }))} />
                 <Input label="Issue Detail" multiline value={form.description} onChange={(value) => setForm((current) => ({ ...current, description: value }))} />
@@ -284,7 +284,7 @@ export default function SupportHub() {
               {[
                 { icon: Phone, title: "Call Support", detail: "+91 98765 43210" },
                 { icon: Mail, title: "Email Desk", detail: "support@crmpro.local" },
-                { icon: MessageSquare, title: "WhatsApp", detail: "Internal CRM support group" },
+                { icon: MessageSquare, title: "WhatsApp", detail: "Internal support group" },
                 { icon: ShieldCheck, title: "Escalation", detail: "Critical approvals and access issues" },
               ].map((item) => (
                 <div key={item.title} className="flex items-start gap-3 rounded-xl bg-slate-50 p-4">

@@ -243,7 +243,7 @@ export default function Step8salepurchaseExpenses() {
 
   return (
     <AccountingPage
-      title="Sales, Purchase & Expenses"
+      title="Sales, Purchases & Expenses"
       description="Consolidated financial ledger for enterprise billing, procurement, and operational costs."
       icon={ReceiptText}
       badge="Financial Ledger"

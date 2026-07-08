@@ -26,7 +26,7 @@ const clientOptions = [
 ];
 
 const projectOptions = [
-  { id: "PRJ-001", clientId: "CL-24001", name: "Loan CRM Web App", agreementId: "AGR-2024-002" },
+  { id: "PRJ-001", clientId: "CL-24001", name: "Loan Automation Platform", agreementId: "AGR-2024-002" },
   { id: "PRJ-002", clientId: "CL-24002", name: "E-commerce Mobile App", agreementId: "AGR-2024-001" },
   { id: "PRJ-003", clientId: "CL-24003", name: "Logistics Control Tower", agreementId: "" },
 ];
@@ -118,18 +118,18 @@ const initialQuotations: QuotationRecord[] = [
     clientId: "CL-24001",
     clientName: "Apex Finserve Pvt Ltd",
     projectId: "PRJ-001",
-    projectName: "Loan CRM Web App",
+    projectName: "Loan Automation Platform",
     agreementId: "AGR-2024-002",
     quoteDate: "2026-06-11",
     validTill: "2026-06-25",
     currency: "INR",
-    items: [{ id: "QL-041-1", description: "Loan CRM design and implementation", qty: 1, rate: 800000, amount: 800000 }],
+    items: [{ id: "QL-041-1", description: "Loan automation platform design and implementation", qty: 1, rate: 800000, amount: 800000 }],
     subtotal: 800000,
     discount: 0,
     gstPercent: 18,
     gstAmount: 144000,
     totalAmount: 944000,
-    serviceSummary: "Loan CRM Web App",
+    serviceSummary: "Loan Automation Platform",
     commercialTerms: "30% advance, 40% on UAT, 30% on production release.",
     status: "Approved",
     owner: "Finance Manager",

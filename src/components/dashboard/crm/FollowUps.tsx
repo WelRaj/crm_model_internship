@@ -79,7 +79,7 @@ function buildRows(): FollowUpRow[] {
       lastOutcome: done ? "Issue resolved" : lead.availability || "Callback needed",
       telecallerDeskStatus: done ? "Done" : lead.accountStatus === "Issue Resolved" ? "Resolved" : index % 6 === 0 ? "Escalated" : "Pending",
       callNote: lead.lastCallNote || lead.remarks,
-      nextAction: done ? "Mark telecaller task done" : "Call customer, check issue/account opening status",
+      nextAction: done ? "Mark calling task done" : "Call customer, check issue/account opening status",
       priority: status === "Overdue" ? "High" : lead.interestLevel === "High" ? "Medium" : "Low",
     };
   });
@@ -156,7 +156,7 @@ export default function FollowUps() {
   };
 
   const exportRows = () => {
-    const header = ["Follow-up ID", "Lead ID", "Client", "Type", "Telecaller", "Follow-up Status", "Telecaller Desk Status", "Date", "Time", "Outcome", "Note", "Next Action"];
+    const header = ["Follow-up ID", "Lead ID", "Client", "Type", "Calling Owner", "Follow-up Status", "Calling Desk Status", "Date", "Time", "Outcome", "Note", "Next Action"];
     const csvRows = filteredRows.map((row) =>
       [row.id, row.leadId, row.client, row.leadType, row.telecaller, row.status, row.telecallerDeskStatus, row.date, row.time, row.lastOutcome, row.callNote, row.nextAction]
         .map((value) => `"${String(value).replace(/"/g, '""')}"`)
@@ -166,7 +166,7 @@ export default function FollowUps() {
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;
-    anchor.download = "telecaller-followups.csv";
+    anchor.download = "calling-owner-followups.csv";
     anchor.click();
     URL.revokeObjectURL(url);
   };
@@ -175,10 +175,10 @@ export default function FollowUps() {
     <div className="space-y-6 animate-in fade-in duration-500">
       <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
         <div>
-          <p className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-400">Telecaller Next Step</p>
+          <p className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-400">Follow-up Queue</p>
           <h2 className="mt-2 text-3xl font-black tracking-tight text-primary">Follow-ups</h2>
           <p className="mt-1 max-w-3xl text-sm font-semibold leading-6 text-secondary">
-            Telecaller Desk me call update hone ke baad jo callback, issue check, proposal confirmation ya pending conversation hai woh yaha manage hoga.
+            Manage callbacks, issue checks, proposal confirmations, and pending conversations after each Calling Desk update.
           </p>
         </div>
         <button onClick={exportRows} className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs font-black uppercase tracking-widest text-primary shadow-sm hover:border-primary">
@@ -226,7 +226,7 @@ export default function FollowUps() {
               <input
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
-                placeholder="Search lead, phone, telecaller..."
+                placeholder="Search lead, phone, calling owner..."
                 className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 pl-11 pr-4 text-sm font-semibold outline-none focus:border-primary focus:bg-white"
               />
             </div>
@@ -236,7 +236,7 @@ export default function FollowUps() {
             <table className="w-full min-w-[980px] text-left">
               <thead>
                 <tr className="border-b border-slate-100 bg-slate-50/60">
-                  {["Lead", "Telecaller", "Follow-up", "Desk Status", "Schedule", "Last Outcome", "Next Action"].map((head) => (
+                  {["Lead", "Calling Owner", "Follow-up", "Desk Status", "Schedule", "Last Outcome", "Next Action"].map((head) => (
                     <th key={head} className="px-5 py-4 text-[10px] font-black uppercase tracking-widest text-slate-400">{head}</th>
                   ))}
                 </tr>
@@ -284,7 +284,7 @@ export default function FollowUps() {
                 value={note}
                 onChange={(event) => setNote(event.target.value)}
                 rows={6}
-                placeholder="Telecaller ne call me kya baat ki, customer interested hai ya nahi, issue resolve hua ya callback chahiye..."
+                placeholder="Summarize the call, interest level, issue status, callback requirement, and next action..."
                 className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm font-semibold outline-none focus:border-primary focus:bg-white"
               />
             </label>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, type ChangeEvent } from "react";
+import { useEffect, useMemo, useState, type ChangeEvent } from "react";
 import { 
   CheckCircle2, AlertTriangle, 
   Plus, Search, Filter, Download,
@@ -11,6 +11,7 @@ import {
 import { 
   ActionButton, DataTable, StatusBadge, Panel, MetricCard, ProgressBar, Field 
 } from "../accounting/AccountingComponents";
+import { projectHandoffEventName, projectHandoffStorageKey, type ClientContactSnapshot, type CreatedProjectRecord } from "./projectHandoff";
 
 // --- Types ---
 interface TeamMember {
@@ -57,6 +58,8 @@ interface Project {
   client: string;
   sourceLeadId: string;
   teamLeader: string;
+  teamLeaderId?: string;
+  teamLeaderName?: string;
   projectOwner: string;
   status: ProjectStatus;
   health: ProjectHealth;
@@ -68,6 +71,7 @@ interface Project {
   milestones: Milestone[];
   totalValue: number;
   nextAction: string;
+  clientContacts?: ClientContactSnapshot[];
 }
 
 interface ProjectFormState {
@@ -160,11 +164,12 @@ interface DeadlineFormState {
 const initialProjects: Project[] = [
   {
     id: "PRJ-001",
-    name: "Apex Loan CRM",
+    name: "Apex Loan Automation Platform",
     clientId: "ACC-24001",
     client: "Apex Finserve Pvt Ltd",
     sourceLeadId: "LEAD-2026-019",
     teamLeader: "Vikram Rathore",
+    teamLeaderName: "Vikram Rathore",
     projectOwner: "Priya Menon",
     status: "Development",
     health: "On Track",
@@ -192,6 +197,7 @@ const initialProjects: Project[] = [
     client: "Nexa Retail Cloud",
     sourceLeadId: "LEAD-2026-027",
     teamLeader: "Sunita Sharma",
+    teamLeaderName: "Sunita Sharma",
     projectOwner: "Ritu Menon",
     status: "Discovery",
     health: "New",
@@ -287,6 +293,78 @@ function makeProjectId(count: number) {
   return `PRJ-${String(count + 1).padStart(3, "0")}`;
 }
 
+function readCreatedProjectRecords(): CreatedProjectRecord[] {
+  if (typeof window === "undefined") return [];
+
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(projectHandoffStorageKey) || "[]");
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((project): project is CreatedProjectRecord => Boolean(project?.projectId && project?.clientId && project?.sourceLeadId));
+  } catch {
+    return [];
+  }
+}
+
+function makeProjectFromHandoff(record: CreatedProjectRecord): Project {
+  return {
+    id: record.projectId,
+    name: record.projectName,
+    clientId: record.clientId,
+    client: record.company,
+    sourceLeadId: record.sourceLeadId,
+    teamLeader: record.teamLeaderName || record.projectManager,
+    teamLeaderId: record.teamLeaderId,
+    teamLeaderName: record.teamLeaderName || record.projectManager,
+    projectOwner: record.projectOwner,
+    status: "Planning",
+    health: "New",
+    billingStatus: record.billingModel === "Milestone Based" ? "Milestone Billing" : "Not Started",
+    progress: 0,
+    startDate: record.startDate,
+    endDate: record.targetEndDate,
+    team: (record.teamAssignments || []).map((assignment) => ({
+      id: assignment.id,
+      employeeId: assignment.employeeId,
+      name: assignment.name,
+      role: assignment.role,
+      assignedWork: assignment.assignedWork,
+      startDate: assignment.startDate,
+      endDate: assignment.endDate,
+      progress: 0,
+      status: "Active",
+      priority: assignment.priority,
+      comment: assignment.connectionNote || `Coordinate with ${assignment.clientContactName}`,
+      attachment: "",
+      history: [`Assigned from Client Operations handoff to coordinate with ${assignment.clientContactName}`],
+    })),
+    milestones: [
+      {
+        id: `${record.projectId}-KICKOFF`,
+        title: "Project kickoff",
+        status: "Pending",
+        progress: 0,
+        amount: record.value,
+        billed: false,
+        dueDate: record.startDate,
+        owner: record.projectManager,
+        nextAction: "Assign delivery team and confirm kickoff checklist",
+        billingEventStatus: "Not Ready",
+      },
+    ],
+    totalValue: record.value,
+    nextAction: `Assign developer team. ${record.kickoffNotes}`,
+    clientContacts: record.clientContacts || [],
+  };
+}
+
+function mergeHandoffProjects(currentProjects: Project[], records: CreatedProjectRecord[]) {
+  const handoffProjects = records.map(makeProjectFromHandoff);
+  const handoffProjectIds = new Set(handoffProjects.map((project) => project.id));
+  const handoffSourceLeadIds = new Set(handoffProjects.map((project) => project.sourceLeadId));
+  const unchangedProjects = currentProjects.filter((project) => !handoffProjectIds.has(project.id) && !handoffSourceLeadIds.has(project.sourceLeadId));
+  return [...handoffProjects, ...unchangedProjects];
+}
+
 function projectStatusTone(status: ProjectStatus): "green" | "blue" | "amber" | "red" | "purple" | "slate" {
   if (status === "Completed") return "green";
   if (status === "Development" || status === "UAT") return "blue";
@@ -337,11 +415,13 @@ function TeamTrackingView({
   onAddMember,
   onUpdateMember,
   onRemoveMember,
+  onSetTeamLeader,
 }: {
   projects: Project[];
   onAddMember: (prjId: string, member: NewMemberForm) => void;
   onUpdateMember: (prjId: string, memberId: string, member: NewMemberForm) => void;
   onRemoveMember: (prjId: string, memberId: string) => void;
+  onSetTeamLeader: (prjId: string, employeeId: string) => void;
 }) {
   const [activeAddForm, setActiveAddForm] = useState<string | null>(null);
   const [newMem, setNewMem] = useState<NewMemberForm>(blankMemberForm);
@@ -481,7 +561,7 @@ function TeamTrackingView({
         <MetricCard label="Overdue" value={String(overdueAssignments).padStart(2, "0")} helper="Past due and incomplete" icon={Flag} />
       </div>
 
-      <Panel title="Team Allocation Directory" description="Search active allocations before opening an individual project card.">
+      <Panel title="Team Assignment Directory" description="Search active allocations before opening an individual project record.">
         <div className="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(0,1fr)_220px_170px]">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300" size={16} />
@@ -503,9 +583,59 @@ function TeamTrackingView({
         <Panel 
           key={project.id} 
           title={project.name} 
-          description={`Project Master Deadline: ${project.endDate} | Leader: ${project.teamLeader}`}
-          actions={<ActionButton icon={UserPlus} label="Add Member" variant="accent" onClick={() => setActiveAddForm(activeAddForm === project.id ? null : project.id)} />}
+          description={`Project deadline: ${project.endDate} | Team leader: ${project.teamLeader}`}
+          actions={<ActionButton icon={UserPlus} label="Assign Member" variant="accent" onClick={() => setActiveAddForm(activeAddForm === project.id ? null : project.id)} />}
         >
+          <div className="mb-6 grid gap-4 xl:grid-cols-[1fr_280px]">
+            <div className="rounded-[2rem] border border-slate-100 bg-slate-50 p-5">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-400">Client Delivery Contacts</p>
+                  <h4 className="mt-1 text-sm font-black text-primary">Connected contacts for delivery coordination</h4>
+                </div>
+                <span className="w-fit rounded-full border border-slate-200 bg-white px-3 py-1 text-[10px] font-black uppercase tracking-widest text-slate-500">
+                  {project.clientContacts?.length || 0} Linked
+                </span>
+              </div>
+              <div className="mt-4 grid gap-3 md:grid-cols-2">
+                {(project.clientContacts || []).filter((contact) => contact.role === "Technical" || contact.role === "Decision Maker").map((contact) => (
+                  <div key={contact.id} className="rounded-2xl border border-white bg-white p-4 shadow-sm">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">{contact.role}</p>
+                    <h5 className="mt-1 text-sm font-black text-primary">{contact.name}</h5>
+                    <p className="text-xs font-bold text-secondary">{contact.designation}</p>
+                    <p className="mt-2 text-xs font-semibold text-slate-500">{contact.email}</p>
+                    <p className="mt-1 text-xs font-semibold text-slate-500">{contact.phone}</p>
+                    <p className="mt-2 text-xs font-semibold leading-5 text-slate-500">{contact.responsibility}</p>
+                  </div>
+                ))}
+                {!(project.clientContacts || []).length ? (
+                  <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-5 text-center text-xs font-black uppercase tracking-widest text-slate-400 md:col-span-2">
+                    No client contacts linked from Client Operations
+                  </div>
+                ) : null}
+              </div>
+            </div>
+            <div className="rounded-[2rem] border border-slate-100 bg-slate-50 p-5">
+              <p className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-400">Team Leader</p>
+              <h4 className="mt-1 text-sm font-black text-primary">Assign the project lead</h4>
+              <select
+                value={employeeDirectory.find((employee) => employee.name === project.teamLeader)?.id || project.teamLeaderId || ""}
+                onChange={(event) => onSetTeamLeader(project.id, event.target.value)}
+                className="mt-4 h-11 w-full rounded-xl border border-border bg-white px-3 text-sm font-semibold text-primary outline-none focus:ring-4 focus:ring-primary/10"
+              >
+                <option value="">Select team leader...</option>
+                {employeeDirectory.map((employee) => (
+                  <option key={employee.id} value={employee.id}>
+                    {employee.id} - {employee.name}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-3 text-xs font-semibold leading-5 text-slate-500">
+                This leader coordinates internal work and stays connected to the client technical contact above.
+              </p>
+            </div>
+          </div>
+
           {activeAddForm === project.id && (
              <div className="p-8 bg-slate-50 rounded-[2rem] border border-slate-100 mb-8 grid grid-cols-1 md:grid-cols-4 gap-6 animate-in slide-in-from-top-4 shadow-sm">
                 {memberError ? <div className="md:col-span-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-xs font-black text-red-700">{memberError}</div> : null}
@@ -527,7 +657,7 @@ function TeamTrackingView({
                 </div>
              </div>
           )}
-          <DataTable columns={["Developer", "Task Responsibility", "Work Done %", "Working Timeline", "Status", "Actions"]}>
+          <DataTable columns={["Team Member", "Task Responsibility", "Work Done %", "Working Timeline", "Status", "Actions"]}>
             {project.team
               .filter((member) => filteredAssignments.some((assignment) => assignment.projectId === project.id && assignment.id === member.id))
               .map((m) => (
@@ -1438,6 +1568,22 @@ export default function ProjectHub({ activeView = "projects" }: { activeView?: s
   const [healthFilter, setHealthFilter] = useState<"All" | ProjectHealth>("All");
   const [billingEvents, setBillingEvents] = useState<BillingEventDraft[]>([]);
 
+  useEffect(() => {
+    const syncCreatedProjects = () => {
+      const records = readCreatedProjectRecords();
+      setProjects((current) => mergeHandoffProjects(current, records));
+    };
+
+    syncCreatedProjects();
+    window.addEventListener("storage", syncCreatedProjects);
+    window.addEventListener(projectHandoffEventName, syncCreatedProjects);
+
+    return () => {
+      window.removeEventListener("storage", syncCreatedProjects);
+      window.removeEventListener(projectHandoffEventName, syncCreatedProjects);
+    };
+  }, []);
+
   const exportCsv = (filename: string, rows: Array<Array<string | number>>) => {
     const csv = rows.map((row) => row.map(csvEscape).join(",")).join("\n");
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
@@ -1729,6 +1875,25 @@ export default function ProjectHub({ activeView = "projects" }: { activeView?: s
     setProjects(projects.map(p => p.id === prjId ? { ...p, team: [...p.team, mem] } : p));
   };
 
+  const handleSetTeamLeader = (projectId: string, employeeId: string) => {
+    const employee = employeeDirectory.find((item) => item.id === employeeId);
+    if (!employee) return;
+
+    setProjects((current) =>
+      current.map((project) =>
+        project.id === projectId
+          ? {
+              ...project,
+              teamLeaderId: employee.id,
+              teamLeaderName: employee.name,
+              teamLeader: employee.name,
+              nextAction: `Team leader assigned: ${employee.name}. Connect the team with client technical contacts before starting delivery.`,
+            }
+          : project,
+      ),
+    );
+  };
+
   const handleUpdateMember = (prjId: string, memberId: string, member: NewMemberForm) => {
     setProjects((current) =>
       current.map((project) =>
@@ -1773,7 +1938,14 @@ export default function ProjectHub({ activeView = "projects" }: { activeView?: s
   return (
     <div className="space-y-8 animate-in fade-in duration-700">
       <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
-        <div><h2 className="text-4xl font-black text-primary tracking-tight capitalize">{activeView.replace("-", " ")} HUB</h2><p className="text-slate-500 font-medium mt-1 text-lg">Central control for all client engagements.</p></div>
+        <div>
+          <h2 className="text-4xl font-black text-primary tracking-tight capitalize">
+            {activeView === "team-tracking" ? "Team Assignment" : activeView === "projects" ? "Project Portfolio" : activeView.replace("-", " ")}
+          </h2>
+          <p className="text-slate-500 font-medium mt-1 text-lg">
+            {activeView === "team-tracking" ? "Assign team leaders, internal members, and client coordination links." : "Delivery control for software projects and fintech client engagements."}
+          </p>
+        </div>
         {activeView === "projects" && (
           <div className="flex flex-wrap gap-3">
             <ActionButton icon={Download} label="Export" variant="outline" onClick={handleExportProjects} />
@@ -1792,11 +1964,11 @@ export default function ProjectHub({ activeView = "projects" }: { activeView?: s
             <MetricCard label="At Risk" value={String(atRiskProjects).padStart(2, "0")} helper="Health marked at risk/delayed" icon={AlertTriangle} />
           </div>
 
-          <Panel title="Active Projects Portfolio" description="Project master list with client, lead, owner, health, billing and delivery links.">
+          <Panel title="Active Project Portfolio" description="Project master list with client, source lead, owner, health, billing and delivery links.">
             <div className="mb-5 grid grid-cols-1 gap-3 lg:grid-cols-[minmax(0,1fr)_190px_170px]">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300" size={16} />
-                <input value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder="Search project, client, lead, owner..." className="h-11 w-full rounded-xl border border-border bg-slate-50 pl-10 pr-3 text-sm font-semibold text-primary outline-none focus:ring-4 focus:ring-primary/10" />
+                <input value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder="Search project, client, source lead, owner..." className="h-11 w-full rounded-xl border border-border bg-slate-50 pl-10 pr-3 text-sm font-semibold text-primary outline-none focus:ring-4 focus:ring-primary/10" />
               </div>
               <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as "All" | ProjectStatus)} className="h-11 rounded-xl border border-border bg-white px-3 text-sm font-semibold text-primary outline-none focus:ring-4 focus:ring-primary/10">
                 <option>All</option>
@@ -1850,7 +2022,13 @@ export default function ProjectHub({ activeView = "projects" }: { activeView?: s
         </Panel>
         </div>
       ) : activeView === "team-tracking" ? (
-        <TeamTrackingView projects={projects} onAddMember={handleAddMemberToProject} onUpdateMember={handleUpdateMember} onRemoveMember={handleRemoveMember} />
+        <TeamTrackingView
+          projects={projects}
+          onAddMember={handleAddMemberToProject}
+          onUpdateMember={handleUpdateMember}
+          onRemoveMember={handleRemoveMember}
+          onSetTeamLeader={handleSetTeamLeader}
+        />
       ) : activeView === "tasks" ? (
         <GlobalTasksTracker projects={projects} onAddMember={handleAddMemberToProject} onUpdateMember={handleUpdateMember} onRemoveMember={handleRemoveMember} />
       ) : activeView === "milestones" ? (
@@ -1875,7 +2053,7 @@ export default function ProjectHub({ activeView = "projects" }: { activeView?: s
 
       {showAddPrj && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
-          <Panel title={editingProjectId ? "Edit Project" : "Assign New Project"} description="Create a project record with client, source lead, delivery owner, billing status and next action.">
+          <Panel title={editingProjectId ? "Edit Project" : "Create Project Record"} description="Create a project record with client, source lead, delivery owner, billing status and next action.">
             <button type="button" onClick={() => { resetProjectForm(); setShowAddPrj(false); }} className="absolute right-8 top-8 inline-flex h-9 items-center gap-2 rounded-xl border border-border bg-white px-3 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:bg-slate-50">
               <X size={14} /> Close
             </button>

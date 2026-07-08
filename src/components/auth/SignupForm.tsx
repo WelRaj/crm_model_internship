@@ -69,7 +69,7 @@ export default function SignupForm() {
     <div className="w-full max-w-md space-y-8 bg-surface p-8 rounded-2xl shadow-sm border border-border">
       <div className="text-center">
         <h2 className="text-3xl font-black text-text tracking-tight">Create Account</h2>
-        <p className="mt-2 text-sm text-text-muted">Join our premium CRM platform</p>
+        <p className="mt-2 text-sm text-text-muted">Create access for the DeMatade Algo operations panel</p>
       </div>
 
       <form className="mt-8 space-y-6" onSubmit={handleDetailsSubmit}>
@@ -94,7 +94,7 @@ export default function SignupForm() {
         <Select 
           label="Department Category" 
           required 
-          options={["Lead", "Onboarding", "Accounting", "Marketing", "Projects", "Administration"]} 
+          options={["Client Operations", "People Operations", "Finance Control", "Growth Marketing", "Delivery Projects", "Admin Control"]} 
           onChange={(e) => setFormData({...formData, category: e.target.value})}
         />
 

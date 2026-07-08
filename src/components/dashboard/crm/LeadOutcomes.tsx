@@ -61,7 +61,7 @@ function makeOutcomeRows(): OutcomeRow[] {
       status: lead.status,
       outcome: isFinal ? "Final" : "Not Final",
       reason: isFinal ? "Account/issue closed successfully." : "Customer not interested or not reachable after calls.",
-      nextStep: isFinal ? "Mark customer done and close telecaller task" : "Archive with call reason and manager remark",
+      nextStep: isFinal ? "Mark customer done and close calling task" : "Archive with call reason and manager remark",
       value: lead.budget,
       lastConversation: index % 2 === 0 ? "Call connected. Customer update captured." : "No answer/callback needed.",
     };
@@ -106,7 +106,7 @@ export default function LeadOutcomes() {
   );
 
   const exportRows = () => {
-    const header = ["Lead ID", "Name", "Type", "Source", "Telecaller", "Status", "Outcome", "Reason", "Next Step", "Value"];
+    const header = ["Lead ID", "Name", "Type", "Source", "Calling Owner", "Status", "Outcome", "Reason", "Next Step", "Value"];
     const csvRows = filteredRows.map((row) =>
       [row.id, row.name, row.type, row.source, row.telecaller, row.status, row.outcome, row.reason, row.nextStep, row.value]
         .map((value) => `"${String(value).replace(/"/g, '""')}"`)
@@ -128,7 +128,7 @@ export default function LeadOutcomes() {
           <p className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-400">After Conversation Result</p>
           <h2 className="mt-2 text-3xl font-black tracking-tight text-primary">Lead Outcomes</h2>
           <p className="mt-1 max-w-3xl text-sm font-semibold leading-6 text-secondary">
-            Telecaller/team leader decision ke baad sirf final aur not-final leads yaha dikhegi. Pending callback wali leads Follow-ups me rahengi.
+            Final and not-final lead decisions appear here after calling owner or team leader review. Pending callbacks remain in Follow-ups.
           </p>
         </div>
         <button onClick={exportRows} className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs font-black uppercase tracking-widest text-primary shadow-sm hover:border-primary">
@@ -177,7 +177,7 @@ export default function LeadOutcomes() {
             <input
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search lead, telecaller, source..."
+              placeholder="Search lead, calling owner, source..."
               className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 pl-11 pr-4 text-sm font-semibold outline-none focus:border-primary focus:bg-white"
             />
           </div>
@@ -187,7 +187,7 @@ export default function LeadOutcomes() {
           <table className="w-full min-w-[1120px] text-left">
             <thead>
               <tr className="border-b border-slate-100 bg-slate-50/60">
-                {["Lead", "Type", "Telecaller", "Status", "Outcome", "Conversation", "Next Step", "Value"].map((head) => (
+                {["Lead", "Type", "Calling Owner", "Status", "Outcome", "Conversation", "Next Step", "Value"].map((head) => (
                   <th key={head} className="px-5 py-4 text-[10px] font-black uppercase tracking-widest text-slate-400">{head}</th>
                 ))}
               </tr>

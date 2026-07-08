@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "CRM Panel",
-  description: "Premium Finance CRM",
+  title: "DeMatade Algo Operations Panel",
+  description: "Business operations panel for DeMatade Algo Technology Solutions Pvt Ltd",
 };
 
 export default function RootLayout({

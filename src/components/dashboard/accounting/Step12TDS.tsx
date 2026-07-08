@@ -493,7 +493,7 @@ export default function Step12TDS() {
 
   return (
     <AccountingPage
-      title="TDS Management"
+      title="TDS Compliance"
       description="Reconcile client TDS credits and control vendor or salary TDS deduction, deposit, return, and certificate compliance."
       icon={Calculator}
       badge="Tax deduction"
@@ -566,7 +566,7 @@ export default function Step12TDS() {
                     </Panel>
                   </div>
                   <div className="space-y-6">
-                    <Panel title="TDS Impact" description="Computed tax and accounting direction.">
+                    <Panel title="TDS Impact" description="Computed tax and finance posting direction.">
                       <div className="space-y-5">
                         <div className={`rounded-2xl p-6 text-white ${watchedType === "Client TDS Receivable" ? "bg-amber-500" : "bg-blue-600"}`}>
                           <p className="text-[10px] font-black uppercase tracking-widest text-white/70">Calculated TDS</p>

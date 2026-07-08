@@ -366,7 +366,7 @@ export default function Step11GST() {
 
   return (
     <AccountingPage
-      title="GST Management"
+      title="GST Compliance"
       description="Reconcile invoice output tax, credit-note reversals, verified input tax credit, GSTR-1, GSTR-3B, and filing acknowledgements."
       icon={Percent}
       badge="Indian compliance"

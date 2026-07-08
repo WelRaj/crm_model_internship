@@ -21,7 +21,7 @@ export default function Step3Documents({ category, documents, updateDocument, on
     <div className="space-y-8">
       <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 mb-6 flex items-center justify-between">
         <div>
-          <h3 className="text-xl font-bold text-primary">Document Verification</h3>
+          <h3 className="text-xl font-bold text-primary">Document Collection</h3>
           <p className="text-sm text-secondary mt-1">
             Please upload clear copies of the following documents for <span className="text-accent font-semibold">{category}</span> category.
           </p>

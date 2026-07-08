@@ -173,10 +173,10 @@ const exitRisks: ExitRisk[] = ["Low", "Medium", "High"];
 const teams = ["Product Engineering", "Delivery QA", "CloudOps", "Design Studio", "Support", "HR", "Finance"];
 
 const initialEmployees: EmployeeRecord[] = [
-  { id: "EMP-1024", name: "Aarav Mehta", role: "Senior React Developer", team: "Product Engineering", manager: "Vikram", location: "Jaipur", type: "Full-time", status: "Active", score: 92, email: "aarav@it-crm.com", mobile: "+91 98765 43210", joined: "2022-01-12", kycStatus: "Complete", assetTag: "LAP-882" },
-  { id: "EMP-1041", name: "Priya Nair", role: "QA Automation Engineer", team: "Delivery QA", manager: "Sunita", location: "Remote", type: "Full-time", status: "Active", score: 88, email: "priya@it-crm.com", mobile: "+91 98765 43211", joined: "2022-03-05", kycStatus: "Complete", assetTag: "LAP-914" },
-  { id: "EMP-1088", name: "Rohan Saini", role: "DevOps Engineer", team: "CloudOps", manager: "Rajesh", location: "Bengaluru", type: "Consultant", status: "Probation", score: 76, email: "rohan@it-crm.com", mobile: "+91 98765 43212", joined: "2023-11-20", kycStatus: "Pending", assetTag: "LAP-971" },
-  { id: "EMP-1112", name: "Meera Singh", role: "UI/UX Designer", team: "Design Studio", manager: "Anjali", location: "Indore", type: "Intern", status: "Training", score: 69, email: "meera@it-crm.com", mobile: "+91 98765 43213", joined: "2024-05-15", kycStatus: "Pending", assetTag: "PENDING" },
+  { id: "EMP-1024", name: "Aarav Mehta", role: "Senior React Developer", team: "Product Engineering", manager: "Vikram", location: "Navi Mumbai", type: "Full-time", status: "Active", score: 92, email: "aarav@dematadealgo.local", mobile: "+91 98765 43210", joined: "2022-01-12", kycStatus: "Complete", assetTag: "LAP-882" },
+  { id: "EMP-1041", name: "Priya Nair", role: "QA Automation Engineer", team: "Delivery QA", manager: "Sunita", location: "Remote", type: "Full-time", status: "Active", score: 88, email: "priya@dematadealgo.local", mobile: "+91 98765 43211", joined: "2022-03-05", kycStatus: "Complete", assetTag: "LAP-914" },
+  { id: "EMP-1088", name: "Rohan Saini", role: "DevOps Engineer", team: "CloudOps", manager: "Rajesh", location: "Navi Mumbai", type: "Consultant", status: "Probation", score: 76, email: "rohan@dematadealgo.local", mobile: "+91 98765 43212", joined: "2023-11-20", kycStatus: "Pending", assetTag: "LAP-971" },
+  { id: "EMP-1112", name: "Meera Singh", role: "UI/UX Designer", team: "Design Studio", manager: "Anjali", location: "Remote", type: "Intern", status: "Training", score: 69, email: "meera@dematadealgo.local", mobile: "+91 98765 43213", joined: "2024-05-15", kycStatus: "Pending", assetTag: "PENDING" },
 ];
 
 const initialAttendance: AttendanceRecord[] = [
@@ -423,7 +423,7 @@ function EmployeeForm({
       <div className="mb-5 flex items-start justify-between gap-4">
         <div>
           <h3 className="text-lg font-black text-primary">{editing ? "Edit Employee" : "Add Employee"}</h3>
-          <p className="mt-1 text-xs font-semibold text-slate-500">Maintain one employee master record for HRMS, attendance, payroll and exit lifecycle.</p>
+          <p className="mt-1 text-xs font-semibold text-slate-500">Maintain one employee master record for attendance, payroll, assets, access and exit lifecycle.</p>
         </div>
         <ActionButton icon={X} label="Close" onClick={onCancel} />
       </div>
@@ -479,16 +479,16 @@ export default function HRMSHub({ activeView, onAddEmployee }: { activeView: HRM
   const [exitError, setExitError] = useState("");
   const [exitForm, setExitForm] = useState({ employeeId: "", exitType: "Resignation" as ExitType, resignationDate: "2026-06-24", lastDay: "", handoverOwner: "", reason: "", risk: "Low" as ExitRisk });
 
-  const title = activeView === "employees" ? "Employees" : activeView === "attendance" ? "Attendance" : activeView === "leave" ? "Leave Management" : activeView === "payroll" ? "Payroll" : "Exit Management";
+  const title = activeView === "employees" ? "Employee Directory" : activeView === "attendance" ? "Attendance" : activeView === "leave" ? "Leave Management" : activeView === "payroll" ? "Payroll" : "Exit Process";
   const description = activeView === "employees"
-    ? "Employee master, org mapping, manager ownership, assets, compliance and HR health for IT teams."
+    ? "Employee master, org mapping, manager ownership, assets, compliance and people health for software and fintech teams."
     : activeView === "attendance"
       ? "Hybrid attendance tracking with shifts, regularization, missing punch and billable hours."
       : activeView === "leave"
         ? "Leave, WFH, comp-off and approval queue with manager plus HR review workflow."
         : activeView === "payroll"
           ? "Monthly payroll register with gross, deductions, net pay, holds and approval status."
-          : "Notice period, handover, asset recovery, access revoke and final settlement control.";
+          : "Notice period, handover, asset recovery, access revocation and final settlement control.";
 
   const filteredEmployees = useMemo(() => {
     const search = searchTerm.trim().toLowerCase();
@@ -962,7 +962,7 @@ export default function HRMSHub({ activeView, onAddEmployee }: { activeView: HRM
           <div>
             <div className="flex flex-wrap items-center gap-3">
               <h2 className="text-3xl font-black tracking-tight text-[#1E293B]">{title}</h2>
-              <Badge tone="green">HRMS</Badge>
+              <Badge tone="green">People Operations</Badge>
             </div>
             <p className="mt-1 max-w-3xl text-sm font-medium leading-6 text-slate-500">{description}</p>
           </div>
@@ -1002,7 +1002,7 @@ export default function HRMSHub({ activeView, onAddEmployee }: { activeView: HRM
       {activeView === "employees" ? (
         <div className="space-y-6">
           <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-4">
-            <MetricCard label="Employees" value={String(employees.filter((employee) => employee.status !== "Archived").length)} helper="Active master records" icon={Users} tone="blue" />
+            <MetricCard label="Directory Records" value={String(employees.filter((employee) => employee.status !== "Archived").length)} helper="Active master records" icon={Users} tone="blue" />
             <MetricCard label="Probation" value={String(employees.filter((employee) => employee.status === "Probation").length)} helper="Review required" icon={UserCheck} tone="amber" />
             <MetricCard label="KYC Pending" value={String(employees.filter((employee) => employee.kycStatus === "Pending").length)} helper="Compliance queue" icon={ShieldCheck} tone="red" />
             <MetricCard label="On Notice" value={String(employees.filter((employee) => employee.status === "On Notice").length)} helper="Exit linked" icon={UserMinus} tone="purple" />
@@ -1101,7 +1101,7 @@ export default function HRMSHub({ activeView, onAddEmployee }: { activeView: HRM
       {selectedEmployee ? <EmployeeProfile employee={selectedEmployee} onClose={() => setSelectedEmployee(null)} onEdit={(employee) => { setSelectedEmployee(null); openEmployeeForm(employee); }} /> : null}
 
       <section className="rounded-2xl border border-border bg-primary p-6 text-white shadow-sm">
-        <div className="flex items-center gap-3"><ShieldCheck className="text-accent" size={24} /><h3 className="text-lg font-black">Practical HRMS Controls</h3></div>
+        <div className="flex items-center gap-3"><ShieldCheck className="text-accent" size={24} /><h3 className="text-lg font-black">People Operations Controls</h3></div>
         <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-4">
           {[
             ["Single employee master", "Employee data connects attendance, payroll, assets, project allocation and access."],

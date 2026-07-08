@@ -25,13 +25,13 @@ export default function AccountingDashboard({ onSelectModule }: { onSelectModule
     { id: "accounting-payments",     label: "Payments",                   icon: Wallet },
     { id: "accounting-reminders",    label: "Reminders",                  icon: BellRing },
     { id: "accounting-credit-notes", label: "Credit Notes",               icon: RotateCcw },
-    { id: "accounting-expenses",     label: "Sales, Purchase & Expenses", icon: TrendingDown },
-    { id: "accounting-budgets",      label: "Budgets",                    icon: BarChart3 },
-    { id: "accounting-salary",       label: "Salary/Payroll",             icon: UserSquare2 },
-    { id: "accounting-gst",          label: "GST Mgmt",                   icon: Percent },
-    { id: "accounting-tds",          label: "TDS Mgmt",                   icon: Calculator },
-    { id: "accounting-reports",      label: "Reports",                    icon: LineChart },
-    { id: "accounting-approvals",    label: "Approvals",                  icon: ShieldCheck },
+    { id: "accounting-expenses",     label: "Sales, Purchases & Expenses", icon: TrendingDown },
+    { id: "accounting-budgets",      label: "Budget Control",              icon: BarChart3 },
+    { id: "accounting-salary",       label: "Payroll Register",            icon: UserSquare2 },
+    { id: "accounting-gst",          label: "GST Compliance",              icon: Percent },
+    { id: "accounting-tds",          label: "TDS Compliance",              icon: Calculator },
+    { id: "accounting-reports",      label: "Finance Reports",             icon: LineChart },
+    { id: "accounting-approvals",    label: "Finance Approvals",           icon: ShieldCheck },
     { id: "accounting-audit-logs",   label: "Audit Logs",                 icon: History },
     { id: "accounting-access",       label: "Access Control",             icon: Lock },
     { id: "accounting-bank-details", label: "Bank Details",               icon: Landmark },
@@ -41,8 +41,8 @@ export default function AccountingDashboard({ onSelectModule }: { onSelectModule
     <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-700">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
         <div>
-          <h2 className="text-3xl font-black text-[#0F172A] tracking-tight">Accounting Control Center</h2>
-          <p className="text-slate-500 font-medium mt-1">Monitor enterprise cashflow and compliance status.</p>
+          <h2 className="text-3xl font-black text-[#0F172A] tracking-tight">Finance Control Center</h2>
+          <p className="text-slate-500 font-medium mt-1">Monitor receivables, payables, tax compliance, and cashflow health.</p>
         </div>
         <div className="flex gap-3">
            <button className="flex items-center gap-2 px-6 py-3 bg-white border border-slate-200 rounded-2xl text-xs font-black text-slate-600 hover:bg-slate-50 transition-all">
@@ -70,7 +70,7 @@ export default function AccountingDashboard({ onSelectModule }: { onSelectModule
       </div>
 
       <div>
-        <h3 className="text-sm font-black text-slate-900 uppercase tracking-[0.2em] mb-8 ml-2">Masters & Modules</h3>
+        <h3 className="text-sm font-black text-slate-900 uppercase tracking-[0.2em] mb-8 ml-2">Finance Modules</h3>
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-4 gap-4">
           {modules.map((mod) => (
             <button

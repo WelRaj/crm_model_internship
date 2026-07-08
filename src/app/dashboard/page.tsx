@@ -4,7 +4,7 @@ import EmployeePerformance from "@/components/dashboard/projects/performance/Emp
 import { useState } from "react";
 import type { LucideIcon } from "lucide-react";
 import { 
-  LayoutDashboard, UserPlus, Target, Wallet, Speaker, Bell, Search, LogOut, TrendingUp, Users, Briefcase, Settings, Shield, ShieldCheck, Calendar, HelpCircle, MessageSquare, ChevronDown, User, Clock, SquareCheck, History, CheckCircle2, Menu, ChevronLeft, UserCheck, Headphones
+  LayoutDashboard, UserPlus, Target, Wallet, Speaker, Bell, Search, LogOut, TrendingUp, Users, Briefcase, Settings, Shield, ShieldCheck, Calendar, HelpCircle, MessageSquare, ChevronDown, User, Clock, SquareCheck, History, CheckCircle2, Menu, ChevronLeft, UserCheck, Headphones, X, Mail, Phone, MapPin, IdCard, KeyRound, Pencil
 } from "lucide-react";
 import AdministrationHub from "@/components/dashboard/administration/AdministrationHub";
 import OnboardingWizard from "@/components/dashboard/onboarding/OnboardingWizard";
@@ -33,12 +33,47 @@ const isAccountingModule = (tab: string): tab is AccountingModuleId =>
   accountingModuleIds.includes(tab as AccountingModuleId);
 
 const notifications = [
-  { id: "NOT-01", title: "Critical support ticket", detail: "Accounting invoice approval needs action", tab: "support", tone: "bg-rose-500" },
-  { id: "NOT-02", title: "Follow-up due today", detail: "12 CRM callbacks are scheduled", tab: "followups", tone: "bg-amber-500" },
+  { id: "NOT-01", title: "Critical support ticket", detail: "Finance invoice approval needs action", tab: "support", tone: "bg-rose-500" },
+  { id: "NOT-02", title: "Follow-up due today", detail: "12 client callbacks are scheduled", tab: "followups", tone: "bg-amber-500" },
   { id: "NOT-03", title: "Payroll review", detail: "June payroll draft is ready", tab: "payroll", tone: "bg-blue-500" },
 ];
 
-function DashboardOverview({ setActiveTab }: { setActiveTab: (tab: string) => void }) {
+const defaultUserProfile = {
+  photoDataUrl: "",
+  photoInitials: "RR",
+  fullName: "Rajkumar Rathore",
+  employeeId: "EMP-2024-001",
+  designation: "Super Admin",
+  department: "Admin Control",
+  officialEmail: "rajkumar@dematadealgo.local",
+  mobile: "+91 98765 43210",
+  role: "Admin",
+  employeeStatus: "Active",
+  reportingManager: "Managing Director",
+  dateOfJoining: "01 Apr 2024",
+  officeLocation: "Jaipur Head Office",
+  employmentType: "Full-Time",
+  username: "rajkumar.rathore",
+  lastLogin: "06 Jul 2026, 10:42 AM",
+};
+
+type UserProfile = typeof defaultUserProfile;
+type ProfileDrawerMode = "view" | "edit" | "password" | "forgot-password";
+
+const profileActivityTimeline = [
+  { id: "ACT-01", title: "Profile reviewed", detail: "Employee profile opened from dashboard header", time: "Today, 10:42 AM", status: "Completed" },
+  { id: "ACT-02", title: "Password security checked", detail: "Email OTP password flow is available for this account", time: "Today, 10:40 AM", status: "Secure" },
+  { id: "ACT-03", title: "Role access synced", detail: "Admin role permissions are active for Client Operations, People Operations, Finance Control, Delivery Projects, and Admin Control", time: "05 Jul 2026, 06:20 PM", status: "Active" },
+  { id: "ACT-04", title: "Profile details updated", detail: "Employment and account details are ready for backend profile API mapping", time: "04 Jul 2026, 03:15 PM", status: "Updated" },
+];
+
+const recentLoginHistory = [
+  { id: "LOG-01", device: "Chrome on Windows", location: "Jaipur, India", ip: "103.87.XX.24", time: "06 Jul 2026, 10:42 AM", result: "Successful" },
+  { id: "LOG-02", device: "Chrome on Windows", location: "Jaipur, India", ip: "103.87.XX.24", time: "05 Jul 2026, 06:18 PM", result: "Successful" },
+  { id: "LOG-03", device: "Edge on Windows", location: "Jaipur, India", ip: "103.87.XX.18", time: "04 Jul 2026, 11:02 AM", result: "Successful" },
+];
+
+function DashboardOverview({ activeModule, setActiveTab }: { activeModule: string; setActiveTab: (tab: string) => void }) {
   const INR = "\u20b9";
   const executiveStats = [
     { title: "Monthly Revenue", value: `${INR}45.2L`, detail: "+12.4% vs last month", icon: Wallet, tone: "bg-emerald-50 text-emerald-600" },
@@ -51,27 +86,31 @@ function DashboardOverview({ setActiveTab }: { setActiveTab: (tab: string) => vo
     <div className="min-w-0 space-y-8 animate-in fade-in duration-700">
       <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
         <div>
-          <p className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-400">Company Command Center</p>
+          <p className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-400">Operations Command Center</p>
           <div className="flex flex-wrap gap-3 mt-4">
             {[
-                { name: "Leads", id: "leads" },
-                { name: "Onboarding", id: "onboarding" },
-                { name: "Accounting", id: "accounting" },
-                { name: "Marketing", id: "marketing" },
-                { name: "Projects", id: "projects" },
-                { name: "Administration", id: "administration" },
-                { name: "Support", id: "support" },
+                { name: "Lead Desk", id: "leads" },
+                { name: "Employee Onboarding", id: "onboarding" },
+                { name: "Finance Control", id: "accounting" },
+                { name: "Growth Marketing", id: "marketing" },
+                { name: "Delivery Projects", id: "projects" },
+                { name: "Admin Control", id: "administration" },
+                { name: "Support Desk", id: "support" },
             ].map((dept) => (
               <button
                 key={dept.id}
                 onClick={() => setActiveTab(dept.id)}
-                className="px-6 py-2.5 rounded-full border border-border bg-surface text-xs font-black uppercase tracking-widest text-text-muted hover:border-primary hover:text-primary transition-all shadow-sm"
+                className={`px-6 py-2.5 rounded-full border text-xs font-black uppercase tracking-widest transition-all shadow-sm ${
+                  activeModule === dept.id
+                    ? "border-emerald-200 bg-emerald-500 text-white shadow-emerald-100"
+                    : "border-border bg-surface text-text-muted hover:border-primary hover:text-primary"
+                }`}
               >
                 {dept.name}
               </button>
             ))}
           </div>
-          <h2 className="mt-4 text-3xl font-black tracking-tight text-[#1E293B]">What is happening today</h2>
+          <h2 className="mt-4 text-3xl font-black tracking-tight text-[#1E293B]">Today&apos;s Business Snapshot</h2>
         </div>
       </div>
       <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-4">
@@ -106,21 +145,457 @@ function ProfileAction({ icon: Icon, label, onClick }: { icon: LucideIcon; label
   );
 }
 
+function ProfileDetail({ label, value, icon: Icon }: { label: string; value: string; icon: LucideIcon }) {
+  return (
+    <div className="rounded-2xl border border-slate-100 bg-white p-4">
+      <div className="mb-3 flex items-center gap-2 text-slate-400">
+        <Icon size={15} />
+        <p className="text-[10px] font-black uppercase tracking-widest">{label}</p>
+      </div>
+      <p className="break-words text-sm font-black text-primary">{value}</p>
+    </div>
+  );
+}
+
+function ProfileAvatar({ photoDataUrl, initials, label, size = "large" }: { photoDataUrl: string; initials: string; label: string; size?: "large" | "medium" }) {
+  const sizeClass = size === "large" ? "h-20 w-20 rounded-3xl text-2xl" : "h-20 w-20 rounded-2xl text-2xl";
+
+  if (photoDataUrl) {
+    return (
+      <div
+        role="img"
+        aria-label={label}
+        className={`${sizeClass} shrink-0 bg-cover bg-center shadow-lg`}
+        style={{ backgroundImage: `url("${photoDataUrl}")` }}
+      />
+    );
+  }
+
+  return (
+    <div className={`${sizeClass} flex shrink-0 items-center justify-center bg-slate-900 font-black text-white shadow-lg`}>
+      {initials}
+    </div>
+  );
+}
+
+function ProfileInput({
+  label,
+  value,
+  onChange,
+  type = "text",
+  options,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  type?: string;
+  options?: string[];
+}) {
+  return (
+    <label className="block">
+      <span className="mb-2 block text-[10px] font-black uppercase tracking-widest text-slate-400">{label}</span>
+      {options ? (
+        <select
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-primary outline-none focus:border-primary focus:ring-4 focus:ring-primary/10"
+        >
+          {options.map((option) => (
+            <option key={option} value={option}>{option}</option>
+          ))}
+        </select>
+      ) : (
+        <input
+          type={type}
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-primary outline-none focus:border-primary focus:ring-4 focus:ring-primary/10"
+        />
+      )}
+    </label>
+  );
+}
+
+function initialsFromName(name: string) {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  return `${parts[0]?.[0] || "U"}${parts[1]?.[0] || ""}`.toUpperCase();
+}
+
+function makeDemoOtp() {
+  return String(Math.floor(100000 + Math.random() * 900000));
+}
+
+function isStrongPassword(password: string) {
+  return /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/.test(password);
+}
+
+function ProfileDrawer({
+  open,
+  profile,
+  onClose,
+  onSave,
+}: {
+  open: boolean;
+  profile: UserProfile;
+  onClose: () => void;
+  onSave: (profile: UserProfile) => void;
+}) {
+  const [mode, setMode] = useState<ProfileDrawerMode>("view");
+  const [draft, setDraft] = useState<UserProfile>(profile);
+  const [passwordForm, setPasswordForm] = useState({ currentPassword: "", newPassword: "", confirmPassword: "", otp: "" });
+  const [generatedOtp, setGeneratedOtp] = useState("");
+  const [otpSent, setOtpSent] = useState(false);
+  const [otpAttempts, setOtpAttempts] = useState(0);
+  const [formMessage, setFormMessage] = useState("");
+
+  if (!open) return null;
+
+  const openEdit = () => {
+    setDraft(profile);
+    setFormMessage("");
+    setMode("edit");
+  };
+
+  const handlePhotoUpload = (file: File | undefined) => {
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      setFormMessage("Upload a valid image file.");
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      setFormMessage("Profile photo must be 2 MB or smaller.");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      setDraft((current) => ({ ...current, photoDataUrl: String(reader.result || "") }));
+      setFormMessage("Profile photo selected. Save profile to apply it.");
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const openPassword = () => {
+    setPasswordForm({ currentPassword: "", newPassword: "", confirmPassword: "", otp: "" });
+    setGeneratedOtp("");
+    setOtpSent(false);
+    setOtpAttempts(0);
+    setFormMessage("");
+    setMode("password");
+  };
+
+  const openForgotPassword = () => {
+    setPasswordForm({ currentPassword: "", newPassword: "", confirmPassword: "", otp: "" });
+    setGeneratedOtp("");
+    setOtpSent(false);
+    setOtpAttempts(0);
+    setFormMessage("");
+    setMode("forgot-password");
+  };
+
+  const saveProfile = () => {
+    if (!draft.fullName.trim() || !draft.employeeId.trim() || !draft.officialEmail.trim() || !draft.mobile.trim()) {
+      setFormMessage("Full name, employee ID, official email, and mobile number are required.");
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(draft.officialEmail.trim())) {
+      setFormMessage("Enter a valid official email address.");
+      return;
+    }
+    const nextProfile = {
+      ...draft,
+      photoInitials: initialsFromName(draft.fullName),
+    };
+    onSave(nextProfile);
+    setDraft(nextProfile);
+    setFormMessage("Profile updated.");
+    setMode("view");
+  };
+
+  const sendOtp = () => {
+    const isForgotFlow = mode === "forgot-password";
+    if (!isForgotFlow && !passwordForm.currentPassword) {
+      setFormMessage("Current password is required. Use forgot password if you do not remember it.");
+      return;
+    }
+    if (!passwordForm.newPassword || !passwordForm.confirmPassword) {
+      setFormMessage("New password and confirm password are required.");
+      return;
+    }
+    if (!isStrongPassword(passwordForm.newPassword)) {
+      setFormMessage("Password must include uppercase, lowercase, number, special character, and at least 8 characters.");
+      return;
+    }
+    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+      setFormMessage("New password and confirm password do not match.");
+      return;
+    }
+
+    const nextOtp = makeDemoOtp();
+    setGeneratedOtp(nextOtp);
+    setOtpSent(true);
+    setOtpAttempts(0);
+    setPasswordForm((current) => ({ ...current, otp: "" }));
+    setFormMessage(`OTP sent to official email ${profile.officialEmail}. Frontend demo OTP: ${nextOtp}`);
+  };
+
+  const savePassword = () => {
+    if (!otpSent || !generatedOtp) {
+      setFormMessage("Send the official email OTP first.");
+      return;
+    }
+    if (otpAttempts >= 3) {
+      setFormMessage("OTP attempt limit exceeded. Resend the OTP.");
+      return;
+    }
+    if (passwordForm.otp !== generatedOtp) {
+      setOtpAttempts((current) => current + 1);
+      setFormMessage(`Invalid OTP. Attempts left: ${Math.max(0, 2 - otpAttempts)}.`);
+      return;
+    }
+
+    setPasswordForm({ currentPassword: "", newPassword: "", confirmPassword: "", otp: "" });
+    setGeneratedOtp("");
+    setOtpSent(false);
+    setOtpAttempts(0);
+    setFormMessage(mode === "forgot-password" ? "Password reset successful. Other sessions will be logged out." : "Password changed successfully. Other sessions will be logged out.");
+    setMode("view");
+  };
+
+  return (
+    <div className="fixed inset-0 z-[80] flex justify-end bg-slate-950/30 backdrop-blur-sm">
+      <button type="button" aria-label="Close profile overlay" className="absolute inset-0 cursor-default" onClick={onClose} />
+      <aside className="relative flex h-full w-full max-w-[32rem] flex-col overflow-hidden bg-slate-50 shadow-2xl">
+        <div className="border-b border-slate-200 bg-white px-6 py-5">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-400">My Profile</p>
+              <h2 className="mt-1 text-2xl font-black tracking-tight text-primary">Employee Details</h2>
+            </div>
+            <button type="button" onClick={onClose} className="flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 hover:text-primary">
+              <X size={20} />
+            </button>
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-6">
+          <section className="rounded-3xl border border-slate-100 bg-white p-5 shadow-sm">
+            <div className="flex items-start gap-4">
+              <ProfileAvatar photoDataUrl={profile.photoDataUrl} initials={profile.photoInitials} label={`${profile.fullName} profile photo`} />
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h3 className="text-xl font-black text-primary">{profile.fullName}</h3>
+                  <span className="rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-emerald-700">
+                    {profile.employeeStatus}
+                  </span>
+                </div>
+                <p className="mt-1 text-sm font-bold text-slate-500">{profile.designation} . {profile.department}</p>
+                <div className="mt-4 grid gap-2 text-xs font-bold text-slate-500 sm:grid-cols-2">
+                  <span className="inline-flex items-center gap-2"><IdCard size={14} /> {profile.employeeId}</span>
+                  <span className="inline-flex items-center gap-2"><ShieldCheck size={14} /> {profile.role}</span>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {formMessage ? (
+            <div className="mt-5 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-xs font-black text-blue-700">
+              {formMessage}
+            </div>
+          ) : null}
+
+          {mode === "edit" ? (
+            <section className="mt-6 space-y-5 rounded-3xl border border-slate-100 bg-white p-5 shadow-sm">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-400">Edit Profile</p>
+                <h3 className="mt-1 text-lg font-black text-primary">Update Employee Details</h3>
+              </div>
+              <div className="flex flex-col gap-4 rounded-2xl border border-slate-100 bg-slate-50 p-4 sm:flex-row sm:items-center">
+                <ProfileAvatar photoDataUrl={draft.photoDataUrl} initials={draft.photoInitials} label="Selected profile photo preview" size="medium" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-black text-primary">Profile Photo Upload</p>
+                  <p className="mt-1 text-xs font-semibold leading-5 text-slate-500">Upload JPG, PNG, or WebP up to 2 MB. The photo is previewed locally until backend storage is connected.</p>
+                  <label className="mt-3 inline-flex h-10 cursor-pointer items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-xs font-black uppercase tracking-widest text-primary hover:border-primary">
+                    Choose Photo
+                    <input type="file" accept="image/*" className="sr-only" onChange={(event) => handlePhotoUpload(event.target.files?.[0])} />
+                  </label>
+                </div>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <ProfileInput label="Full Name" value={draft.fullName} onChange={(value) => setDraft((current) => ({ ...current, fullName: value }))} />
+                <ProfileInput label="Employee ID" value={draft.employeeId} onChange={(value) => setDraft((current) => ({ ...current, employeeId: value }))} />
+                <ProfileInput label="Designation" value={draft.designation} onChange={(value) => setDraft((current) => ({ ...current, designation: value }))} />
+                <ProfileInput label="Department" value={draft.department} onChange={(value) => setDraft((current) => ({ ...current, department: value }))} />
+                <ProfileInput label="Official Email" type="email" value={draft.officialEmail} onChange={(value) => setDraft((current) => ({ ...current, officialEmail: value }))} />
+                <ProfileInput label="Mobile Number" value={draft.mobile} onChange={(value) => setDraft((current) => ({ ...current, mobile: value }))} />
+                <ProfileInput label="Role" value={draft.role} onChange={(value) => setDraft((current) => ({ ...current, role: value }))} options={["Admin", "HR", "Sales", "Frontend Developer", "Backend Developer", "Accounts", "Manager"]} />
+                <ProfileInput label="Employee Status" value={draft.employeeStatus} onChange={(value) => setDraft((current) => ({ ...current, employeeStatus: value }))} options={["Active", "Inactive"]} />
+                <ProfileInput label="Reporting Manager" value={draft.reportingManager} onChange={(value) => setDraft((current) => ({ ...current, reportingManager: value }))} />
+                <ProfileInput label="Date of Joining" value={draft.dateOfJoining} onChange={(value) => setDraft((current) => ({ ...current, dateOfJoining: value }))} />
+                <ProfileInput label="Office Location" value={draft.officeLocation} onChange={(value) => setDraft((current) => ({ ...current, officeLocation: value }))} />
+                <ProfileInput label="Employment Type" value={draft.employmentType} onChange={(value) => setDraft((current) => ({ ...current, employmentType: value }))} options={["Intern", "Full-Time", "Part-Time", "Contract"]} />
+                <ProfileInput label="Username" value={draft.username} onChange={(value) => setDraft((current) => ({ ...current, username: value }))} />
+              </div>
+            </section>
+          ) : mode === "password" || mode === "forgot-password" ? (
+            <section className="mt-6 space-y-5 rounded-3xl border border-slate-100 bg-white p-5 shadow-sm">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-400">Account Security</p>
+                <h3 className="mt-1 text-lg font-black text-primary">{mode === "forgot-password" ? "Reset Password Using Email OTP" : "Change Password"}</h3>
+                <p className="mt-1 text-xs font-semibold leading-5 text-slate-500">
+                  {mode === "forgot-password" ? "Current password is not required. Verification will use official email OTP." : "Current password and official email OTP are required."}
+                </p>
+              </div>
+              <div className="space-y-4">
+                {mode === "password" ? (
+                  <ProfileInput label="Current Password" type="password" value={passwordForm.currentPassword} onChange={(value) => setPasswordForm((current) => ({ ...current, currentPassword: value }))} />
+                ) : null}
+                <ProfileInput label="New Password" type="password" value={passwordForm.newPassword} onChange={(value) => setPasswordForm((current) => ({ ...current, newPassword: value }))} />
+                <ProfileInput label="Confirm Password" type="password" value={passwordForm.confirmPassword} onChange={(value) => setPasswordForm((current) => ({ ...current, confirmPassword: value }))} />
+                <button type="button" onClick={sendOtp} className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-blue-100 bg-blue-50 px-4 text-xs font-black uppercase tracking-widest text-blue-700 hover:border-blue-200">
+                  <Mail size={16} /> {otpSent ? "Resend Email OTP" : "Send OTP To Official Email"}
+                </button>
+                {otpSent ? (
+                  <ProfileInput label="Email OTP" value={passwordForm.otp} onChange={(value) => setPasswordForm((current) => ({ ...current, otp: value.replace(/\D/g, "").slice(0, 6) }))} />
+                ) : null}
+                {mode === "password" ? (
+                  <button type="button" onClick={openForgotPassword} className="text-left text-xs font-black uppercase tracking-widest text-primary hover:underline">
+                    Forgot current password? Reset using email OTP
+                  </button>
+                ) : (
+                  <button type="button" onClick={openPassword} className="text-left text-xs font-black uppercase tracking-widest text-primary hover:underline">
+                    I remember current password
+                  </button>
+                )}
+              </div>
+            </section>
+          ) : (
+            <>
+          <section className="mt-6 space-y-3">
+            <p className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-400">Minimum Details</p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <ProfileDetail icon={User} label="Full Name" value={profile.fullName} />
+              <ProfileDetail icon={IdCard} label="Employee ID" value={profile.employeeId} />
+              <ProfileDetail icon={Briefcase} label="Designation" value={profile.designation} />
+              <ProfileDetail icon={Users} label="Department" value={profile.department} />
+              <ProfileDetail icon={Mail} label="Official Email" value={profile.officialEmail} />
+              <ProfileDetail icon={Phone} label="Mobile Number" value={profile.mobile} />
+              <ProfileDetail icon={Shield} label="Role" value={profile.role} />
+              <ProfileDetail icon={CheckCircle2} label="Employee Status" value={profile.employeeStatus} />
+            </div>
+          </section>
+
+          <section className="mt-6 space-y-3">
+            <p className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-400">Work Details</p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <ProfileDetail icon={UserCheck} label="Reporting Manager" value={profile.reportingManager} />
+              <ProfileDetail icon={Calendar} label="Date of Joining" value={profile.dateOfJoining} />
+              <ProfileDetail icon={MapPin} label="Office Location" value={profile.officeLocation} />
+              <ProfileDetail icon={Briefcase} label="Employment Type" value={profile.employmentType} />
+            </div>
+          </section>
+
+          <section className="mt-6 space-y-3">
+            <p className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-400">Account Details</p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <ProfileDetail icon={User} label="Username" value={profile.username} />
+              <ProfileDetail icon={Clock} label="Last Login" value={profile.lastLogin} />
+            </div>
+          </section>
+
+          <section className="mt-6 space-y-3">
+            <p className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-400">Activity Timeline</p>
+            <div className="space-y-3 rounded-3xl border border-slate-100 bg-white p-4 shadow-sm">
+              {profileActivityTimeline.map((activity) => (
+                <div key={activity.id} className="relative border-l-2 border-slate-100 pb-4 pl-5 last:pb-0">
+                  <span className="absolute -left-[7px] top-1 h-3 w-3 rounded-full border-2 border-white bg-primary" />
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                      <p className="text-sm font-black text-primary">{activity.title}</p>
+                      <p className="mt-1 text-xs font-semibold leading-5 text-slate-500">{activity.detail}</p>
+                    </div>
+                    <span className="w-fit rounded-full bg-slate-50 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-slate-500">{activity.status}</span>
+                  </div>
+                  <p className="mt-2 text-[10px] font-black uppercase tracking-widest text-slate-400">{activity.time}</p>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section className="mt-6 space-y-3">
+            <p className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-400">Recent Login History</p>
+            <div className="space-y-3 rounded-3xl border border-slate-100 bg-white p-4 shadow-sm">
+              {recentLoginHistory.map((login) => (
+                <div key={login.id} className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                      <p className="text-sm font-black text-primary">{login.device}</p>
+                      <p className="mt-1 text-xs font-semibold text-slate-500">{login.location} . {login.ip}</p>
+                    </div>
+                    <span className="w-fit rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-emerald-700">{login.result}</span>
+                  </div>
+                  <p className="mt-3 text-[10px] font-black uppercase tracking-widest text-slate-400">{login.time}</p>
+                </div>
+              ))}
+            </div>
+          </section>
+            </>
+          )}
+        </div>
+
+        <div className="border-t border-slate-200 bg-white p-5">
+          {mode === "edit" ? (
+            <div className="grid gap-3 sm:grid-cols-2">
+              <button type="button" onClick={() => setMode("view")} className="inline-flex h-11 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-xs font-black uppercase tracking-widest text-primary hover:border-primary">
+                Cancel
+              </button>
+              <button type="button" onClick={saveProfile} className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-primary px-4 text-xs font-black uppercase tracking-widest text-white hover:bg-primary/90">
+                <Pencil size={16} /> Save Profile
+              </button>
+            </div>
+          ) : mode === "password" || mode === "forgot-password" ? (
+            <div className="grid gap-3 sm:grid-cols-2">
+              <button type="button" onClick={() => setMode("view")} className="inline-flex h-11 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-xs font-black uppercase tracking-widest text-primary hover:border-primary">
+                Cancel
+              </button>
+              <button type="button" onClick={savePassword} className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-primary px-4 text-xs font-black uppercase tracking-widest text-white hover:bg-primary/90">
+                <KeyRound size={16} /> Verify OTP & Update
+              </button>
+            </div>
+          ) : (
+            <div className="grid gap-3 sm:grid-cols-2">
+              <button type="button" onClick={openPassword} className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-xs font-black uppercase tracking-widest text-primary hover:border-primary">
+                <KeyRound size={16} /> Change Password
+              </button>
+              <button type="button" onClick={openEdit} className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-primary px-4 text-xs font-black uppercase tracking-widest text-white hover:bg-primary/90">
+                <Pencil size={16} /> Edit Profile
+              </button>
+            </div>
+          )}
+        </div>
+      </aside>
+    </div>
+  );
+}
+
 export default function Dashboard() {
   const [activeTab, setActiveTab] = useState("overview");
+  const [lastVisitedModule, setLastVisitedModule] = useState("");
   const [showNotif, setShowNotif] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
+  const [showProfileDrawer, setShowProfileDrawer] = useState(false);
+  const [userProfile, setUserProfile] = useState<UserProfile>(defaultUserProfile);
   const [isSidebarVisible, setIsSidebarVisible] = useState(true);
 
   const menuGroups = [
     { label: "Main", department: "overview", items: [{ id: "overview", label: "Dashboard", icon: LayoutDashboard }] },
-    { label: "CRM", department: "leads", items: [{ id: "leads", label: "Leads", icon: Target }, { id: "lead-assign", label: "Lead Assign", icon: UserCheck }, { id: "telecaller", label: "Telecaller Desk", icon: Headphones }, { id: "followups", label: "Follow-ups", icon: Clock }, { id: "lead-outcomes", label: "Lead Outcomes", icon: CheckCircle2 }, { id: "clients", label: "Clients & Contacts", icon: Users }, { id: "agreements", label: "Project Agreements", icon: ShieldCheck }] },
-    { label: "Marketing", department: "marketing", items: [{ id: "campaigns", label: "Campaigns", icon: Speaker }, { id: "roi", label: "ROI", icon: TrendingUp }, { id: "sources", label: "Lead Sources", icon: Search }] },
-    { label: "Projects", department: "projects", items: [{ id: "projects", label: "Projects", icon: Briefcase }, { id: "team-tracking", label: "Team Tracking", icon: Users }, { id: "tasks", label: "Tasks", icon: SquareCheck }, { id: "milestones", label: "Milestones", icon: Shield }, { id: "deadlines", label: "Deadlines", icon: Calendar }, { id: "performance", label: "Employee Performance", icon: TrendingUp }] },
-    { label: "HRMS", department: "onboarding", items: [{ id: "employees", label: "Employees", icon: Users }, { id: "onboarding", label: "Onboarding", icon: UserPlus }, { id: "attendance", label: "Attendance", icon: Calendar }, { id: "leave", label: "Leave", icon: LogOut }, { id: "payroll", label: "Payroll", icon: Wallet }, { id: "exit", label: "Exit Management", icon: LogOut }] },
-    { label: "Accounting", department: "accounting", items: [{ id: "accounting", label: "Accounting Overview", icon: LayoutDashboard }, ...ACCOUNTING_MODULES] },
-    { label: "Administration", department: "administration", items: [{ id: "users", label: "Users", icon: Users }, { id: "roles", label: "Roles", icon: Shield }, { id: "logs", label: "System Audit Trail", icon: History }, { id: "approvals", label: "Approval Center", icon: CheckCircle2 }, { id: "settings", label: "Settings", icon: Settings }] },
-    { label: "Support", department: "support", items: [{ id: "support", label: "Help & Support", icon: HelpCircle }] }
+    { label: "Client Operations", department: "leads", items: [{ id: "leads", label: "Lead Desk", icon: Target }, { id: "lead-assign", label: "Lead Assignment", icon: UserCheck }, { id: "telecaller", label: "Calling Desk", icon: Headphones }, { id: "followups", label: "Follow-ups", icon: Clock }, { id: "lead-outcomes", label: "Lead Outcomes", icon: CheckCircle2 }, { id: "clients", label: "Project Clients", icon: Users }, { id: "agreements", label: "Legal Agreements", icon: ShieldCheck }] },
+    { label: "Growth Marketing", department: "marketing", items: [{ id: "campaigns", label: "Growth Campaigns", icon: Speaker }, { id: "roi", label: "ROI Analysis", icon: TrendingUp }, { id: "sources", label: "Acquisition Sources", icon: Search }] },
+    { label: "Delivery Projects", department: "projects", items: [{ id: "projects", label: "Project Portfolio", icon: Briefcase }, { id: "team-tracking", label: "Team Assignment", icon: Users }, { id: "tasks", label: "Tasks", icon: SquareCheck }, { id: "milestones", label: "Milestones", icon: Shield }, { id: "deadlines", label: "Deadlines", icon: Calendar }, { id: "performance", label: "Team Performance", icon: TrendingUp }] },
+    { label: "People Operations", department: "onboarding", items: [{ id: "employees", label: "Employee Directory", icon: Users }, { id: "onboarding", label: "Employee Onboarding", icon: UserPlus }, { id: "attendance", label: "Attendance", icon: Calendar }, { id: "leave", label: "Leave Management", icon: LogOut }, { id: "payroll", label: "Payroll", icon: Wallet }, { id: "exit", label: "Exit Process", icon: LogOut }] },
+    { label: "Finance Control", department: "accounting", items: [{ id: "accounting", label: "Finance Overview", icon: LayoutDashboard }, ...ACCOUNTING_MODULES] },
+    { label: "Admin Control", department: "administration", items: [{ id: "users", label: "User Management", icon: Users }, { id: "roles", label: "Role Permissions", icon: Shield }, { id: "logs", label: "System Audit Trail", icon: History }, { id: "approvals", label: "Approval Center", icon: CheckCircle2 }, { id: "settings", label: "System Settings", icon: Settings }] },
+    { label: "Support Desk", department: "support", items: [{ id: "support", label: "Support Desk", icon: HelpCircle }] }
   ];
 
   const getSidebarGroups = () => {
@@ -134,22 +609,27 @@ export default function Dashboard() {
   const isAdminTab = adminTabs.includes(activeTab as AdminView);
   const isProjectTab = projectTabs.includes(activeTab);
   const openTab = (tab: string) => {
+    if (tab !== "overview") {
+      const matchingGroup = menuGroups.find((group) => group.department === tab || group.items.some((item) => item.id === tab));
+      setLastVisitedModule(matchingGroup?.department || tab);
+    }
     setActiveTab(tab);
     setShowNotif(false);
     setShowProfile(false);
+    setShowProfileDrawer(false);
   };
 
   return (
     <div className="relative flex min-h-screen overflow-x-hidden bg-[#F8FAFC]">
       <aside className={`bg-[#0F172A] text-white flex flex-col fixed inset-y-0 left-0 z-50 shadow-2xl transition-all duration-500 ease-in-out ${isSidebarVisible ? "w-[19rem] translate-x-0" : "w-0 -translate-x-full overflow-hidden"}`}>
         <div className="p-10 flex items-center gap-4 whitespace-nowrap min-w-[19rem]">
-          <div className="w-12 h-12 bg-accent rounded-[1.25rem] flex items-center justify-center text-[#0F172A] font-black text-2xl shadow-lg shadow-accent/20">C</div>
-          <div className="text-2xl font-black tracking-tighter leading-none">CRM<span className="text-accent">PRO</span></div>
+          <div className="w-12 h-12 bg-accent rounded-[1.25rem] flex items-center justify-center text-[#0F172A] font-black text-2xl shadow-lg shadow-accent/20">D</div>
+          <div className="text-2xl font-black tracking-tighter leading-none">DeMatade<span className="text-accent">Algo</span></div>
         </div>
         <div className="relative flex-1 min-h-0 min-w-[19rem]">
           <nav className="h-full px-6 space-y-10 overflow-y-auto pb-10">
             {activeTab !== "overview" && (
-              <button onClick={() => setActiveTab("overview")} className="w-full flex items-center gap-4 px-5 py-4 rounded-2xl text-accent hover:bg-white/5 transition-all">
+              <button onClick={() => openTab("overview")} className="w-full flex items-center gap-4 px-5 py-4 rounded-2xl text-accent hover:bg-white/5 transition-all">
                 <ChevronLeft size={20} />
                 <span className="text-sm font-black uppercase tracking-widest">Back to Dashboard</span>
               </button>
@@ -162,7 +642,7 @@ export default function Dashboard() {
                     const Icon = item.icon;
                     const isActive = activeTab === item.id;
                     return (
-                      <button key={item.id} onClick={() => setActiveTab(item.id)} className={`w-full flex items-center gap-4 px-5 py-4 rounded-2xl transition-all ${isActive ? "bg-accent text-[#0F172A] font-black" : "text-slate-400 hover:text-white"}`}>
+                      <button key={item.id} onClick={() => openTab(item.id)} className={`w-full flex items-center gap-4 px-5 py-4 rounded-2xl transition-all ${isActive ? "bg-accent text-[#0F172A] font-black" : "text-slate-400 hover:text-white"}`}>
                           <Icon size={20} />
                           <span className="text-sm font-bold tracking-wide">{item.label}</span>
                       </button>
@@ -221,7 +701,7 @@ export default function Dashboard() {
                       onClick={() => openTab("support")}
                       className="mt-3 flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-primary text-xs font-black uppercase tracking-widest text-white"
                     >
-                      <MessageSquare size={15} /> Open Support Center
+                      <MessageSquare size={15} /> Open Support Desk
                     </button>
                   </div>
                 ) : null}
@@ -253,16 +733,23 @@ export default function Dashboard() {
                       </div>
                     </div>
                     <div className="space-y-1">
-                      <ProfileAction icon={User} label="My Profile" onClick={() => openTab("users")} />
+                      <ProfileAction
+                        icon={User}
+                        label="My Profile"
+                        onClick={() => {
+                          setShowProfile(false);
+                          setShowProfileDrawer(true);
+                        }}
+                      />
                       <ProfileAction icon={ShieldCheck} label="Approval Center" onClick={() => openTab("approvals")} />
-                      <ProfileAction icon={Settings} label="Settings" onClick={() => openTab("settings")} />
-                      <ProfileAction icon={HelpCircle} label="Help & Support" onClick={() => openTab("support")} />
+                      <ProfileAction icon={Settings} label="System Settings" onClick={() => openTab("settings")} />
+                      <ProfileAction icon={HelpCircle} label="Support Desk" onClick={() => openTab("support")} />
                     </div>
                     <button
                       type="button"
                       onClick={() => {
                         setShowProfile(false);
-                        setActiveTab("overview");
+                        openTab("overview");
                       }}
                       className="mt-3 flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-rose-100 bg-rose-50 text-xs font-black uppercase tracking-widest text-rose-700"
                     >
@@ -275,7 +762,7 @@ export default function Dashboard() {
         </header>
         <main className="w-full min-w-0 flex-1 p-6 xl:p-12">
             <div className="mx-auto w-full max-w-[1600px]">
-                {activeTab === "overview" && <DashboardOverview setActiveTab={setActiveTab} />}
+                {activeTab === "overview" && <DashboardOverview activeModule={lastVisitedModule} setActiveTab={openTab} />}
                 {activeTab === "leads" && <LeadHub />}
                 {activeTab === "lead-assign" && <LeadAssign />}
                 {activeTab === "telecaller" && <TelecallerDesk />}
@@ -289,8 +776,8 @@ export default function Dashboard() {
                 {activeTab === "leave" && <HRMSHub activeView="leave" />}
                 {activeTab === "payroll" && <HRMSHub activeView="payroll" />}
                 {activeTab === "exit" && <HRMSHub activeView="exit" />}
-                {activeTab === "accounting" && <AccountingWizard onSelectModule={setActiveTab} />}
-                {isAccountingModule(activeTab) && <AccountingWizard activeModule={activeTab} onSelectModule={setActiveTab} />}
+                {activeTab === "accounting" && <AccountingWizard onSelectModule={openTab} />}
+                {isAccountingModule(activeTab) && <AccountingWizard activeModule={activeTab} onSelectModule={openTab} />}
                 {(activeTab === "marketing" || isMarketingTab) && <MarketingHub activeView={isMarketingTab ? activeTab as MarketingView : "campaigns"} />}
                 {isProjectTab && (activeTab === "performance" ? <EmployeePerformance /> : <ProjectHub activeView={activeTab} />)}
                 {(activeTab === "administration" || isAdminTab) && <AdministrationHub activeView={isAdminTab ? activeTab as AdminView : "users"} />}
@@ -298,6 +785,7 @@ export default function Dashboard() {
             </div>
         </main>
       </div>
+      <ProfileDrawer open={showProfileDrawer} profile={userProfile} onSave={setUserProfile} onClose={() => setShowProfileDrawer(false)} />
     </div>
   );
 }

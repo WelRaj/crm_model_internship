@@ -46,7 +46,7 @@ const mockLeads: LeadRecord[] = [
     company: "Apex Finserve", 
     mobile: "+91 98765 43211", 
     email: "priya@apex.in",
-    service: "Loan CRM",
+    service: "Loan Automation Platform",
     platform: "Web Dashboard",
     source: "Referral",
     status: "Proposal Sent",
@@ -113,6 +113,7 @@ function csvEscape(value: string) {
 export default function LeadWizard() {
   const [showWizard, setShowWizard] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
+  const [maxUnlockedStep, setMaxUnlockedStep] = useState(1);
   const [isCompleted, setIsCompleted] = useState(false);
   const [leads, setLeads] = useState<LeadRecord[]>(mockLeads);
   const [searchQuery, setSearchQuery] = useState("");
@@ -130,9 +131,19 @@ export default function LeadWizard() {
     };
   }, []);
 
-  const nextStep = () => setCurrentStep((prev) => Math.min(prev + 1, STEPS.length));
+  const nextStep = () => {
+    setCurrentStep((prev) => {
+      const next = Math.min(prev + 1, STEPS.length);
+      setMaxUnlockedStep((current) => Math.max(current, next));
+      return next;
+    });
+  };
   const prevStep = () => setCurrentStep((prev) => Math.max(prev - 1, 1));
-  const goToStep = (stepId: number) => setCurrentStep(Math.min(Math.max(stepId, 1), STEPS.length));
+  const goToStep = (stepId: number) => {
+    if (stepId <= maxUnlockedStep) {
+      setCurrentStep(Math.min(Math.max(stepId, 1), STEPS.length));
+    }
+  };
 
   const filteredLeads = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -170,6 +181,7 @@ export default function LeadWizard() {
     setShowWizard(false);
     setIsCompleted(false);
     setCurrentStep(1);
+    setMaxUnlockedStep(1);
     setFormData(createLeadDraft());
   };
 
@@ -280,7 +292,7 @@ export default function LeadWizard() {
              </button>
              <div>
                 <h2 className="text-2xl font-black text-primary tracking-tight">
-                   {isCompleted ? "Process Complete" : `Lead Generation Pipeline`}
+                   {isCompleted ? "Process Complete" : "Lead Qualification Workflow"}
                 </h2>
                 {!isCompleted && <p className="text-slate-400 font-bold text-xs uppercase tracking-widest mt-1">Currently at Step {currentStep} of {STEPS.length}</p>}
              </div>
@@ -303,11 +315,14 @@ export default function LeadWizard() {
                   <button
                     key={step.id}
                     onClick={() => goToStep(step.id)}
+                    disabled={step.id > maxUnlockedStep}
                     className={`w-full flex items-center gap-4 px-5 py-4 rounded-2xl transition-all duration-300 text-left cursor-pointer group ${
                       isActive
                         ? "bg-primary text-white shadow-xl shadow-primary/20 scale-[1.02]"
-                        : isDone
+                      : isDone
                         ? "bg-emerald-50 text-emerald-600 hover:bg-emerald-100"
+                        : step.id > maxUnlockedStep
+                        ? "cursor-not-allowed text-slate-200"
                         : "text-slate-300 hover:bg-slate-50 hover:text-slate-400"
                     }`}
                   >
@@ -342,8 +357,8 @@ export default function LeadWizard() {
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-end gap-6">
         <div>
-          <h2 className="text-4xl font-black text-primary tracking-tight">Leads Central Hub</h2>
-          <p className="text-slate-500 font-medium mt-1 text-lg">Sales & Development unified pipeline management.</p>
+          <h2 className="text-4xl font-black text-primary tracking-tight">Lead Desk</h2>
+          <p className="text-slate-500 font-medium mt-1 text-lg">Client enquiry, software project, and trading support pipeline management.</p>
         </div>
         <div className="flex gap-4">
           <ActionButton onClick={exportLeads} icon={Download} label="Export Leads" variant="outline" />
@@ -370,8 +385,8 @@ export default function LeadWizard() {
 
       {/* Unified Pipeline Table */}
       <Panel 
-        title="Active Sales Pipeline" 
-        description="Tele-calling team can connect via icons; Development team can view technical scope."
+        title="Active Lead Pipeline" 
+        description="Calling owners can connect with clients; delivery teams can review technical scope."
         actions={
           <div className="flex gap-3">
              <div className="relative">
@@ -456,7 +471,7 @@ export default function LeadWizard() {
       {selectedLead ? (
         <Panel
           title="Selected Lead Detail"
-          description="Quick view for sales, telecaller and development handoff."
+          description="Quick view for client follow-up and delivery handoff."
           actions={
             <button
               type="button"

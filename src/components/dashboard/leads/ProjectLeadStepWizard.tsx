@@ -11,16 +11,17 @@ import Step6LeadStatus from "./Step6LeadStatus";
 import { createLeadDraft, telecallers, type LeadDraft, type LeadDraftUpdater, type ProjectLead } from "./leadTypes";
 
 const PROJECT_STEPS = [
-  { id: 1, title: "Lead Info", description: "Client and contact details", icon: Target },
-  { id: 2, title: "Requirements", description: "Project, scope and budget", icon: Briefcase },
-  { id: 3, title: "Follow Up", description: "Discussion and next action", icon: Clock },
+  { id: 1, title: "Client Info", description: "Contact and source details", icon: Target },
+  { id: 2, title: "Project Scope", description: "Service, scope and budget", icon: Briefcase },
+  { id: 3, title: "Follow-up", description: "Discussion and next action", icon: Clock },
   { id: 4, title: "Proposal", description: "Quotation and commercials", icon: TrendingUp },
-  { id: 5, title: "Approval", description: "Review and authorization", icon: Users },
-  { id: 6, title: "Lead Status", description: "Closure and handoff", icon: Target },
+  { id: 5, title: "Approval", description: "Commercial review", icon: Users },
+  { id: 6, title: "Outcome", description: "Closure and handoff", icon: Target },
 ];
 
 export default function ProjectLeadStepWizard({ onBack, onSave }: { onBack: () => void; onSave: (lead: ProjectLead) => void }) {
   const [currentStep, setCurrentStep] = useState(1);
+  const [maxUnlockedStep, setMaxUnlockedStep] = useState(1);
   const [isCompleted, setIsCompleted] = useState(false);
   const [formData, setFormData]: [LeadDraft, Dispatch<SetStateAction<LeadDraft>>] = useState<LeadDraft>(() => ({
     ...createLeadDraft(),
@@ -38,8 +39,19 @@ export default function ProjectLeadStepWizard({ onBack, onSave }: { onBack: () =
     });
   };
 
-  const nextStep = () => setCurrentStep((prev) => Math.min(prev + 1, PROJECT_STEPS.length));
+  const nextStep = () => {
+    setCurrentStep((prev) => {
+      const next = Math.min(prev + 1, PROJECT_STEPS.length);
+      setMaxUnlockedStep((current) => Math.max(current, next));
+      return next;
+    });
+  };
   const prevStep = () => setCurrentStep((prev) => Math.max(prev - 1, 1));
+  const goToStep = (stepId: number) => {
+    if (stepId <= maxUnlockedStep) {
+      setCurrentStep(stepId);
+    }
+  };
 
   const handleComplete = (finalData: Partial<LeadDraft> = {}) => {
     const completedData = { ...formData, ...finalData, department: "Projects" as const };
@@ -56,7 +68,7 @@ export default function ProjectLeadStepWizard({ onBack, onSave }: { onBack: () =
       currentOwnerId: selectedTelecaller.id,
       teamLeaderId: "TL-1",
       transferHistory: [],
-      remarks: completedData.overallRemarks || completedData.remarks || completedData.projectDescription || "Project lead created from step wizard.",
+      remarks: completedData.overallRemarks || completedData.remarks || completedData.projectDescription || "Project lead created from Lead Desk.",
       followUpDate: completedData.closeDate || completedData.leadDate,
       department: "Projects",
       projectType: completedData.projectType || completedData.serviceRequired || "Project Enquiry",
@@ -84,8 +96,8 @@ export default function ProjectLeadStepWizard({ onBack, onSave }: { onBack: () =
           <div className="mx-auto mb-6 flex h-24 w-24 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
             <CheckCircle2 size={54} />
           </div>
-          <h3 className="text-3xl font-black tracking-tight text-primary">Project Lead Added Successfully</h3>
-          <p className="mt-2 text-xs font-black uppercase tracking-[0.2em] text-slate-400">Returning to Project Leads...</p>
+          <h3 className="text-3xl font-black tracking-tight text-primary">Project Enquiry Added Successfully</h3>
+          <p className="mt-2 text-xs font-black uppercase tracking-[0.2em] text-slate-400">Returning to Lead Desk...</p>
         </div>
       );
     }
@@ -116,8 +128,8 @@ export default function ProjectLeadStepWizard({ onBack, onSave }: { onBack: () =
             <ChevronLeft size={24} />
           </button>
           <div>
-            <p className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-400">Project Lead Wizard</p>
-            <h2 className="mt-1 text-2xl font-black tracking-tight text-primary">Add New Project Lead</h2>
+            <p className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-400">Software Project Enquiry</p>
+            <h2 className="mt-1 text-2xl font-black tracking-tight text-primary">Create Project Lead</h2>
           </div>
         </div>
         <div className="text-right">
@@ -135,9 +147,10 @@ export default function ProjectLeadStepWizard({ onBack, onSave }: { onBack: () =
               return (
                 <button
                   key={step.id}
-                  onClick={() => setCurrentStep(step.id)}
+                  onClick={() => goToStep(step.id)}
+                  disabled={step.id > maxUnlockedStep}
                   className={`flex w-full items-center gap-4 rounded-2xl px-5 py-4 text-left transition-all ${
-                    isActive ? "bg-primary text-white shadow-xl shadow-primary/20" : isDone ? "bg-emerald-50 text-emerald-600" : "text-slate-300 hover:bg-slate-50"
+                    isActive ? "bg-primary text-white shadow-xl shadow-primary/20" : isDone ? "bg-emerald-50 text-emerald-600" : step.id > maxUnlockedStep ? "cursor-not-allowed text-slate-200" : "text-slate-300 hover:bg-slate-50"
                   }`}
                 >
                   <span className={`flex h-8 w-8 items-center justify-center rounded-xl text-xs font-black ${isDone ? "bg-emerald-500 text-white" : "bg-white/10"}`}>

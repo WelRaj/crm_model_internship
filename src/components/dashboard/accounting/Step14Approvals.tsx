@@ -100,7 +100,7 @@ const initialQueue: ApprovalRequest[] = [
     secondApproverRole: "", approvalLevel: 2, status: "In Review", risk: "Low", policyId: "POL-010",
     budgetStatus: "Within Budget", duplicateCheck: "Clear", complianceCheck: "Clear",
     submittedAt: "2026-06-25T04:00:00.000Z", dueAt: "2026-06-25T08:00:00.000Z",
-    summary: "June payroll finance review completed; director release pending.", events: [{ at: "2026-06-25T05:00:00.000Z", actor: "Finance Manager", role: "Finance Manager", action: "Level 1 Approved", comment: "Payroll reconciled with HRMS." }],
+    summary: "June payroll finance review completed; director release pending.", events: [{ at: "2026-06-25T05:00:00.000Z", actor: "Finance Manager", role: "Finance Manager", action: "Level 1 Approved", comment: "Payroll reconciled with People Operations." }],
   },
   {
     id: "APP-2026-904", module: "Credit Note", recordId: "CN-2026-015", amount: 21830,
@@ -306,7 +306,7 @@ export default function Step14Approvals() {
   return (
     <AccountingPage
       title="Approval Matrix & Workflow"
-      description="Route accounting transactions by module, value, role, risk, budget, and compliance controls with permanent decision history."
+      description="Route finance transactions by module, value, role, risk, budget, and compliance controls with permanent decision history."
       icon={ShieldCheck}
       badge={`Role: ${role}`}
       actions={

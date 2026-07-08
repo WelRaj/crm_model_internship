@@ -80,6 +80,7 @@ export const telecallers: Array<{ id: TelecallerId; employeeId: string; name: st
 ];
 
 export const leadSourceOptions: LeadSource[] = ["Website", "Google Ads", "Referral", "LinkedIn", "Walk In", "WhatsApp", "Email", "Facebook", "Instagram", "Other Social Media"];
+export const wonProjectLeadStorageKey = "crm_won_project_leads";
 
 const owners = ["Asha Verma", "Neeraj Singh", "Pooja Khan"];
 const ownerIds: TelecallerId[] = ["Tele-1", "Tele-2", "Tele-3"];
@@ -88,7 +89,7 @@ const sources: LeadSource[] = ["Website", "Google Ads", "Referral", "LinkedIn", 
 export const projectLeadSeedData: ProjectLead[] = Array.from({ length: 20 }, (_, index) => {
   const ownerIndex = index % ownerIds.length;
   const statusList: ProjectLeadStatus[] = ["New Enquiry", "Requirement Discussed", "Proposal Pending", "Proposal Sent", "Negotiation", "Won", "Project Created", "Lost"];
-  const projectTypes = ["CRM Web App", "ERP Portal", "Mobile App", "Website", "SaaS Dashboard", "DevOps Audit", "E-commerce Store", "Loan CRM", "HRMS Portal", "Accounting System"];
+  const projectTypes = ["Trading Software Platform", "Strategy Automation Portal", "Mobile Trading App", "Website", "SaaS Dashboard", "DevOps Audit", "E-commerce Store", "Loan Automation Platform", "People Operations Portal", "Finance Control System"];
   const budgets = [250000, 420000, 650000, 850000, 1200000, 1500000, 300000, 540000, 980000, 1750000];
   const status = statusList[index % statusList.length];
 
@@ -140,7 +141,7 @@ export const tradingLeadSeedData: TradingLead[] = Array.from({ length: 20 }, (_,
     currentOwnerId: ownerIds[ownerIndex],
     teamLeaderId: "TL-1",
     transferHistory: [],
-    remarks: "Telecaller lead for account opening, trading app support, or investment interest follow-up.",
+    remarks: "Calling owner lead for account opening, trading app support, or investment interest follow-up.",
     followUpDate: `2026-07-${String((index % 20) + 1).padStart(2, "0")}`,
     department: "Trading",
     interestLevel: index % 3 === 0 ? "High" : index % 3 === 1 ? "Medium" : "Low",
@@ -153,7 +154,7 @@ export const tradingLeadSeedData: TradingLead[] = Array.from({ length: 20 }, (_,
     accountStatus: accountStatuses[index % accountStatuses.length],
     issueType: issueTypes[index % issueTypes.length],
     availability: index % 3 === 0 ? "Available" : index % 3 === 1 ? "Call Back Later" : "Not Available",
-    lastCallNote: "Customer call note pending update after next telecaller interaction.",
+    lastCallNote: "Customer call note pending update after the next owner interaction.",
   };
 });
 
@@ -186,6 +187,7 @@ export type LeadDraft = {
   minBudget: number | "";
   maxBudget: number | "";
   paymentMode: string;
+  followUpDate: string;
   proposalNo: string;
   proposalDate: string;
   amount: number | "";
@@ -199,6 +201,7 @@ export type LeadDraft = {
   finalValue: number | "";
   closeDate: string;
   lossReason: string;
+  competitorName: string;
   overallRemarks: string;
 };
 
@@ -264,6 +267,7 @@ export function createLeadDraft(): LeadDraft {
     minBudget: "",
     maxBudget: "",
     paymentMode: "",
+    followUpDate: "",
     proposalNo: "",
     proposalDate: today,
     amount: "",
@@ -277,6 +281,7 @@ export function createLeadDraft(): LeadDraft {
     finalValue: "",
     closeDate: "",
     lossReason: "",
+    competitorName: "",
     overallRemarks: "",
   };
 }

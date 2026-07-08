@@ -8,14 +8,33 @@ import { ArrowLeft, Trophy, XCircle, Send, Landmark } from "lucide-react";
 import { ActionButton, Field } from "../accounting/AccountingComponents";
 import { createLeadDraft, mergeLeadDraft, type LeadStepProps } from "./leadTypes";
 
+const optionalPositiveNumber = z.preprocess((value) => {
+  if (value === "" || value === null || value === undefined) return undefined;
+  return value;
+}, z.coerce.number().positive("Must be greater than 0").optional());
+
 const leadStatusSchema = z.object({
-  status: z.string().optional(),
-  priority: z.string().optional(),
-  expectedValue: z.coerce.number().optional(),
-  finalValue: z.coerce.number().optional(),
+  status: z.string().min(1, "Final status required"),
+  priority: z.string().min(1, "Priority required"),
+  expectedValue: optionalPositiveNumber,
+  finalValue: optionalPositiveNumber,
   closeDate: z.string().optional(),
   lossReason: z.string().optional(),
-  overallRemarks: z.string().optional(),
+  competitorName: z.string().optional(),
+  overallRemarks: z.string().min(10, "Add final outcome remarks"),
+}).superRefine((values, context) => {
+  if (values.status === "Won") {
+    if (!values.finalValue) {
+      context.addIssue({ code: z.ZodIssueCode.custom, path: ["finalValue"], message: "Closed value required" });
+    }
+    if (!values.closeDate) {
+      context.addIssue({ code: z.ZodIssueCode.custom, path: ["closeDate"], message: "Close date required" });
+    }
+  }
+
+  if (values.status === "Lost" && !values.lossReason) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ["lossReason"], message: "Loss reason required" });
+  }
 });
 
 type LeadStatusFormInput = z.input<typeof leadStatusSchema>;
@@ -26,7 +45,12 @@ type Step6Props = Pick<LeadStepProps, "onPrev"> & Partial<Pick<LeadStepProps, "d
 export default function Step6LeadStatus({ data = createLeadDraft(), updateData = () => undefined, onPrev, onComplete }: Step6Props) {
   const [isLoading, setIsLoading] = useState(false);
 
-  const { register, handleSubmit, control } = useForm<LeadStatusFormInput, unknown, LeadStatusFormData>({
+  const {
+    register,
+    handleSubmit,
+    control,
+    formState: { errors },
+  } = useForm<LeadStatusFormInput, unknown, LeadStatusFormData>({
     resolver: zodResolver(leadStatusSchema),
     defaultValues: data,
   });
@@ -45,9 +69,9 @@ export default function Step6LeadStatus({ data = createLeadDraft(), updateData =
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
-        <Field label="Final Lead Status" options={["Interested", "Proposal Sent", "Negotiation", "Won", "Lost", "On Hold"]} register={register("status")} />
-        <Field label="Priority Level" options={["Low", "Medium", "High", "Critical"]} register={register("priority")} />
-        <Field label="Expected Deal Value" type="number" register={register("expectedValue")} />
+        <Field label="Final Lead Status" required options={["Interested", "Proposal Sent", "Negotiation", "Won", "Lost", "On Hold"]} register={register("status")} error={errors.status?.message} />
+        <Field label="Priority Level" required options={["Low", "Medium", "High", "Critical"]} register={register("priority")} error={errors.priority?.message} />
+        <Field label="Expected Deal Value" type="number" min={1} register={register("expectedValue")} error={errors.expectedValue?.message} />
       </div>
 
       {watchedStatus === "Won" ? (
@@ -57,13 +81,13 @@ export default function Step6LeadStatus({ data = createLeadDraft(), updateData =
               <Trophy size={28} />
             </div>
             <div>
-              <h4 className="text-xl font-black tracking-tight text-emerald-900">Congratulations! Deal Secured</h4>
-              <p className="mt-1 text-sm font-bold uppercase tracking-widest text-emerald-600">Ready for transition to projects module.</p>
+              <h4 className="text-xl font-black tracking-tight text-emerald-900">Deal Secured</h4>
+              <p className="mt-1 text-sm font-bold uppercase tracking-widest text-emerald-600">Ready for project handoff.</p>
             </div>
           </div>
           <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
-            <Field label="Final Closed Value" type="number" register={register("finalValue")} />
-            <Field label="Actual Close Date" type="date" register={register("closeDate")} />
+            <Field label="Final Closed Value" required type="number" min={1} register={register("finalValue")} error={errors.finalValue?.message} />
+            <Field label="Actual Close Date" required type="date" register={register("closeDate")} error={errors.closeDate?.message} />
             <div className="md:col-span-1">
               <label className="mb-1.5 block text-[10px] font-black uppercase tracking-widest text-emerald-800">Agreement / MSA</label>
               <div className="flex h-11 items-center gap-3 rounded-xl border border-emerald-200 bg-white px-4">
@@ -83,21 +107,21 @@ export default function Step6LeadStatus({ data = createLeadDraft(), updateData =
             </div>
             <div>
               <h4 className="text-xl font-black tracking-tight text-rose-900">Lead Marked as Lost</h4>
-              <p className="mt-1 text-sm font-bold uppercase tracking-widest text-rose-600">Forensic reason required for sales ROI audit.</p>
+              <p className="mt-1 text-sm font-bold uppercase tracking-widest text-rose-600">Reason required for source quality review.</p>
             </div>
           </div>
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-            <Field label="Reason for Loss" options={["Budget Constraint", "Lost to Competitor", "Internal Priority Change", "Timeline Mismatch"]} register={register("lossReason")} />
-            <Field label="Competitor Name" placeholder="e.g. Acme Tech Solutions" />
+            <Field label="Reason for Loss" required options={["Budget Constraint", "Lost to Competitor", "Internal Priority Change", "Timeline Mismatch"]} register={register("lossReason")} error={errors.lossReason?.message} />
+            <Field label="Competitor Name" placeholder="e.g. Acme Tech Solutions" register={register("competitorName")} />
           </div>
         </div>
       ) : null}
 
-      <Field label="Closure Executive Remarks" multiline placeholder="Summarize the final outcome..." register={register("overallRemarks")} />
+      <Field label="Closure Executive Remarks" required multiline placeholder="Summarize the final outcome..." register={register("overallRemarks")} error={errors.overallRemarks?.message} />
 
       <div className="flex justify-between border-t border-slate-50 pt-8">
-        <ActionButton label="Back to Review" variant="outline" icon={ArrowLeft} onClick={onPrev} />
-        <ActionButton type="submit" label={isLoading ? "Saving..." : "Finalize & Close Lead"} icon={Send} variant="accent" />
+        <ActionButton label="Back to Approval" variant="outline" icon={ArrowLeft} onClick={onPrev} />
+        <ActionButton type="submit" label={isLoading ? "Saving..." : "Finalize Lead"} icon={Send} variant="accent" />
       </div>
     </form>
   );

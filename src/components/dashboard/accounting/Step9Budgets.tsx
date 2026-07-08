@@ -21,7 +21,7 @@ const categories = ["Operating Expenses", "Payroll", "Marketing Spend", "Cloud &
 const budgetStatuses = ["Draft", "Pending Approval", "Active", "Rejected", "Closed", "Archived"] as const;
 
 const projectOptions = [
-  { id: "PRJ-001", name: "Loan CRM Web App", department: "Engineering" },
+  { id: "PRJ-001", name: "Loan Automation Platform", department: "Engineering" },
   { id: "PRJ-002", name: "E-commerce Mobile App", department: "Engineering" },
   { id: "PRJ-003", name: "Logistics Control Tower", department: "Cloud Ops" },
 ];
@@ -419,7 +419,7 @@ export default function Step9Budgets() {
 
   return (
     <AccountingPage
-      title="Budget Management"
+      title="Budget Control"
       description="Control approved financial limits using actual and committed spend, utilization alerts, revisions, and approval history."
       icon={BarChart3}
       badge="Financial control"

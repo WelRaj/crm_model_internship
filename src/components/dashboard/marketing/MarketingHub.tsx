@@ -111,10 +111,10 @@ const sourceQualities: SourceQuality[] = ["High", "High Intent", "Enterprise", "
 const initialCampaigns: CampaignRecord[] = [
   {
     id: "CMP-2026-041",
-    name: "AI CRM Automation Launch",
+    name: "Algo Trading Automation Launch",
     channel: "LinkedIn Ads",
-    objective: "B2B demo bookings",
-    audienceSegment: "Founders and sales heads",
+    objective: "Strategy automation demo bookings",
+    audienceSegment: "Traders, founders, and fintech operators",
     budgetAmount: 240000,
     spentAmount: 162000,
     leads: 184,
@@ -124,8 +124,8 @@ const initialCampaigns: CampaignRecord[] = [
     endDate: "2026-06-30",
     utmSource: "linkedin",
     utmMedium: "paid-social",
-    utmCampaign: "ai-crm-automation-launch",
-    landingPage: "/landing/ai-crm",
+    utmCampaign: "algo-trading-automation-launch",
+    landingPage: "/landing/algo-trading-automation",
     leadForm: "Demo booking form",
     owner: "B2B Growth",
     status: "Active",
@@ -147,7 +147,7 @@ const initialCampaigns: CampaignRecord[] = [
     utmSource: "whatsapp",
     utmMedium: "nurture",
     utmCampaign: "whatsapp-lead-nurture",
-    landingPage: "/crm/demo",
+    landingPage: "/trading-software/demo",
     leadForm: "WhatsApp quick reply",
     owner: "Marketing Ops",
     status: "Active",
@@ -155,10 +155,10 @@ const initialCampaigns: CampaignRecord[] = [
   },
   {
     id: "CMP-2026-043",
-    name: "ERP for IT Services Webinar",
+    name: "Trading Software Automation Webinar",
     channel: "Webinar",
     objective: "Webinar registrations",
-    audienceSegment: "IT service company owners",
+    audienceSegment: "Active traders and fintech founders",
     budgetAmount: 65000,
     spentAmount: 61000,
     leads: 312,
@@ -168,8 +168,8 @@ const initialCampaigns: CampaignRecord[] = [
     endDate: "2026-06-20",
     utmSource: "webinar",
     utmMedium: "event",
-    utmCampaign: "erp-it-services-webinar",
-    landingPage: "/webinars/erp-it-services",
+    utmCampaign: "trading-software-automation-webinar",
+    landingPage: "/webinars/trading-software-automation",
     leadForm: "Webinar registration",
     owner: "Content Marketing",
     status: "Review",
@@ -180,7 +180,7 @@ const initialCampaigns: CampaignRecord[] = [
     name: "Founder Search Intent",
     channel: "Google Search",
     objective: "High-intent enquiries",
-    audienceSegment: "Founders searching CRM/ERP vendors",
+    audienceSegment: "Founders searching trading software vendors",
     budgetAmount: 180000,
     spentAmount: 178000,
     leads: 96,
@@ -191,7 +191,7 @@ const initialCampaigns: CampaignRecord[] = [
     utmSource: "google",
     utmMedium: "cpc",
     utmCampaign: "founder-search-intent",
-    landingPage: "/landing/crm-for-founders",
+    landingPage: "/landing/trading-software-for-founders",
     leadForm: "Consultation form",
     owner: "Performance Marketing",
     status: "Scale",
@@ -225,7 +225,7 @@ const initialSources: LeadSourceRecord[] = [
   { id: "SRC-001", source: "Website Organic", type: "Organic", normalizedKey: "website_organic", defaultUtmSource: "website", defaultUtmMedium: "organic", leads: 214, mql: 86, sql: 39, won: 12, quality: "High", owner: "SEO Team", last30Change: 22, status: "Active", nextAction: "Add service pages" },
   { id: "SRC-002", source: "Google Ads", type: "Paid", normalizedKey: "google_ads", defaultUtmSource: "google", defaultUtmMedium: "cpc", leads: 226, mql: 98, sql: 51, won: 15, quality: "High Intent", owner: "Performance", last30Change: 14, status: "Active", nextAction: "Scale exact-match keywords" },
   { id: "SRC-003", source: "LinkedIn", type: "Paid", normalizedKey: "linkedin_ads", defaultUtmSource: "linkedin", defaultUtmMedium: "paid-social", leads: 148, mql: 61, sql: 29, won: 8, quality: "Enterprise", owner: "B2B Growth", last30Change: 31, status: "Active", nextAction: "Increase founder audience" },
-  { id: "SRC-004", source: "WhatsApp Referral", type: "Referral", normalizedKey: "whatsapp_referral", defaultUtmSource: "whatsapp", defaultUtmMedium: "referral", leads: 86, mql: 42, sql: 24, won: 9, quality: "Warm", owner: "Sales", last30Change: 9, status: "Active", nextAction: "Launch referral incentive" },
+  { id: "SRC-004", source: "WhatsApp Referral", type: "Referral", normalizedKey: "whatsapp_referral", defaultUtmSource: "whatsapp", defaultUtmMedium: "referral", leads: 86, mql: 42, sql: 24, won: 9, quality: "Warm", owner: "Client Growth", last30Change: 9, status: "Active", nextAction: "Launch referral incentive" },
   { id: "SRC-005", source: "Meta Ads", type: "Paid", normalizedKey: "meta_ads", defaultUtmSource: "meta", defaultUtmMedium: "paid-social", leads: 205, mql: 54, sql: 16, won: 3, quality: "Mixed", owner: "Performance", last30Change: -6, status: "Review", nextAction: "Tighten retargeting" },
   { id: "SRC-006", source: "Events / Webinar", type: "Event", normalizedKey: "events_webinar", defaultUtmSource: "webinar", defaultUtmMedium: "event", leads: 312, mql: 76, sql: 31, won: 7, quality: "Nurture", owner: "Marketing", last30Change: 48, status: "Active", nextAction: "Segment by intent score" },
 ];
@@ -612,7 +612,7 @@ function CampaignsView({
         <MetricCard label="Active Campaigns" value={String(activeCampaigns.length)} helper={`${new Set(activeCampaigns.map((campaign) => campaign.channel)).size} channels live`} icon={Megaphone} tone="blue" />
         <MetricCard label="Monthly Spend" value={formatCurrency(activeSpend)} helper={`${spendPercent}% budget consumed`} icon={Wallet} tone="amber" />
         <MetricCard label="Generated Leads" value={generatedLeads.toLocaleString("en-IN")} helper="From active campaigns" icon={Users} tone="green" />
-        <MetricCard label="AI Qualified" value={qualifiedLeads.toLocaleString("en-IN")} helper="MQL captured for CRM handoff" icon={Bot} tone="purple" />
+        <MetricCard label="Qualified Leads" value={qualifiedLeads.toLocaleString("en-IN")} helper="MQL captured for Client Operations handoff" icon={Bot} tone="purple" />
       </div>
 
       {showForm ? (
@@ -661,7 +661,7 @@ function CampaignsView({
       <section className="rounded-2xl border border-border bg-white p-6 shadow-sm">
         <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <h3 className="text-lg font-black text-primary">Campaign Command Center</h3>
+            <h3 className="text-lg font-black text-primary">Growth Campaign Control</h3>
             <p className="mt-1 text-xs font-semibold text-slate-500">Track channel, objective, spend, MQLs, pipeline, and scale decisions.</p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -737,8 +737,8 @@ function CampaignsView({
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
         <section className="rounded-2xl border border-border bg-white p-6 shadow-sm">
-          <h3 className="text-lg font-black text-primary">2026 Campaign Stack</h3>
-          <p className="mt-1 text-xs font-semibold text-slate-500">Modern campaign setup expected in a practical CRM.</p>
+          <h3 className="text-lg font-black text-primary">2026 Growth Campaign Stack</h3>
+          <p className="mt-1 text-xs font-semibold text-slate-500">Campaign setup expected for fintech acquisition and trading software demand generation.</p>
           <div className="mt-5 space-y-3">
             {[
               [Sparkles, "AI lead scoring", "Auto score based on source, behavior, budget, role and urgency."],
@@ -938,14 +938,14 @@ function RoiView({ campaigns }: { campaigns: CampaignRecord[] }) {
           <LineChart className="text-primary" size={22} />
           <div>
             <h3 className="text-lg font-black text-primary">Attribution Model</h3>
-            <p className="mt-1 text-xs font-semibold text-slate-500">2026-ready CRM should not judge ROI only by first lead source.</p>
+            <p className="mt-1 text-xs font-semibold text-slate-500">2026-ready growth analytics should not judge ROI only by first lead source.</p>
           </div>
         </div>
         <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
           {[
             ["Best Channel", `${bestChannel} has the highest attributed pipeline in the current filter.`],
-            ["Spend Source", "Spend comes from campaign records and should later map to accounting bills."],
-            ["Revenue Source", "Pipeline is still marketing-attributed and must later reconcile with CRM/project/accounting APIs."],
+            ["Spend Source", "Spend comes from campaign records and should later map to Finance Control bills."],
+            ["Revenue Source", "Pipeline is still marketing-attributed and must later reconcile with Client Operations, Delivery Projects, and Finance Control APIs."],
             ["Report State", "Export and report actions use the selected date, campaign, and channel filters."],
           ].map(([title, text]) => (
             <div key={title} className="rounded-2xl border border-border bg-slate-50 p-4">
@@ -1109,7 +1109,7 @@ function SourcesView({ sources }: { sources: LeadSourceRecord[] }) {
       <div className="flex flex-wrap justify-end gap-3">
         <ActionButton icon={Download} onClick={handleExport}>Export</ActionButton>
         <ActionButton icon={Filter} onClick={() => { setTypeFilter("All"); setStatusFilter("All"); setSearchTerm(""); }}>Clear Filters</ActionButton>
-        <ActionButton icon={Plus} variant="accent" onClick={openNewSource}>Add Source</ActionButton>
+        <ActionButton icon={Plus} variant="accent" onClick={openNewSource}>Add Acquisition Source</ActionButton>
       </div>
 
       <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-4">
@@ -1123,7 +1123,7 @@ function SourcesView({ sources }: { sources: LeadSourceRecord[] }) {
         <section className="rounded-2xl border border-border bg-white p-6 shadow-sm">
           <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
             <div>
-              <h3 className="text-lg font-black text-primary">{editingId ? "Edit Lead Source" : "Add Lead Source"}</h3>
+              <h3 className="text-lg font-black text-primary">{editingId ? "Edit Acquisition Source" : "Add Acquisition Source"}</h3>
               <p className="mt-1 text-xs font-semibold text-slate-500">Normalize source labels now so lead attribution does not become messy when backend APIs arrive.</p>
             </div>
             <button type="button" onClick={() => { resetForm(); setShowForm(false); }} className="inline-flex h-9 items-center gap-2 rounded-xl border border-border bg-white px-4 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:bg-slate-50">
@@ -1162,7 +1162,7 @@ function SourcesView({ sources }: { sources: LeadSourceRecord[] }) {
       <section className="rounded-2xl border border-border bg-white p-6 shadow-sm">
         <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <h3 className="text-lg font-black text-primary">Lead Source Intelligence</h3>
+            <h3 className="text-lg font-black text-primary">Acquisition Source Intelligence</h3>
             <p className="mt-1 text-xs font-semibold text-slate-500">Track volume, quality, conversion, owner and next optimization action.</p>
           </div>
           <Badge tone="purple">Source Quality Score</Badge>
@@ -1254,7 +1254,7 @@ function SourcesView({ sources }: { sources: LeadSourceRecord[] }) {
       <section className="rounded-2xl border border-border bg-primary p-6 text-white shadow-sm">
         <div className="flex items-center gap-3">
           <Sparkles className="text-accent" size={24} />
-          <h3 className="text-lg font-black">2026 Lead Source Rules</h3>
+          <h3 className="text-lg font-black">2026 Acquisition Source Rules</h3>
         </div>
         <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-3">
           {[
@@ -1263,7 +1263,7 @@ function SourcesView({ sources }: { sources: LeadSourceRecord[] }) {
             ["Multi-touch view", "Show original source, latest source, and assisted campaigns together."],
             ["Offline mapping", "Events, referrals, calls, walk-ins, and partner leads need manual source capture."],
             ["Nurture source", "WhatsApp/email reactivation should be tracked as assisted source."],
-            ["Sales feedback", "Sales owners should rate source quality after first conversation."],
+            ["Client growth feedback", "Client growth owners should rate source quality after the first conversation."],
           ].map(([title, text]) => (
             <div key={title} className="rounded-2xl border border-white/10 bg-white/5 p-4">
               <p className="text-sm font-black">{title}</p>
@@ -1277,7 +1277,7 @@ function SourcesView({ sources }: { sources: LeadSourceRecord[] }) {
 }
 
 export default function MarketingHub({ activeView }: { activeView: MarketingView }) {
-  const title = activeView === "campaigns" ? "Campaigns" : activeView === "roi" ? "Marketing ROI" : "Lead Sources";
+  const title = activeView === "campaigns" ? "Growth Campaigns" : activeView === "roi" ? "Marketing ROI" : "Acquisition Sources";
   const description =
     activeView === "campaigns"
       ? "Plan, run, measure and optimize 2026-ready campaigns across Google, LinkedIn, Meta, WhatsApp, email and webinars."
@@ -1295,7 +1295,7 @@ export default function MarketingHub({ activeView }: { activeView: MarketingView
           <div>
             <div className="flex flex-wrap items-center gap-3">
               <h2 className="text-3xl font-black tracking-tight text-[#1E293B]">{title}</h2>
-              <Badge tone="green">2026 CRM Model</Badge>
+              <Badge tone="green">2026 Growth Model</Badge>
             </div>
             <p className="mt-1 max-w-3xl text-sm font-medium leading-6 text-slate-500">{description}</p>
           </div>

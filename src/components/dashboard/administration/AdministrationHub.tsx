@@ -76,9 +76,9 @@ type AdminUser = {
 type UserForm = Pick<AdminUser, "employeeId" | "name" | "email" | "mobile" | "userType" | "role" | "team" | "designation" | "risk" | "accessReviewDate">;
 
 const initialUsers: AdminUser[] = [
-  { id: "USR-001", employeeId: "EMP-001", name: "Rajkumar Rathore", email: "rajkumar@company.in", mobile: "9876543210", userType: "Employee", role: "Super Admin", team: "Leadership", designation: "Director", status: "Active", mfa: "Enabled", lastLoginAt: "2026-06-25T09:28:00.000Z", activeSessions: 2, risk: "Low", accessReviewDate: "2026-07-01", createdAt: "2025-01-10T10:00:00.000Z", updatedAt: "2026-06-20T10:00:00.000Z" },
-  { id: "USR-002", employeeId: "EMP-018", name: "Vikram Rathore", email: "vikram@company.in", mobile: "9876543211", userType: "Employee", role: "Project Manager", team: "Delivery", designation: "Senior Project Manager", status: "Active", mfa: "Enabled", lastLoginAt: "2026-06-25T09:16:00.000Z", activeSessions: 1, risk: "Low", accessReviewDate: "2026-07-15", createdAt: "2025-03-12T10:00:00.000Z", updatedAt: "2026-06-18T10:00:00.000Z" },
-  { id: "USR-003", employeeId: "EMP-026", name: "Sunita Sharma", email: "sunita@company.in", mobile: "9876543212", userType: "Employee", role: "HR Manager", team: "HRMS", designation: "HR Manager", status: "Active", mfa: "Pending", lastLoginAt: "2026-06-25T08:30:00.000Z", activeSessions: 1, risk: "Medium", accessReviewDate: "2026-06-20", createdAt: "2025-05-22T10:00:00.000Z", updatedAt: "2026-06-10T10:00:00.000Z" },
+  { id: "USR-001", employeeId: "EMP-001", name: "Rajkumar Rathore", email: "rajkumar@dematadealgo.local", mobile: "9876543210", userType: "Employee", role: "Super Admin", team: "Leadership", designation: "Director", status: "Active", mfa: "Enabled", lastLoginAt: "2026-06-25T09:28:00.000Z", activeSessions: 2, risk: "Low", accessReviewDate: "2026-07-01", createdAt: "2025-01-10T10:00:00.000Z", updatedAt: "2026-06-20T10:00:00.000Z" },
+  { id: "USR-002", employeeId: "EMP-018", name: "Vikram Rathore", email: "vikram@dematadealgo.local", mobile: "9876543211", userType: "Employee", role: "Project Manager", team: "Delivery Projects", designation: "Senior Project Manager", status: "Active", mfa: "Enabled", lastLoginAt: "2026-06-25T09:16:00.000Z", activeSessions: 1, risk: "Low", accessReviewDate: "2026-07-15", createdAt: "2025-03-12T10:00:00.000Z", updatedAt: "2026-06-18T10:00:00.000Z" },
+  { id: "USR-003", employeeId: "EMP-026", name: "Sunita Sharma", email: "sunita@dematadealgo.local", mobile: "9876543212", userType: "Employee", role: "People Operations Manager", team: "People Operations", designation: "People Operations Manager", status: "Active", mfa: "Pending", lastLoginAt: "2026-06-25T08:30:00.000Z", activeSessions: 1, risk: "Medium", accessReviewDate: "2026-06-20", createdAt: "2025-05-22T10:00:00.000Z", updatedAt: "2026-06-10T10:00:00.000Z" },
   { id: "USR-004", employeeId: "EXT-009", name: "External Auditor", email: "audit.partner@vendor.in", mobile: "9876543213", userType: "External", role: "Auditor", team: "Compliance", designation: "Statutory Auditor", status: "Active", mfa: "Enabled", lastLoginAt: "2026-06-24T11:00:00.000Z", activeSessions: 0, risk: "Medium", accessReviewDate: "2026-06-30", createdAt: "2026-04-01T10:00:00.000Z", updatedAt: "2026-06-24T11:00:00.000Z" },
 ];
 
@@ -95,7 +95,7 @@ const emptyUserForm = (): UserForm => ({
   accessReviewDate: new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10),
 });
 
-const GLOBAL_MODULES = ["Dashboard", "CRM", "Marketing", "Projects", "HRMS", "Accounting", "Administration", "Support"] as const;
+const GLOBAL_MODULES = ["Dashboard", "Client Operations", "Growth Marketing", "Delivery Projects", "People Operations", "Finance Control", "Admin Control", "Support Desk"] as const;
 const GLOBAL_ACTIONS = ["View", "Create", "Edit", "Approve", "Export", "Administer"] as const;
 const DATA_SCOPES = ["Own Records", "Team", "Department", "Business Unit", "All Company"] as const;
 
@@ -125,10 +125,10 @@ type RoleForm = Pick<AdminRole, "name" | "description" | "dataScope" | "sensitiv
 
 const initialRoles: AdminRole[] = [
   { id: "ROLE-001", name: "Super Admin", description: "Protected platform owner for identity, policy, security, and organization controls.", users: 2, modules: [...GLOBAL_MODULES], actions: [...GLOBAL_ACTIONS], dataScope: "All Company", sensitiveScope: "All sensitive data", status: "Active", protected: true, risk: "High", lastReviewedAt: "2026-06-01", nextReviewDate: "2026-07-01", updatedAt: "2026-06-01T10:00:00.000Z" },
-  { id: "ROLE-002", name: "Finance Manager", description: "Company finance oversight with delegated accounting policy and approval responsibility.", users: 4, modules: ["Dashboard", "HRMS", "Accounting"], actions: ["View", "Create", "Edit", "Approve", "Export"], dataScope: "All Company", sensitiveScope: "Invoices, payroll and tax data", status: "Active", protected: false, risk: "High", lastReviewedAt: "2026-06-05", nextReviewDate: "2026-07-05", updatedAt: "2026-06-05T10:00:00.000Z" },
-  { id: "ROLE-003", name: "Project Manager", description: "Owns project delivery, assigned client context, milestones, tasks, and team tracking.", users: 11, modules: ["Dashboard", "CRM", "Projects", "Support"], actions: ["View", "Create", "Edit", "Export"], dataScope: "Business Unit", sensitiveScope: "Assigned client delivery data", status: "Active", protected: false, risk: "Medium", lastReviewedAt: "2026-06-10", nextReviewDate: "2026-07-10", updatedAt: "2026-06-10T10:00:00.000Z" },
-  { id: "ROLE-004", name: "HR Manager", description: "Manages employee lifecycle, onboarding, attendance, leave, payroll readiness, and exits.", users: 3, modules: ["Dashboard", "HRMS", "Support"], actions: ["View", "Create", "Edit", "Approve", "Export"], dataScope: "All Company", sensitiveScope: "Employee KYC and compensation", status: "Active", protected: false, risk: "High", lastReviewedAt: "2026-06-08", nextReviewDate: "2026-07-08", updatedAt: "2026-06-08T10:00:00.000Z" },
-  { id: "ROLE-005", name: "Viewer", description: "Read-only business visibility without export, approval, or administrative authority.", users: 18, modules: ["Dashboard", "CRM", "Projects"], actions: ["View"], dataScope: "Department", sensitiveScope: "Masked operational data", status: "Active", protected: false, risk: "Low", lastReviewedAt: "2026-06-15", nextReviewDate: "2026-09-15", updatedAt: "2026-06-15T10:00:00.000Z" },
+  { id: "ROLE-002", name: "Finance Manager", description: "Company finance oversight with delegated Finance Control policy and approval responsibility.", users: 4, modules: ["Dashboard", "People Operations", "Finance Control"], actions: ["View", "Create", "Edit", "Approve", "Export"], dataScope: "All Company", sensitiveScope: "Invoices, payroll and tax data", status: "Active", protected: false, risk: "High", lastReviewedAt: "2026-06-05", nextReviewDate: "2026-07-05", updatedAt: "2026-06-05T10:00:00.000Z" },
+  { id: "ROLE-003", name: "Project Manager", description: "Owns project delivery, assigned client context, milestones, tasks, and team tracking.", users: 11, modules: ["Dashboard", "Client Operations", "Delivery Projects", "Support Desk"], actions: ["View", "Create", "Edit", "Export"], dataScope: "Business Unit", sensitiveScope: "Assigned client delivery data", status: "Active", protected: false, risk: "Medium", lastReviewedAt: "2026-06-10", nextReviewDate: "2026-07-10", updatedAt: "2026-06-10T10:00:00.000Z" },
+  { id: "ROLE-004", name: "People Operations Manager", description: "Manages employee lifecycle, onboarding, attendance, leave, payroll readiness, and exits.", users: 3, modules: ["Dashboard", "People Operations", "Support Desk"], actions: ["View", "Create", "Edit", "Approve", "Export"], dataScope: "All Company", sensitiveScope: "Employee KYC and compensation", status: "Active", protected: false, risk: "High", lastReviewedAt: "2026-06-08", nextReviewDate: "2026-07-08", updatedAt: "2026-06-08T10:00:00.000Z" },
+  { id: "ROLE-005", name: "Viewer", description: "Read-only business visibility without export, approval, or administrative authority.", users: 18, modules: ["Dashboard", "Client Operations", "Delivery Projects"], actions: ["View"], dataScope: "Department", sensitiveScope: "Masked operational data", status: "Active", protected: false, risk: "Low", lastReviewedAt: "2026-06-15", nextReviewDate: "2026-09-15", updatedAt: "2026-06-15T10:00:00.000Z" },
 ];
 
 const emptyRoleForm = (): RoleForm => ({
@@ -167,11 +167,11 @@ type SystemAuditEvent = {
 };
 
 const initialSystemEvents: SystemAuditEvent[] = [
-  { id: "SYS-EVT-1005", sequence: 1005, timestamp: "2026-06-25T12:14:00.000Z", actorId: "USR-001", actorName: "Rajkumar Rathore", actorRole: "Super Admin", action: "Updated global role permissions", module: "Administration", resource: "Role", resourceId: "ROLE-002", sessionId: "SES-A91F", ipAddress: "103.87.***.21", device: "Chrome / Windows", result: "Success", risk: "High", reason: "Quarterly finance access review", changedFields: ["modules", "actions", "nextReviewDate"], investigationStatus: "Clear", investigationNote: "" },
-  { id: "SYS-EVT-1004", sequence: 1004, timestamp: "2026-06-25T11:42:00.000Z", actorId: "USR-003", actorName: "Sunita Sharma", actorRole: "HR Manager", action: "Approved leave exception", module: "HRMS", resource: "Leave Request", resourceId: "LV-2041", sessionId: "SES-C11B", ipAddress: "49.36.***.88", device: "Edge / Windows", result: "Success", risk: "Low", reason: "Medical exception approved by HR", changedFields: ["status", "approvedBy"], investigationStatus: "Clear", investigationNote: "" },
-  { id: "SYS-EVT-1003", sequence: 1003, timestamp: "2026-06-25T10:57:00.000Z", actorId: "USR-004", actorName: "External Auditor", actorRole: "Auditor", action: "Exported GST invoice register", module: "Accounting", resource: "Report Export", resourceId: "EXP-GST-0625", sessionId: "SES-D02C", ipAddress: "115.96.***.14", device: "Chrome / macOS", result: "Reviewed", risk: "High", reason: "Statutory audit evidence request", changedFields: [], investigationStatus: "Flagged", investigationNote: "Confirm export approval and retention reference." },
-  { id: "SYS-EVT-1002", sequence: 1002, timestamp: "2026-06-25T09:33:00.000Z", actorId: "UNKNOWN", actorName: "Unknown login", actorRole: "Unauthenticated", action: "Repeated failed password attempt", module: "Security", resource: "Authentication", resourceId: "rajkumar@company.in", sessionId: "NO-SESSION", ipAddress: "45.129.***.10", device: "Unknown browser", result: "Blocked", risk: "High", reason: "Password policy threshold exceeded", changedFields: [], investigationStatus: "Investigating", investigationNote: "IP reputation and account targeting under review." },
-  { id: "SYS-EVT-1001", sequence: 1001, timestamp: "2026-06-25T08:51:00.000Z", actorId: "USR-002", actorName: "Vikram Rathore", actorRole: "Project Manager", action: "Updated project deadline", module: "Projects", resource: "Project", resourceId: "PRJ-108", sessionId: "SES-B87E", ipAddress: "122.161.***.44", device: "Chrome / Windows", result: "Success", risk: "Medium", reason: "Client approved delivery extension", changedFields: ["dueDate", "status"], investigationStatus: "Clear", investigationNote: "" },
+  { id: "SYS-EVT-1005", sequence: 1005, timestamp: "2026-06-25T12:14:00.000Z", actorId: "USR-001", actorName: "Rajkumar Rathore", actorRole: "Super Admin", action: "Updated global role permissions", module: "Admin Control", resource: "Role", resourceId: "ROLE-002", sessionId: "SES-A91F", ipAddress: "103.87.***.21", device: "Chrome / Windows", result: "Success", risk: "High", reason: "Quarterly finance access review", changedFields: ["modules", "actions", "nextReviewDate"], investigationStatus: "Clear", investigationNote: "" },
+  { id: "SYS-EVT-1004", sequence: 1004, timestamp: "2026-06-25T11:42:00.000Z", actorId: "USR-003", actorName: "Sunita Sharma", actorRole: "People Operations Manager", action: "Approved leave exception", module: "People Operations", resource: "Leave Request", resourceId: "LV-2041", sessionId: "SES-C11B", ipAddress: "49.36.***.88", device: "Edge / Windows", result: "Success", risk: "Low", reason: "Medical exception approved by People Operations", changedFields: ["status", "approvedBy"], investigationStatus: "Clear", investigationNote: "" },
+  { id: "SYS-EVT-1003", sequence: 1003, timestamp: "2026-06-25T10:57:00.000Z", actorId: "USR-004", actorName: "External Auditor", actorRole: "Auditor", action: "Exported GST invoice register", module: "Finance Control", resource: "Report Export", resourceId: "EXP-GST-0625", sessionId: "SES-D02C", ipAddress: "115.96.***.14", device: "Chrome / macOS", result: "Reviewed", risk: "High", reason: "Statutory audit evidence request", changedFields: [], investigationStatus: "Flagged", investigationNote: "Confirm export approval and retention reference." },
+  { id: "SYS-EVT-1002", sequence: 1002, timestamp: "2026-06-25T09:33:00.000Z", actorId: "UNKNOWN", actorName: "Unknown login", actorRole: "Unauthenticated", action: "Repeated failed password attempt", module: "Security", resource: "Authentication", resourceId: "rajkumar@dematadealgo.local", sessionId: "NO-SESSION", ipAddress: "45.129.***.10", device: "Unknown browser", result: "Blocked", risk: "High", reason: "Password policy threshold exceeded", changedFields: [], investigationStatus: "Investigating", investigationNote: "IP reputation and account targeting under review." },
+  { id: "SYS-EVT-1001", sequence: 1001, timestamp: "2026-06-25T08:51:00.000Z", actorId: "USR-002", actorName: "Vikram Rathore", actorRole: "Project Manager", action: "Updated project deadline", module: "Delivery Projects", resource: "Project", resourceId: "PRJ-108", sessionId: "SES-B87E", ipAddress: "122.161.***.44", device: "Chrome / Windows", result: "Success", risk: "Medium", reason: "Client approved delivery extension", changedFields: ["dueDate", "status"], investigationStatus: "Clear", investigationNote: "" },
 ];
 
 type GlobalApprovalType = "Access Change" | "Data Export" | "Security Exception" | "Integration" | "Policy Change" | "Operational Exception";
@@ -209,10 +209,10 @@ type GlobalApprovalRequest = {
 };
 
 const initialGlobalApprovals: GlobalApprovalRequest[] = [
-  { id: "GAP-2201", type: "Access Change", title: "Finance role access upgrade", requester: "Rajesh Kumar", requesterRole: "Accountant", ownerRole: "Super Admin", secondApproverRole: "Director", approvalLevel: 1, module: "Administration", resourceId: "USR-008", status: "Pending", priority: "High", risk: "High", submittedAt: "2026-06-25T07:30:00.000Z", dueAt: "2026-06-25T11:30:00.000Z", reason: "Temporary Finance Manager access required for quarter close.", evidence: ["Manager approval", "Quarter-close duty note"], dataScope: "Accounting / All Company", events: [] },
-  { id: "GAP-2202", type: "Data Export", title: "Client data export request", requester: "External Auditor", requesterRole: "Auditor", ownerRole: "Compliance Officer", secondApproverRole: "Super Admin", approvalLevel: 1, module: "CRM", resourceId: "EXP-CRM-0625", status: "In Review", priority: "High", risk: "High", submittedAt: "2026-06-25T06:45:00.000Z", dueAt: "2026-06-26T06:45:00.000Z", reason: "Sample client register required for statutory control testing.", evidence: ["Audit engagement letter", "Approved field list"], dataScope: "Masked client master fields", events: [{ at: "2026-06-25T08:00:00.000Z", actor: "Compliance Officer", role: "Compliance Officer", action: "Review Started", comment: "Data minimization scope under review." }] },
-  { id: "GAP-2203", type: "Security Exception", title: "Temporary IP allowlist exception", requester: "Vikram Rathore", requesterRole: "Project Manager", ownerRole: "Super Admin", secondApproverRole: "", approvalLevel: 1, module: "Security", resourceId: "SEC-IP-041", status: "Clarification Required", priority: "Critical", risk: "High", submittedAt: "2026-06-25T05:20:00.000Z", dueAt: "2026-06-25T09:20:00.000Z", reason: "Client-site network requires temporary administrative portal access.", evidence: ["Client site email"], dataScope: "Administration portal login", events: [{ at: "2026-06-25T06:00:00.000Z", actor: "Rajkumar Rathore", role: "Super Admin", action: "Clarification Requested", comment: "Provide fixed IP and exception expiry time." }] },
-  { id: "GAP-2204", type: "Integration", title: "Enable production WhatsApp webhook", requester: "Marketing Manager", requesterRole: "Marketing Manager", ownerRole: "Super Admin", secondApproverRole: "Director", approvalLevel: 1, module: "Settings", resourceId: "INT-WA-009", status: "Pending", priority: "Medium", risk: "Medium", submittedAt: "2026-06-25T04:10:00.000Z", dueAt: "2026-06-27T04:10:00.000Z", reason: "Activate approved customer reminder templates in production.", evidence: ["Vendor DPA", "Webhook security checklist", "Template approval"], dataScope: "Client mobile and reminder metadata", events: [] },
+  { id: "GAP-2201", type: "Access Change", title: "Finance role access upgrade", requester: "Rajesh Kumar", requesterRole: "Accountant", ownerRole: "Super Admin", secondApproverRole: "Director", approvalLevel: 1, module: "Admin Control", resourceId: "USR-008", status: "Pending", priority: "High", risk: "High", submittedAt: "2026-06-25T07:30:00.000Z", dueAt: "2026-06-25T11:30:00.000Z", reason: "Temporary Finance Manager access required for quarter close.", evidence: ["Manager approval", "Quarter-close duty note"], dataScope: "Finance Control / All Company", events: [] },
+  { id: "GAP-2202", type: "Data Export", title: "Client data export request", requester: "External Auditor", requesterRole: "Auditor", ownerRole: "Compliance Officer", secondApproverRole: "Super Admin", approvalLevel: 1, module: "Client Operations", resourceId: "EXP-CLIENT-0625", status: "In Review", priority: "High", risk: "High", submittedAt: "2026-06-25T06:45:00.000Z", dueAt: "2026-06-26T06:45:00.000Z", reason: "Sample client register required for statutory control testing.", evidence: ["Audit engagement letter", "Approved field list"], dataScope: "Masked client master fields", events: [{ at: "2026-06-25T08:00:00.000Z", actor: "Compliance Officer", role: "Compliance Officer", action: "Review Started", comment: "Data minimization scope under review." }] },
+  { id: "GAP-2203", type: "Security Exception", title: "Temporary IP allowlist exception", requester: "Vikram Rathore", requesterRole: "Project Manager", ownerRole: "Super Admin", secondApproverRole: "", approvalLevel: 1, module: "Security", resourceId: "SEC-IP-041", status: "Clarification Required", priority: "Critical", risk: "High", submittedAt: "2026-06-25T05:20:00.000Z", dueAt: "2026-06-25T09:20:00.000Z", reason: "Client-site network requires temporary administrative portal access.", evidence: ["Client site email"], dataScope: "Admin Control portal login", events: [{ at: "2026-06-25T06:00:00.000Z", actor: "Rajkumar Rathore", role: "Super Admin", action: "Clarification Requested", comment: "Provide fixed IP and exception expiry time." }] },
+  { id: "GAP-2204", type: "Integration", title: "Enable production WhatsApp webhook", requester: "Marketing Manager", requesterRole: "Marketing Manager", ownerRole: "Super Admin", secondApproverRole: "Director", approvalLevel: 1, module: "System Settings", resourceId: "INT-WA-009", status: "Pending", priority: "Medium", risk: "Medium", submittedAt: "2026-06-25T04:10:00.000Z", dueAt: "2026-06-27T04:10:00.000Z", reason: "Activate approved client reminder templates in production.", evidence: ["Vendor DPA", "Webhook security checklist", "Template approval"], dataScope: "Client mobile and reminder metadata", events: [] },
 ];
 
 type SettingKey = "company" | "security" | "notifications" | "integrations" | "governance" | "mobile";
@@ -282,10 +282,10 @@ type SettingControl = {
 };
 
 const initialSettings: AdministrationSettings = {
-  company: { legalName: "WelRaj Panel Services Pvt Ltd", gstin: "08AABCU9603R1ZM", cin: "U72900RJ2022PTC081234", registeredAddress: "Malviya Nagar, Jaipur, Rajasthan 302017", timezone: "Asia/Kolkata", currency: "INR", invoicePrefix: "INV" },
+  company: { legalName: "DeMatade Algo Technology Solutions Pvt Ltd", gstin: "27AABCU9603R1ZM", cin: "U72900MH2022PTC081234", registeredAddress: "Ulwe, Panvel, Navi Mumbai, Maharashtra 410206", timezone: "Asia/Kolkata", currency: "INR", invoicePrefix: "INV" },
   security: { mfaRequired: true, passwordExpiryDays: 90, sessionTimeoutMinutes: 30, maxFailedAttempts: 5, ipAllowlistEnabled: false, trustedDeviceDays: 30 },
-  notifications: { senderName: "WelRaj CRM", senderEmail: "notifications@company.in", smtpHost: "smtp.company.in", approvalAlerts: true, securityAlerts: true, billingReminders: true, escalationHours: 24 },
-  integrations: { googleWorkspace: true, whatsapp: false, paymentGateway: true, webhookUrl: "https://api.company.in/webhooks/crm", webhookSigningEnabled: true, environment: "Production" },
+  notifications: { senderName: "DeMatade Algo", senderEmail: "notifications@dematadealgo.local", smtpHost: "smtp.dematadealgo.local", approvalAlerts: true, securityAlerts: true, billingReminders: true, escalationHours: 24 },
+  integrations: { googleWorkspace: true, whatsapp: false, paymentGateway: true, webhookUrl: "https://api.dematadealgo.local/webhooks/platform", webhookSigningEnabled: true, environment: "Production" },
   governance: { auditRetentionDays: 365, backupFrequency: "Daily", piiMasking: true, exportApprovalRequired: true, legalHoldEnabled: false, archiveAfterDays: 2555 },
   mobile: { mobileAccessEnabled: true, biometricRequired: true, deviceLockRequired: true, remoteLogoutEnabled: true, offlineAccessAllowed: false, maxDevicesPerUser: 2 },
 };
@@ -850,11 +850,11 @@ function RolesView() {
       setFormError("A role with this name already exists.");
       return;
     }
-    if (selectedActions.includes("Administer") && !selectedModules.includes("Administration")) {
-      setFormError("Administer action requires the Administration module.");
+    if (selectedActions.includes("Administer") && !selectedModules.includes("Admin Control")) {
+      setFormError("Administer action requires the Admin Control module.");
       return;
     }
-    if (selectedModules.includes("Administration") && selectedActions.includes("Administer") && form.risk !== "High") {
+    if (selectedModules.includes("Admin Control") && selectedActions.includes("Administer") && form.risk !== "High") {
       setFormError("Administrative roles must be classified as High risk.");
       return;
     }
@@ -948,7 +948,7 @@ function RolesView() {
         <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <h3 className="text-lg font-black text-primary">Global Role & Permission Matrix</h3>
-            <p className="mt-1 text-xs font-semibold text-slate-500">Company-wide module entry and data scope. Accounting action limits remain delegated to Accounting Access Control.</p>
+            <p className="mt-1 text-xs font-semibold text-slate-500">Company-wide module entry and data scope. Finance action limits remain delegated to Finance Control access policies.</p>
           </div>
           <div className="flex flex-wrap gap-2">
             <ActionButton icon={Download} onClick={exportRoles}>Export Matrix</ActionButton>
@@ -1037,7 +1037,7 @@ function RolesView() {
               <p className="mb-3 text-xs font-black uppercase tracking-widest text-slate-500">Allowed Actions *</p>
               <div className="flex flex-wrap gap-2">{GLOBAL_ACTIONS.map((action) => <button key={action} type="button" disabled={editingRole?.protected || action === "View"} onClick={() => toggleAction(action)} className={`h-10 rounded-xl border px-4 text-sm font-black ${selectedActions.includes(action) ? "border-primary bg-primary text-white" : "border-border text-slate-500"} disabled:cursor-not-allowed disabled:opacity-70`}>{action}</button>)}</div>
             </div>
-            {selectedModules.includes("Accounting") ? <div className="mt-5 rounded-xl border border-cyan-200 bg-cyan-50 p-3 text-xs font-semibold leading-5 text-cyan-800">Accounting module entry is granted here. Invoice, payment, tax, payroll, approval-limit, and finance audit permissions remain controlled by Accounting Access Control.</div> : null}
+            {selectedModules.includes("Finance Control") ? <div className="mt-5 rounded-xl border border-cyan-200 bg-cyan-50 p-3 text-xs font-semibold leading-5 text-cyan-800">Finance Control module entry is granted here. Invoice, payment, tax, payroll, approval-limit, and finance audit permissions remain controlled by Finance Control access policies.</div> : null}
             {formError ? <div className="mt-5 flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700"><ShieldAlert className="mt-0.5 shrink-0" size={17} />{formError}</div> : null}
             <div className="mt-6 flex justify-end gap-3 border-t border-border pt-5"><ActionButton icon={X} onClick={closeRoleForm}>Cancel</ActionButton><ActionButton icon={ShieldCheck} variant="accent" onClick={saveRole}>{editingRole ? "Update Role" : "Create Role"}</ActionButton></div>
           </div>
@@ -1168,7 +1168,7 @@ function LogsView() {
         </div>
 
         <div className="mb-5 rounded-xl border border-cyan-200 bg-cyan-50 p-3 text-xs font-semibold leading-5 text-cyan-800">
-          This register covers platform-wide security and administration. Accounting transaction evidence remains in Accounting Audit Logs and should feed this register through stable event references in the backend.
+          This register covers platform-wide security and Admin Control. Finance transaction evidence remains in Finance Control audit logs and should feed this register through stable event references in the backend.
         </div>
 
         {notice ? <div className="mb-5 flex items-center justify-between gap-3 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-semibold text-blue-800"><span>{notice}</span><button type="button" onClick={() => setNotice("")} className="rounded-lg p-1 hover:bg-blue-100" title="Dismiss"><X size={16} /></button></div> : null}
@@ -1359,7 +1359,7 @@ function ApprovalsView() {
         </div>
 
         <div className="mb-5 rounded-xl border border-cyan-200 bg-cyan-50 p-3 text-xs font-semibold leading-5 text-cyan-800">
-          Invoice, expense, payment, budget, payroll, GST, and TDS decisions remain in Accounting Approvals. This center stores only global control decisions or references delegated finance requests without re-approving them.
+          Invoice, expense, payment, budget, payroll, GST, and TDS decisions remain in Finance Approvals. This center stores only global control decisions or references delegated finance requests without re-approving them.
         </div>
 
         {notice ? <div className="mb-5 flex items-center justify-between gap-3 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-semibold text-blue-800"><span>{notice}</span><button type="button" onClick={() => setNotice("")} className="rounded-lg p-1 hover:bg-blue-100" title="Dismiss"><X size={16} /></button></div> : null}
@@ -1576,7 +1576,7 @@ function SettingsView() {
       at: timestamp,
       section: selectedControl.title,
       actor: "Rajkumar Rathore",
-      summary: "Configuration updated through Administration Settings.",
+      summary: "Configuration updated through System Settings.",
     }, ...current]);
     setNotice(`${selectedControl.title} updated locally. Production changes require backend authorization and audit logging.`);
     setSelectedKey(null);
@@ -1741,14 +1741,14 @@ function SettingsView() {
 export default function AdministrationHub({ activeView }: { activeView: AdminView }) {
   const title =
     activeView === "users"
-      ? "Users"
+      ? "User Management"
       : activeView === "roles"
         ? "Roles & Permissions"
         : activeView === "logs"
           ? "System Audit Trail"
           : activeView === "approvals"
             ? "Approval Center"
-            : "Settings";
+            : "System Settings";
 
   const description =
     activeView === "users"
@@ -1771,7 +1771,7 @@ export default function AdministrationHub({ activeView }: { activeView: AdminVie
           <div>
             <div className="flex flex-wrap items-center gap-3">
               <h2 className="text-3xl font-black tracking-tight text-[#1E293B]">{title}</h2>
-              <Badge tone="green">Administration</Badge>
+              <Badge tone="green">Admin Control</Badge>
             </div>
             <p className="mt-1 max-w-3xl text-sm font-medium leading-6 text-slate-500">{description}</p>
           </div>
@@ -1787,7 +1787,7 @@ export default function AdministrationHub({ activeView }: { activeView: AdminVie
       <section className="rounded-2xl border border-border bg-primary p-6 text-white shadow-sm">
         <div className="flex items-center gap-3">
           <ShieldCheck className="text-accent" size={24} />
-          <h3 className="text-lg font-black">Practical Admin Controls</h3>
+          <h3 className="text-lg font-black">Admin Control Guardrails</h3>
         </div>
         <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-4">
           {[

@@ -41,13 +41,13 @@ const ACCOUNTING_MODULES = [
   "Payments",
   "Reminders",
   "Credit Notes",
-  "Sale/Purchase/Expense",
-  "Budgets",
-  "Salary/Payroll",
-  "GST Management",
-  "TDS Management",
-  "Reports",
-  "Approvals",
+  "Sales, Purchases & Expenses",
+  "Budget Control",
+  "Payroll Register",
+  "GST Compliance",
+  "TDS Compliance",
+  "Finance Reports",
+  "Finance Approvals",
   "Audit Logs",
   "Access Control",
   "Bank Details",
@@ -125,7 +125,7 @@ const initialRoles: RoleRecord[] = [
     users: 2,
     status: "Active",
     protected: false,
-    modules: ["Client Master", "Vendor Master", "Quotations", "Invoices", "Payments", "Sale/Purchase/Expense", "Budgets", "Salary/Payroll", "GST Management", "TDS Management", "Reports", "Approvals", "Audit Logs", "Bank Details"],
+    modules: ["Client Master", "Vendor Master", "Quotations", "Invoices", "Payments", "Sales, Purchases & Expenses", "Budget Control", "Payroll Register", "GST Compliance", "TDS Compliance", "Finance Reports", "Finance Approvals", "Audit Logs", "Bank Details"],
     actions: ["Create", "Edit", "Archive", "Approve", "Export"],
     dataScope: "All Records",
     approvalLimit: 1000000,
@@ -137,11 +137,11 @@ const initialRoles: RoleRecord[] = [
   {
     id: "ROLE-ACCOUNTANT",
     name: "Accountant",
-    description: "Processes accounting masters, billing, collections, expenses, and statutory records.",
+    description: "Processes finance masters, billing, collections, expenses, and statutory records.",
     users: 4,
     status: "Active",
     protected: false,
-    modules: ["Client Master", "Vendor Master", "Quotations", "Invoices", "Payments", "Reminders", "Credit Notes", "Sale/Purchase/Expense", "GST Management", "TDS Management", "Reports"],
+    modules: ["Client Master", "Vendor Master", "Quotations", "Invoices", "Payments", "Reminders", "Credit Notes", "Sales, Purchases & Expenses", "GST Compliance", "TDS Compliance", "Finance Reports"],
     actions: ["Create", "Edit", "Export"],
     dataScope: "Business Unit",
     approvalLimit: 0,
@@ -157,7 +157,7 @@ const initialRoles: RoleRecord[] = [
     users: 3,
     status: "Active",
     protected: false,
-    modules: ["Sale/Purchase/Expense", "Salary/Payroll", "Reports"],
+    modules: ["Sales, Purchases & Expenses", "Payroll Register", "Finance Reports"],
     actions: ["Create", "Edit", "Approve", "Export"],
     dataScope: "Department",
     approvalLimit: 250000,
@@ -284,7 +284,7 @@ export default function Step16Access() {
   const onSubmit = (data: RoleFormData) => {
     setFormError("");
     if (selectedModules.length === 0) {
-      setFormError("Select at least one accounting module.");
+      setFormError("Select at least one finance module.");
       return;
     }
     if (selectedActions.length === 0) {
@@ -410,7 +410,7 @@ export default function Step16Access() {
   return (
     <AccountingPage
       title="Access Control"
-      description="Define least-privilege accounting roles, approval authority, data scope, and periodic access reviews."
+      description="Define least-privilege finance roles, approval authority, data scope, and periodic access reviews."
       icon={Lock}
       badge="Restricted Admin"
       actions={

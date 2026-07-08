@@ -6,9 +6,8 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { ArrowRight, ArrowLeft, Plus, Phone, Mail, MessageCircle, Video, Users } from "lucide-react";
 import { ActionButton, Field, Panel, StatusBadge } from "../accounting/AccountingComponents";
-import type { LeadStepProps } from "./leadTypes";
+import { mergeLeadDraft, type LeadStepProps } from "./leadTypes";
 
-// --- Validation Schema (Simplified) ---
 const followUpSchema = z.object({
   date: z.string().min(1, "Date required"),
   time: z.string().optional(),
@@ -29,10 +28,7 @@ type FollowUpRecord = FollowUpFormData & {
 type Step3Props = Pick<LeadStepProps, "onNext" | "onPrev"> & Partial<Pick<LeadStepProps, "data" | "updateData">>;
 
 export default function Step3FollowUp({ data, updateData, onNext, onPrev }: Step3Props) {
-  const [followUps, setFollowUps] = useState<FollowUpRecord[]>([
-    { id: 1, date: "2024-03-12", time: "11:00 AM", mode: "Call", staff: "Vikram Rathore", response: "Interested", summary: "Discussed website features. Client asked for quote.", status: "Done" },
-    { id: 2, date: "2024-03-14", time: "02:30 PM", mode: "WhatsApp", staff: "Vikram Rathore", response: "Call Back", summary: "Shared portfolio links. Client will review tonight.", status: "Done" },
-  ]);
+  const [followUps, setFollowUps] = useState<FollowUpRecord[]>([]);
 
   const [showAddForm, setShowAddForm] = useState(false);
 
@@ -59,16 +55,34 @@ export default function Step3FollowUp({ data, updateData, onNext, onPrev }: Step
     }
   };
 
-  const onAddRecord = (data: FollowUpFormData) => {
+  const onAddRecord = (values: FollowUpFormData) => {
+    const nextId = followUps.reduce((maxId, item) => Math.max(maxId, item.id), 0) + 1;
     const newRecord = {
-      id: followUps.length + 1,
-      staff: "Vikram Rathore",
+      id: nextId,
+      staff: data?.assignedTo || "Current Owner",
       status: "Done",
-      ...data
+      ...values
     };
     setFollowUps([newRecord, ...followUps]);
+    updateData?.(mergeLeadDraft({
+      remarks: values.summary,
+      followUpDate: values.nextDate || values.date,
+      status: values.response === "Not Interested" ? "Lost" : values.response === "Interested" ? "Interested" : data?.status || "Interested",
+    }));
     setShowAddForm(false);
     reset();
+  };
+
+  const saveAndNext = () => {
+    const latestFollowUp = followUps[0];
+    if (latestFollowUp) {
+      updateData?.(mergeLeadDraft({
+        remarks: latestFollowUp.summary,
+        followUpDate: latestFollowUp.nextDate || latestFollowUp.date,
+        status: latestFollowUp.response === "Not Interested" ? "Lost" : latestFollowUp.response === "Interested" ? "Interested" : data?.status || "Interested",
+      }));
+    }
+    onNext();
   };
 
   return (
@@ -100,6 +114,12 @@ export default function Step3FollowUp({ data, updateData, onNext, onPrev }: Step
       )}
 
       <div className="space-y-4">
+        {followUps.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-5 py-8 text-center">
+            <p className="text-sm font-black text-primary">No communication records added yet.</p>
+            <p className="mt-1 text-xs font-semibold text-secondary">Add the first call, meeting or email before moving forward when a follow-up is required.</p>
+          </div>
+        ) : null}
         {followUps.map((log) => (
           <div key={log.id} className="relative pl-8 border-l-2 border-slate-100 pb-4 last:pb-0">
             <div className="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-white border-2 border-primary flex items-center justify-center">
@@ -127,7 +147,7 @@ export default function Step3FollowUp({ data, updateData, onNext, onPrev }: Step
 
       <div className="flex justify-between pt-8 border-t border-border">
         <ActionButton label="Back" variant="outline" icon={ArrowLeft} onClick={onPrev} />
-        <ActionButton label="Save & Next" variant="accent" icon={ArrowRight} onClick={onNext} />
+        <ActionButton label="Continue" variant="accent" icon={ArrowRight} onClick={saveAndNext} />
       </div>
     </div>
   );
