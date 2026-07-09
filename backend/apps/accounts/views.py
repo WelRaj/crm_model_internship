@@ -1,16 +1,26 @@
 from rest_framework import permissions, status
+from django.db.models import Q
+from rest_framework.generics import get_object_or_404
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from apps.accounts.models import LoginHistory, UserProfile
+from apps.accounts.models import LoginHistory, Role, User, UserProfile
+from apps.accounts.permissions import IsAccountsAdmin
 from apps.accounts.serializers import (
+    AdminUserCreateSerializer,
+    AdminUserUpdateSerializer,
     LoginHistorySerializer,
     LoginSerializer,
     LogoutSerializer,
+    RoleAssignmentSerializer,
+    RoleSerializer,
+    SignupSerializer,
     UserProfileSerializer,
     UserSummarySerializer,
 )
-from apps.accounts.services import AuthService
+from apps.accounts.selectors import get_users_queryset
+from apps.accounts.services import AccountAdminService, AuthService
+from apps.core.pagination import StandardPagination
 from apps.core.responses import success_response
 
 
@@ -33,6 +43,20 @@ class LoginView(APIView):
             },
             message="Login successful",
             status_code=status.HTTP_200_OK,
+        )
+
+
+class SignupView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        serializer = SignupSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user = AuthService.signup(data=serializer.validated_data, request=request)
+        return success_response(
+            data=UserSummarySerializer(user).data,
+            message="Account created successfully",
+            status_code=status.HTTP_201_CREATED,
         )
 
 
@@ -84,3 +108,113 @@ class LoginHistoryView(APIView):
     def get(self, request):
         rows = LoginHistory.objects.filter(user=request.user).order_by("-created_at")[:20]
         return success_response(data=LoginHistorySerializer(rows, many=True).data)
+
+
+class RoleListView(APIView):
+    permission_classes = [IsAccountsAdmin]
+
+    def get(self, request):
+        roles = Role.objects.order_by("name")
+        return success_response(data=RoleSerializer(roles, many=True).data)
+
+
+class UserListCreateView(APIView):
+    permission_classes = [IsAccountsAdmin]
+
+    def get(self, request):
+        queryset = get_users_queryset()
+        search = request.query_params.get("search")
+        status_filter = request.query_params.get("status")
+
+        if search:
+            queryset = queryset.filter(
+                Q(email__icontains=search)
+                | Q(mobile__icontains=search)
+                | Q(first_name__icontains=search)
+                | Q(last_name__icontains=search)
+                | Q(employee_id__icontains=search)
+            )
+
+        if status_filter == "active":
+            queryset = queryset.filter(is_active=True)
+        elif status_filter == "inactive":
+            queryset = queryset.filter(is_active=False)
+
+        paginator = StandardPagination()
+        page = paginator.paginate_queryset(queryset.distinct(), request, view=self)
+        serializer = UserSummarySerializer(page, many=True)
+        return paginator.get_paginated_response(serializer.data)
+
+    def post(self, request):
+        serializer = AdminUserCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user = AccountAdminService.create_user(data=serializer.validated_data, actor=request.user, request=request)
+        return success_response(
+            data=UserSummarySerializer(user).data,
+            message="User created successfully",
+            status_code=status.HTTP_201_CREATED,
+        )
+
+
+class UserDetailView(APIView):
+    permission_classes = [IsAccountsAdmin]
+
+    def get(self, request, user_id):
+        user = get_object_or_404(get_users_queryset(), id=user_id)
+        return success_response(data=UserSummarySerializer(user).data)
+
+    def put(self, request, user_id):
+        user = get_object_or_404(User, id=user_id)
+        serializer = AdminUserUpdateSerializer(data=request.data, context={"user": user}, partial=True)
+        serializer.is_valid(raise_exception=True)
+        updated_user = AccountAdminService.update_user(
+            user=user,
+            data=serializer.validated_data,
+            actor=request.user,
+            request=request,
+        )
+        return success_response(data=UserSummarySerializer(updated_user).data, message="User updated successfully")
+
+
+class UserActivateView(APIView):
+    permission_classes = [IsAccountsAdmin]
+
+    def post(self, request, user_id):
+        user = get_object_or_404(User, id=user_id)
+        updated_user = AccountAdminService.set_user_active_status(
+            user=user,
+            is_active=True,
+            actor=request.user,
+            request=request,
+        )
+        return success_response(data=UserSummarySerializer(updated_user).data, message="User activated")
+
+
+class UserDeactivateView(APIView):
+    permission_classes = [IsAccountsAdmin]
+
+    def post(self, request, user_id):
+        user = get_object_or_404(User, id=user_id)
+        updated_user = AccountAdminService.set_user_active_status(
+            user=user,
+            is_active=False,
+            actor=request.user,
+            request=request,
+        )
+        return success_response(data=UserSummarySerializer(updated_user).data, message="User deactivated")
+
+
+class UserRoleAssignmentView(APIView):
+    permission_classes = [IsAccountsAdmin]
+
+    def post(self, request, user_id):
+        user = get_object_or_404(User, id=user_id)
+        serializer = RoleAssignmentSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        updated_user = AccountAdminService.assign_roles(
+            user=user,
+            role_codes=serializer.validated_data["role_codes"],
+            actor=request.user,
+            request=request,
+        )
+        return success_response(data=UserSummarySerializer(updated_user).data, message="User roles updated")

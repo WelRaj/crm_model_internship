@@ -8,9 +8,17 @@ from apps.accounts.views import (
     LogoutAllView,
     LogoutView,
     RefreshView,
+    RoleListView,
+    SignupView,
+    UserActivateView,
+    UserDeactivateView,
+    UserDetailView,
+    UserListCreateView,
+    UserRoleAssignmentView,
 )
 
 urlpatterns = [
+    path("auth/signup/", SignupView.as_view(), name="auth-signup"),
     path("auth/login/", LoginView.as_view(), name="auth-login"),
     path("auth/refresh/", RefreshView.as_view(), name="auth-refresh"),
     path("auth/logout/", LogoutView.as_view(), name="auth-logout"),
@@ -18,4 +26,10 @@ urlpatterns = [
     path("auth/me/", CurrentUserView.as_view(), name="auth-me"),
     path("profile/me/", CurrentUserProfileView.as_view(), name="profile-me"),
     path("profile/me/login-history/", LoginHistoryView.as_view(), name="profile-login-history"),
+    path("accounts/roles/", RoleListView.as_view(), name="accounts-roles"),
+    path("accounts/users/", UserListCreateView.as_view(), name="accounts-users"),
+    path("accounts/users/<int:user_id>/", UserDetailView.as_view(), name="accounts-user-detail"),
+    path("accounts/users/<int:user_id>/activate/", UserActivateView.as_view(), name="accounts-user-activate"),
+    path("accounts/users/<int:user_id>/deactivate/", UserDeactivateView.as_view(), name="accounts-user-deactivate"),
+    path("accounts/users/<int:user_id>/roles/", UserRoleAssignmentView.as_view(), name="accounts-user-roles"),
 ]

@@ -11,6 +11,7 @@ Whenever work resumes after a break or a new session, read this file first. It s
 - What backend architecture is planned.
 - What backend work is completed.
 - What is pending.
+- What important session decisions or progress notes must be carried forward.
 - Which tables are planned.
 - Which module uses which table.
 - Which APIs are planned.
@@ -68,7 +69,16 @@ Current status:
 - Database currently has 25 tables.
 - Login, refresh, logout, current user, profile, and login history API views are implemented.
 - Health and database health endpoints return 200 locally.
-- First admin/user creation is pending.
+- First local admin/user is created.
+- Foundation roles and permissions are seeded.
+- Login, refresh, logout, current user, profile, and login history APIs are verified locally with the first admin.
+- Frontend sign-in now calls the backend login API through the centralized API client and `auth-api` service wrapper.
+- Public signup is implemented through `/api/v1/auth/signup/`, saves users to MySQL, creates a profile, assigns the default `employee` role, and writes an audit log.
+- Internal CRM user signup now generates employee IDs and assigns roles from the selected department category.
+- Dashboard now loads the authenticated backend user, redirects missing/invalid sessions to sign-in, and clears tokens on sign-out.
+- Frontend API client now refreshes expired access tokens once on authenticated 401 responses, retries the original request, and clears local tokens if refresh fails.
+- Admin User Management APIs are implemented for role listing, user listing, create, detail, update, activate, deactivate, and role assignment.
+- Frontend account administration API calls are centralized in `panel/src/services/accounts-api.ts`.
 
 ## 4. Production Architecture Reference
 
@@ -107,6 +117,11 @@ That file contains:
 - Use soft delete for business records.
 - Keep API response format consistent.
 - Keep all API calls centralized.
+- Do not create duplicate APIs for the same business action or data need.
+- Keep API surface area minimal; create only the endpoints that are actually needed by frontend workflows or backend integrations.
+- Prefer extending a correct existing endpoint with safe filters/actions over adding a near-duplicate endpoint.
+- Keep backend implementation solid, clean, maintainable, and production-ready.
+- Every completed backend flow should be verified so the product runs smoothly with minimal bugs.
 
 ## 6. Centralized API Rule
 
@@ -125,6 +140,8 @@ Backend integration rule:
 - All frontend requests should go through `src/lib/api-client.ts` or module-specific service wrappers built on top of it.
 - API base URL should come from `NEXT_PUBLIC_API_URL`.
 - Backend should expose versioned APIs under `/api/v1/`.
+- API wrappers should not duplicate the same backend call in multiple files.
+- Before adding a new endpoint, check whether an existing endpoint already covers the use case cleanly.
 
 Recommended frontend API organization:
 
@@ -412,6 +429,38 @@ Milestone 1 should include:
 - Standard response helper.
 - Basic audit log model.
 
+Internal user signup role mapping:
+
+| Signup Department | Assigned Role | Default Designation |
+| --- | --- | --- |
+| Client Operations | `telecaller` | Client Operations Executive |
+| People Operations | `hr` | HR Executive |
+| Finance Control | `finance` | Finance Executive |
+| Growth Marketing | `marketing` | Marketing Executive |
+| Delivery Projects | `project_manager` | Project Executive |
+| Admin Control | `admin` | Admin Executive |
+
+Internal user signup rules:
+
+- Signup is for internal CRM users/employees only.
+- Customer/client records must not use auth signup unless a customer portal is intentionally built later.
+- New internal users receive an auto-generated employee ID from `core_sequences`.
+- Signup creates `users`, `user_profiles`, `user_roles`, and an `audit_logs` entry in one transaction.
+- New signup users can immediately sign in with their email/mobile and password.
+
+Implemented Admin User Management APIs:
+
+| Method | Endpoint | Purpose |
+| --- | --- | --- |
+| `GET` | `/api/v1/accounts/roles/` | List roles |
+| `GET` | `/api/v1/accounts/users/` | List users with pagination, search, and active/inactive filter |
+| `POST` | `/api/v1/accounts/users/` | Create internal CRM user |
+| `GET` | `/api/v1/accounts/users/{id}/` | Get user detail |
+| `PUT` | `/api/v1/accounts/users/{id}/` | Update user profile/account fields |
+| `POST` | `/api/v1/accounts/users/{id}/activate/` | Activate user |
+| `POST` | `/api/v1/accounts/users/{id}/deactivate/` | Deactivate user and revoke active sessions |
+| `POST` | `/api/v1/accounts/users/{id}/roles/` | Replace assigned roles |
+
 ## 13. Session Resume Checklist
 
 When starting a new backend session:
@@ -424,6 +473,12 @@ When starting a new backend session:
 6. Check latest completed milestone.
 7. Continue from the next pending milestone.
 
+Session continuity rule:
+
+- Important backend decisions, completed work, blockers, and next steps must be saved in this file before ending a work session.
+- Do not rely only on chat history for backend continuity.
+- Treat this file as the durable backend memory for future sessions.
+
 ## 14. Latest Work Log
 
 | Date | Work |
@@ -434,3 +489,11 @@ When starting a new backend session:
 | 2026-07-08 | Ran Django system check successfully and generated initial migrations for foundation apps. |
 | 2026-07-08 | Added centralized auth/profile API routes for login, refresh, logout, logout-all, current user, profile, and login history. |
 | 2026-07-08 | Configured local MySQL environment, created `crmproduct` database, applied migrations, fixed MySQL unique key length warning, and verified health endpoints. |
+| 2026-07-09 | Added reusable `seed_foundation` management command, seeded first local admin, default roles, and module permissions. |
+| 2026-07-09 | Fixed login history metadata bug and verified auth/profile API flow locally: login, me, profile, login history, refresh, and logout. |
+| 2026-07-09 | Connected panel sign-in form to backend `/api/v1/auth/login/` through centralized frontend API wrappers and verified TypeScript, build, and lint. |
+| 2026-07-09 | Added backend signup API, connected panel signup form, verified signup saves to MySQL and the new user can sign in. |
+| 2026-07-09 | Hardened internal user signup with employee ID generation, department-to-role assignment, backend tests, and multi-role signup/signin smoke verification. |
+| 2026-07-09 | Added frontend dashboard auth guard, current-user profile hydration, and sign-out through centralized auth API wrappers. |
+| 2026-07-09 | Added centralized frontend access-token refresh handling with single-flight refresh, one retry per request, and verified backend refresh endpoint. |
+| 2026-07-09 | Added Admin User Management backend APIs with admin-only permission checks, service-layer mutations, audit logs, tests, local smoke verification, and centralized frontend account API wrappers. |

@@ -1,7 +1,7 @@
 "use client";
 
 import EmployeePerformance from "@/components/dashboard/projects/performance/EmployeePerformance";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { LucideIcon } from "lucide-react";
 import { 
   LayoutDashboard, UserPlus, Target, Wallet, Speaker, Bell, Search, LogOut, TrendingUp, Users, Briefcase, Settings, Shield, ShieldCheck, Calendar, HelpCircle, MessageSquare, ChevronDown, User, Clock, SquareCheck, History, CheckCircle2, Menu, ChevronLeft, UserCheck, Headphones, X, Mail, Phone, MapPin, IdCard, KeyRound, Pencil
@@ -20,6 +20,9 @@ import MarketingHub from "@/components/dashboard/marketing/MarketingHub";
 import ProjectHub from "@/components/dashboard/projects/ProjectHub";
 import SupportHub from "@/components/dashboard/support/SupportHub";
 import AccountingWizard, { ACCOUNTING_MODULES, type AccountingModuleId } from "@/components/dashboard/accounting/AccountingWizard";
+import { clearAuthSession, getCurrentUser, logout, type AuthUser } from "@/services/auth-api";
+import { getStoredAuthTokens } from "@/lib/api-client";
+import { useRouter } from "next/navigation";
 
 type MarketingView = "campaigns" | "roi" | "sources";
 type AdminView = "users" | "roles" | "logs" | "approvals" | "settings";
@@ -219,6 +222,26 @@ function ProfileInput({
 function initialsFromName(name: string) {
   const parts = name.trim().split(/\s+/).filter(Boolean);
   return `${parts[0]?.[0] || "U"}${parts[1]?.[0] || ""}`.toUpperCase();
+}
+
+function userToProfile(user: AuthUser): UserProfile {
+  const fullName = user.full_name || [user.first_name, user.last_name].filter(Boolean).join(" ") || user.email || user.mobile || "CRM User";
+  const roleName = user.roles[0]?.name || "Employee";
+
+  return {
+    ...defaultUserProfile,
+    photoInitials: initialsFromName(fullName),
+    fullName,
+    employeeId: user.employee_id || "Pending",
+    designation: user.designation || "Employee",
+    department: user.department || "Operations",
+    officialEmail: user.email || "",
+    mobile: user.mobile ? `+91 ${user.mobile}` : "",
+    role: roleName,
+    employeeStatus: user.is_active ? "Active" : "Inactive",
+    username: user.email || user.mobile || "",
+    lastLogin: "Current session",
+  };
 }
 
 function makeDemoOtp() {
@@ -579,13 +602,48 @@ function ProfileDrawer({
 }
 
 export default function Dashboard() {
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState("overview");
   const [lastVisitedModule, setLastVisitedModule] = useState("");
   const [showNotif, setShowNotif] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [showProfileDrawer, setShowProfileDrawer] = useState(false);
   const [userProfile, setUserProfile] = useState<UserProfile>(defaultUserProfile);
+  const [isAuthChecking, setIsAuthChecking] = useState(true);
   const [isSidebarVisible, setIsSidebarVisible] = useState(true);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadCurrentUser() {
+      if (!getStoredAuthTokens()) {
+        router.replace("/auth/signin");
+        return;
+      }
+
+      try {
+        const user = await getCurrentUser();
+        if (!isMounted) return;
+        setUserProfile(userToProfile(user));
+        setIsAuthChecking(false);
+      } catch {
+        clearAuthSession();
+        router.replace("/auth/signin");
+      }
+    }
+
+    void loadCurrentUser();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [router]);
+
+  const handleSignOut = async () => {
+    setShowProfile(false);
+    await logout();
+    router.replace("/auth/signin");
+  };
 
   const menuGroups = [
     { label: "Main", department: "overview", items: [{ id: "overview", label: "Dashboard", icon: LayoutDashboard }] },
@@ -618,6 +676,17 @@ export default function Dashboard() {
     setShowProfile(false);
     setShowProfileDrawer(false);
   };
+
+  if (isAuthChecking) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-[#F8FAFC] p-6">
+        <div className="rounded-2xl border border-slate-100 bg-white p-8 text-center shadow-sm">
+          <div className="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-4 border-slate-200 border-t-primary" />
+          <p className="text-sm font-black uppercase tracking-widest text-slate-500">Loading CRM session</p>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <div className="relative flex min-h-screen overflow-x-hidden bg-[#F8FAFC]">
@@ -717,19 +786,19 @@ export default function Dashboard() {
                   aria-expanded={showProfile}
                 >
                   <div className="hidden text-right xl:block">
-                    <p className="text-sm font-black text-[#1E293B]">Rajkumar Rathore</p>
-                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Super Admin</p>
+                    <p className="text-sm font-black text-[#1E293B]">{userProfile.fullName}</p>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">{userProfile.role}</p>
                   </div>
-                  <div className="w-14 h-14 rounded-[1.25rem] bg-slate-900 text-white flex items-center justify-center">RR</div>
+                  <div className="w-14 h-14 rounded-[1.25rem] bg-slate-900 text-white flex items-center justify-center">{userProfile.photoInitials}</div>
                   <ChevronDown size={16} className={`hidden text-slate-400 transition-transform md:block ${showProfile ? "rotate-180" : ""}`} />
                 </button>
                 {showProfile ? (
                   <div className="absolute right-0 top-16 w-72 rounded-2xl border border-slate-100 bg-white p-4 shadow-2xl">
                     <div className="mb-4 flex items-center gap-3 rounded-xl bg-slate-50 p-3">
-                      <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-slate-900 text-sm font-black text-white">RR</div>
+                      <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-slate-900 text-sm font-black text-white">{userProfile.photoInitials}</div>
                       <div className="min-w-0">
-                        <p className="truncate text-sm font-black text-primary">Rajkumar Rathore</p>
-                        <p className="text-xs font-semibold text-slate-500">rajkumar@crmpro.local</p>
+                        <p className="truncate text-sm font-black text-primary">{userProfile.fullName}</p>
+                        <p className="truncate text-xs font-semibold text-slate-500">{userProfile.officialEmail || userProfile.mobile}</p>
                       </div>
                     </div>
                     <div className="space-y-1">
@@ -747,10 +816,7 @@ export default function Dashboard() {
                     </div>
                     <button
                       type="button"
-                      onClick={() => {
-                        setShowProfile(false);
-                        openTab("overview");
-                      }}
+                      onClick={handleSignOut}
                       className="mt-3 flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-rose-100 bg-rose-50 text-xs font-black uppercase tracking-widest text-rose-700"
                     >
                       <LogOut size={15} /> Sign Out
