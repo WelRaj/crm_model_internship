@@ -1,18 +1,62 @@
 from rest_framework import serializers
 
-from apps.accounts.models import LoginHistory, Role, User, UserProfile, UserRole
+from apps.accounts.models import LoginHistory, Permission, Role, RolePermission, User, UserProfile, UserRole
 from apps.accounts.services import SIGNUP_DEPARTMENT_ROLES
 
 
 class RoleSerializer(serializers.ModelSerializer):
+    users = serializers.SerializerMethodField()
+    permissions = serializers.SerializerMethodField()
+
     class Meta:
         model = Role
-        fields = ("id", "code", "name", "description")
+        fields = ("id", "code", "name", "description", "is_system_role", "is_active", "users", "permissions")
+
+    def get_users(self, obj):
+        return obj.user_roles.count()
+
+    def get_permissions(self, obj):
+        permission_ids = RolePermission.objects.filter(role=obj).values_list("permission_id", flat=True)
+        return PermissionSerializer(Permission.objects.filter(id__in=permission_ids).order_by("module", "action"), many=True).data
+
+
+class PermissionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Permission
+        fields = ("id", "code", "name", "module", "action", "description")
+
+
+class AdminRoleWriteSerializer(serializers.Serializer):
+    name = serializers.CharField(max_length=120)
+    description = serializers.CharField(required=False, allow_blank=True)
+    is_active = serializers.BooleanField(required=False)
+    permission_codes = serializers.ListField(
+        child=serializers.CharField(max_length=120),
+        allow_empty=True,
+        required=False,
+    )
+
+    def validate_name(self, value):
+        role = self.context.get("role")
+        queryset = Role.objects.filter(name__iexact=value)
+        if role:
+            queryset = queryset.exclude(id=role.id)
+        if queryset.exists():
+            raise serializers.ValidationError("A role with this name already exists.")
+        return value
+
+    def validate_permission_codes(self, value):
+        existing_codes = set(Permission.objects.filter(code__in=value).values_list("code", flat=True))
+        missing = sorted(set(value) - existing_codes)
+        if missing:
+            raise serializers.ValidationError(f"Unknown permission code(s): {', '.join(missing)}")
+        return value
 
 
 class UserSummarySerializer(serializers.ModelSerializer):
     full_name = serializers.SerializerMethodField()
     roles = serializers.SerializerMethodField()
+    active_sessions = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -29,6 +73,7 @@ class UserSummarySerializer(serializers.ModelSerializer):
             "is_active",
             "is_verified",
             "roles",
+            "active_sessions",
         )
 
     def get_full_name(self, obj):
@@ -37,6 +82,9 @@ class UserSummarySerializer(serializers.ModelSerializer):
     def get_roles(self, obj):
         role_ids = UserRole.objects.filter(user=obj).values_list("role_id", flat=True)
         return RoleSerializer(Role.objects.filter(id__in=role_ids), many=True).data
+
+    def get_active_sessions(self, obj):
+        return obj.sessions.filter(is_active=True).count()
 
 
 class AdminUserCreateSerializer(serializers.Serializer):
@@ -66,10 +114,10 @@ class AdminUserCreateSerializer(serializers.Serializer):
         return value
 
     def validate_role_codes(self, value):
-        existing_codes = set(Role.objects.filter(code__in=value).values_list("code", flat=True))
+        existing_codes = set(Role.objects.filter(code__in=value, is_active=True).values_list("code", flat=True))
         missing = sorted(set(value) - existing_codes)
         if missing:
-            raise serializers.ValidationError(f"Unknown role code(s): {', '.join(missing)}")
+            raise serializers.ValidationError(f"Unknown or inactive role code(s): {', '.join(missing)}")
         return value
 
 
@@ -101,10 +149,10 @@ class RoleAssignmentSerializer(serializers.Serializer):
     role_codes = serializers.ListField(child=serializers.CharField(max_length=80), allow_empty=False)
 
     def validate_role_codes(self, value):
-        existing_codes = set(Role.objects.filter(code__in=value).values_list("code", flat=True))
+        existing_codes = set(Role.objects.filter(code__in=value, is_active=True).values_list("code", flat=True))
         missing = sorted(set(value) - existing_codes)
         if missing:
-            raise serializers.ValidationError(f"Unknown role code(s): {', '.join(missing)}")
+            raise serializers.ValidationError(f"Unknown or inactive role code(s): {', '.join(missing)}")
         return value
 
 

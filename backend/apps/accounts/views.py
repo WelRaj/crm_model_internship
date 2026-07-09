@@ -4,7 +4,7 @@ from rest_framework.generics import get_object_or_404
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from apps.accounts.models import LoginHistory, Role, User, UserProfile
+from apps.accounts.models import LoginHistory, Permission, Role, User, UserProfile
 from apps.accounts.permissions import IsAccountsAdmin
 from apps.accounts.serializers import (
     AdminUserCreateSerializer,
@@ -12,6 +12,8 @@ from apps.accounts.serializers import (
     LoginHistorySerializer,
     LoginSerializer,
     LogoutSerializer,
+    AdminRoleWriteSerializer,
+    PermissionSerializer,
     RoleAssignmentSerializer,
     RoleSerializer,
     SignupSerializer,
@@ -114,8 +116,46 @@ class RoleListView(APIView):
     permission_classes = [IsAccountsAdmin]
 
     def get(self, request):
-        roles = Role.objects.order_by("name")
+        roles = Role.objects.prefetch_related("user_roles", "role_permissions__permission").order_by("name")
         return success_response(data=RoleSerializer(roles, many=True).data)
+
+    def post(self, request):
+        serializer = AdminRoleWriteSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        role = AccountAdminService.create_role(
+            data=serializer.validated_data,
+            actor=request.user,
+            request=request,
+        )
+        return success_response(
+            data=RoleSerializer(role).data,
+            message="Role created successfully",
+            status_code=status.HTTP_201_CREATED,
+        )
+
+
+class RoleDetailView(APIView):
+    permission_classes = [IsAccountsAdmin]
+
+    def put(self, request, role_id):
+        role = get_object_or_404(Role, id=role_id)
+        serializer = AdminRoleWriteSerializer(data=request.data, context={"role": role}, partial=True)
+        serializer.is_valid(raise_exception=True)
+        updated_role = AccountAdminService.update_role(
+            role=role,
+            data=serializer.validated_data,
+            actor=request.user,
+            request=request,
+        )
+        return success_response(data=RoleSerializer(updated_role).data, message="Role updated successfully")
+
+
+class PermissionListView(APIView):
+    permission_classes = [IsAccountsAdmin]
+
+    def get(self, request):
+        permissions = Permission.objects.order_by("module", "action")
+        return success_response(data=PermissionSerializer(permissions, many=True).data)
 
 
 class UserListCreateView(APIView):
@@ -218,3 +258,15 @@ class UserRoleAssignmentView(APIView):
             request=request,
         )
         return success_response(data=UserSummarySerializer(updated_user).data, message="User roles updated")
+
+
+class UserSessionRevokeView(APIView):
+    permission_classes = [IsAccountsAdmin]
+
+    def post(self, request, user_id):
+        user = get_object_or_404(User, id=user_id)
+        revoked_count = AccountAdminService.revoke_sessions(user=user, actor=request.user, request=request)
+        return success_response(
+            data={"revoked_sessions": revoked_count},
+            message="User sessions revoked",
+        )

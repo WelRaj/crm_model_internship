@@ -6,7 +6,7 @@ from django.utils import timezone
 from rest_framework.exceptions import AuthenticationFailed, ValidationError
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from apps.accounts.models import LoginHistory, Role, User, UserProfile, UserRole, UserSession
+from apps.accounts.models import LoginHistory, Permission, Role, RolePermission, User, UserProfile, UserRole, UserSession
 from apps.accounts.selectors import get_user_by_identifier
 from apps.audit.services import record_audit_log
 from apps.core.models import Sequence
@@ -47,6 +47,10 @@ def _next_employee_id():
     sequence.current_value += 1
     sequence.save(update_fields=["current_value", "updated_at"])
     return f"{sequence.prefix}-{sequence.current_value:0{sequence.padding}d}"
+
+
+def _role_code_from_name(name: str) -> str:
+    return "_".join(name.strip().lower().split())
 
 
 class AuthService:
@@ -171,8 +175,87 @@ class AuthService:
             **_login_history_meta(request),
         )
 
+        token = RefreshToken(refresh_token)
+        token.blacklist()
+
 
 class AccountAdminService:
+    @staticmethod
+    @transaction.atomic
+    def create_role(*, data, actor, request=None):
+        permission_codes = data.get("permission_codes") or []
+        role = Role.objects.create(
+            code=_role_code_from_name(data["name"]),
+            name=data["name"].strip(),
+            description=data.get("description", "").strip(),
+            is_system_role=False,
+            is_active=data.get("is_active", True),
+        )
+        permissions = list(Permission.objects.filter(code__in=permission_codes))
+        RolePermission.objects.bulk_create([RolePermission(role=role, permission=permission) for permission in permissions])
+
+        record_audit_log(
+            actor=actor,
+            module="accounts",
+            action="create_role",
+            entity_type="Role",
+            entity_id=role.id,
+            new_values={
+                "code": role.code,
+                "name": role.name,
+                "description": role.description,
+                "is_active": role.is_active,
+                "permissions": permission_codes,
+            },
+            request=request,
+        )
+        return role
+
+    @staticmethod
+    @transaction.atomic
+    def update_role(*, role, data, actor, request=None):
+        old_values = {
+            "name": role.name,
+            "description": role.description,
+            "is_active": role.is_active,
+            "permissions": list(RolePermission.objects.filter(role=role).values_list("permission__code", flat=True)),
+        }
+
+        if not role.is_system_role and "name" in data:
+            role.name = data["name"].strip()
+            role.code = _role_code_from_name(role.name)
+        if "description" in data:
+            role.description = data["description"].strip()
+        if "is_active" in data:
+            if role.is_system_role and not data["is_active"]:
+                raise ValidationError({"is_active": "System roles cannot be deactivated."})
+            if role.user_roles.exists() and not data["is_active"]:
+                raise ValidationError({"is_active": "Roles with assigned users cannot be deactivated."})
+            role.is_active = data["is_active"]
+        role.save(update_fields=["name", "code", "description", "is_active", "updated_at"])
+
+        if "permission_codes" in data:
+            permissions = list(Permission.objects.filter(code__in=data["permission_codes"]))
+            RolePermission.objects.filter(role=role).delete()
+            RolePermission.objects.bulk_create([RolePermission(role=role, permission=permission) for permission in permissions])
+
+        record_audit_log(
+            actor=actor,
+            module="accounts",
+            action="update_role",
+            entity_type="Role",
+            entity_id=role.id,
+            old_values=old_values,
+            new_values={
+                "name": role.name,
+                "description": role.description,
+                "is_active": role.is_active,
+                "permissions": list(RolePermission.objects.filter(role=role).values_list("permission__code", flat=True)),
+            },
+            request=request,
+        )
+        return role
+
     @staticmethod
     @transaction.atomic
     def create_user(*, data, actor, request=None):
@@ -291,9 +374,6 @@ class AccountAdminService:
         )
         return user
 
-        token = RefreshToken(refresh_token)
-        token.blacklist()
-
     @staticmethod
     def logout_all(*, user, request=None):
         UserSession.objects.filter(user=user, is_active=True).update(is_active=False, revoked_at=timezone.now())
@@ -304,3 +384,22 @@ class AccountAdminService:
             logout_time=timezone.now(),
             **_login_history_meta(request),
         )
+
+    @staticmethod
+    @transaction.atomic
+    def revoke_sessions(*, user, actor, request=None):
+        revoked_count = UserSession.objects.filter(user=user, is_active=True).update(
+            is_active=False,
+            revoked_at=timezone.now(),
+        )
+        record_audit_log(
+            actor=actor,
+            module="accounts",
+            action="revoke_sessions",
+            entity_type="UserSession",
+            entity_id=user.id,
+            old_values={"active_sessions": revoked_count},
+            new_values={"active_sessions": 0},
+            request=request,
+        )
+        return revoked_count

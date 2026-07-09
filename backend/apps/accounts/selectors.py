@@ -16,4 +16,4 @@ def user_has_admin_access(user):
         return False
     if user.is_superuser:
         return True
-    return UserRole.objects.filter(user=user, role__code__in=["super_admin", "admin"]).exists()
+    return UserRole.objects.filter(user=user, role__code__in=["super_admin", "admin"], role__is_active=True).exists()

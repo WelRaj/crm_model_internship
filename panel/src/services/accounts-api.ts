@@ -21,6 +21,26 @@ export type AccountRole = {
   code: string;
   name: string;
   description: string;
+  is_system_role: boolean;
+  is_active: boolean;
+  users: number;
+  permissions: AccountPermission[];
+};
+
+export type AccountPermission = {
+  id: string;
+  code: string;
+  name: string;
+  module: string;
+  action: string;
+  description: string;
+};
+
+export type RolePayload = {
+  name: string;
+  description?: string;
+  is_active?: boolean;
+  permission_codes?: string[];
 };
 
 export type UserListParams = {
@@ -62,6 +82,21 @@ export async function listRoles() {
   return response.data;
 }
 
+export async function listPermissions() {
+  const response = await api.get<ApiResponse<AccountPermission[]>>("/accounts/permissions/");
+  return response.data;
+}
+
+export async function createRole(payload: RolePayload) {
+  const response = await api.post<ApiResponse<AccountRole>>("/accounts/roles/", payload);
+  return response.data;
+}
+
+export async function updateRole(roleId: string, payload: RolePayload) {
+  const response = await api.put<ApiResponse<AccountRole>>(`/accounts/roles/${roleId}/`, payload);
+  return response.data;
+}
+
 export async function listUsers(params?: UserListParams) {
   return api.get<PaginatedResponse<AuthUser[]>>(`/accounts/users/${toQueryString(params)}`);
 }
@@ -90,5 +125,10 @@ export async function assignUserRoles(userId: number, roleCodes: string[]) {
   const response = await api.post<ApiResponse<AuthUser>>(`/accounts/users/${userId}/roles/`, {
     role_codes: roleCodes,
   });
+  return response.data;
+}
+
+export async function revokeUserSessions(userId: number) {
+  const response = await api.post<ApiResponse<{ revoked_sessions: number }>>(`/accounts/users/${userId}/sessions/revoke/`, {});
   return response.data;
 }

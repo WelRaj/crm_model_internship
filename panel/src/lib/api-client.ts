@@ -11,6 +11,7 @@ type ApiErrorPayload = {
   message?: string;
   detail?: string;
   errors?: Record<string, string | string[]>;
+  [key: string]: unknown;
 };
 
 type ApiRequestConfig = Omit<RequestInit, "body"> & {
@@ -82,13 +83,28 @@ async function getFreshAccessToken() {
   return refreshInFlight;
 }
 
+function formatFieldErrors(errors: Record<string, unknown>) {
+  const messages = Object.entries(errors)
+    .filter(([, value]) => Array.isArray(value) || typeof value === "string")
+    .map(([field, value]) => {
+      const message = Array.isArray(value) ? value.join(", ") : value;
+      return field === "non_field_errors" ? String(message) : `${field}: ${String(message)}`;
+    });
+
+  return messages.join("\n");
+}
+
 function resolveApiError(payload: ApiErrorPayload) {
   if (payload.message) return payload.message;
   if (payload.detail) return payload.detail;
   if (payload.errors) {
-    const firstError = Object.values(payload.errors)[0];
-    return Array.isArray(firstError) ? firstError[0] : firstError;
+    const message = formatFieldErrors(payload.errors);
+    if (message) return message;
   }
+
+  const message = formatFieldErrors(payload);
+  if (message) return message;
+
   return "Something went wrong";
 }
 

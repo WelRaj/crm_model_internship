@@ -22,6 +22,7 @@ from apps.core.views import database_health_check, health_check
 urlpatterns = [
     path('admin/', admin.site.urls),
     path("api/v1/", include("apps.accounts.urls")),
+    path("api/v1/", include("apps.audit.urls")),
     path("api/v1/health/", health_check, name="health-check"),
     path("api/v1/health/db/", database_health_check, name="database-health-check"),
 ]

@@ -1,6 +1,9 @@
-from rest_framework.test import APITestCase
+from datetime import timedelta
 
-from apps.accounts.models import Role, User, UserProfile, UserRole
+from rest_framework.test import APITestCase
+from django.utils import timezone
+
+from apps.accounts.models import Permission, Role, RolePermission, User, UserProfile, UserRole, UserSession
 from apps.audit.models import AuditLog
 
 
@@ -78,6 +81,20 @@ class AccountAdminApiTests(APITestCase):
             description="Finance module access.",
             is_system_role=True,
         )
+        self.view_accounts_permission = Permission.objects.create(
+            code="accounts.view",
+            name="Accounts View",
+            module="accounts",
+            action="view",
+            description="Can view account records.",
+        )
+        self.edit_accounts_permission = Permission.objects.create(
+            code="accounts.edit",
+            name="Accounts Edit",
+            module="accounts",
+            action="edit",
+            description="Can edit account records.",
+        )
         self.admin = User.objects.create_superuser(
             email="admin@example.com",
             mobile="9876543200",
@@ -151,3 +168,98 @@ class AccountAdminApiTests(APITestCase):
         response = self.client.get("/api/v1/accounts/users/")
 
         self.assertEqual(response.status_code, 403)
+
+    def test_admin_can_revoke_user_sessions(self):
+        employee = User.objects.create_user(
+            email="session.user@example.com",
+            mobile="9876543211",
+            password="Employee@123",
+            first_name="Session",
+        )
+        UserRole.objects.create(user=employee, role=self.employee_role, assigned_by=self.admin)
+        UserSession.objects.create(
+            user=employee,
+            refresh_token_hash="active-session-hash",
+            is_active=True,
+            expires_at=timezone.now() + timedelta(days=7),
+        )
+        self.client.force_authenticate(user=self.admin)
+
+        response = self.client.post(f"/api/v1/accounts/users/{employee.id}/sessions/revoke/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["data"]["revoked_sessions"], 1)
+        self.assertFalse(UserSession.objects.get(user=employee).is_active)
+        self.assertTrue(AuditLog.objects.filter(module="accounts", action="revoke_sessions").exists())
+
+    def test_admin_can_manage_roles_and_permissions(self):
+        self.client.force_authenticate(user=self.admin)
+
+        create_response = self.client.post(
+            "/api/v1/accounts/roles/",
+            {
+                "name": "Access Reviewer",
+                "description": "Reviews identity and access changes.",
+                "is_active": False,
+                "permission_codes": ["accounts.view"],
+            },
+            format="json",
+        )
+        self.assertEqual(create_response.status_code, 201)
+        role_id = create_response.data["data"]["id"]
+        self.assertFalse(create_response.data["data"]["is_active"])
+        self.assertEqual(create_response.data["data"]["permissions"][0]["code"], "accounts.view")
+
+        update_response = self.client.put(
+            f"/api/v1/accounts/roles/{role_id}/",
+            {
+                "name": "Access Reviewer",
+                "description": "Reviews and updates identity access changes.",
+                "is_active": True,
+                "permission_codes": ["accounts.view", "accounts.edit"],
+            },
+            format="json",
+        )
+        self.assertEqual(update_response.status_code, 200)
+        self.assertTrue(update_response.data["data"]["is_active"])
+        self.assertEqual(len(update_response.data["data"]["permissions"]), 2)
+        self.assertTrue(RolePermission.objects.filter(role_id=role_id, permission=self.edit_accounts_permission).exists())
+
+        permissions_response = self.client.get("/api/v1/accounts/permissions/")
+        self.assertEqual(permissions_response.status_code, 200)
+        self.assertEqual(len(permissions_response.data["data"]), 2)
+        self.assertTrue(AuditLog.objects.filter(module="accounts", action="update_role").exists())
+
+    def test_inactive_roles_cannot_be_assigned_and_assigned_roles_cannot_be_deactivated(self):
+        inactive_role = Role.objects.create(
+            code="inactive_role",
+            name="Inactive Role",
+            description="Inactive access.",
+            is_active=False,
+        )
+        employee = User.objects.create_user(
+            email="role.employee@example.com",
+            mobile="9876543212",
+            password="Employee@123",
+            first_name="Role",
+        )
+        self.client.force_authenticate(user=self.admin)
+
+        assign_response = self.client.post(
+            f"/api/v1/accounts/users/{employee.id}/roles/",
+            {"role_codes": [inactive_role.code]},
+            format="json",
+        )
+        self.assertEqual(assign_response.status_code, 400)
+
+        UserRole.objects.create(user=employee, role=self.finance_role, assigned_by=self.admin)
+        deactivate_response = self.client.put(
+            f"/api/v1/accounts/roles/{self.finance_role.id}/",
+            {
+                "name": self.finance_role.name,
+                "description": self.finance_role.description,
+                "is_active": False,
+            },
+            format="json",
+        )
+        self.assertEqual(deactivate_response.status_code, 400)

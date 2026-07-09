@@ -18,6 +18,7 @@ export type AuthUser = {
   designation: string;
   is_active: boolean;
   is_verified: boolean;
+  active_sessions: number;
   roles: Array<{
     id: string;
     code: string;

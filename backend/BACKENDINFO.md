@@ -79,6 +79,10 @@ Current status:
 - Frontend API client now refreshes expired access tokens once on authenticated 401 responses, retries the original request, and clears local tokens if refresh fails.
 - Admin User Management APIs are implemented for role listing, user listing, create, detail, update, activate, deactivate, and role assignment.
 - Frontend account administration API calls are centralized in `panel/src/services/accounts-api.ts`.
+- Admin Control UI now consumes live backend users and roles, supports create/edit/activate/deactivate, and keeps user management actions centralized.
+- Admin Role Management APIs now expose permissions, create/update roles, assign permission codes, audit role changes, and drive the Roles & Permissions UI from backend data.
+- Audit Log APIs now expose admin-only paginated/searchable audit events and drive the Admin Control System Audit Trail UI from backend data.
+- Roles now have persisted active/inactive status, protected system-role safeguards, inactive-role assignment blocking, and live UI status toggles.
 
 ## 4. Production Architecture Reference
 
@@ -497,3 +501,7 @@ Session continuity rule:
 | 2026-07-09 | Added frontend dashboard auth guard, current-user profile hydration, and sign-out through centralized auth API wrappers. |
 | 2026-07-09 | Added centralized frontend access-token refresh handling with single-flight refresh, one retry per request, and verified backend refresh endpoint. |
 | 2026-07-09 | Added Admin User Management backend APIs with admin-only permission checks, service-layer mutations, audit logs, tests, local smoke verification, and centralized frontend account API wrappers. |
+| 2026-07-09 | Connected Admin Control user management UI to backend users/roles APIs with live loading, create/update, activate/deactivate, pagination, and role assignment. |
+| 2026-07-09 | Connected Roles & Permissions to backend role/permission data with role create/update APIs, permission assignment, audit logging, frontend API wrappers, and tests. |
+| 2026-07-09 | Added admin-only audit log listing API with search/pagination, connected System Audit Trail UI to live backend audit events, and added audit API tests. |
+| 2026-07-09 | Added persisted role active/inactive status with migration, backend validation, assignment safeguards, audited UI toggles, and regression tests. |

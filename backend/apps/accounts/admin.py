@@ -34,7 +34,13 @@ class CustomUserAdmin(UserAdmin):
     )
 
 
-admin.site.register(Role)
+@admin.register(Role)
+class RoleAdmin(admin.ModelAdmin):
+    list_display = ("code", "name", "is_active", "is_system_role", "updated_at")
+    list_filter = ("is_active", "is_system_role")
+    search_fields = ("code", "name", "description")
+
+
 admin.site.register(Permission)
 admin.site.register(RolePermission)
 admin.site.register(UserRole)

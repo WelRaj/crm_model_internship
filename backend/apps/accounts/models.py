@@ -64,6 +64,7 @@ class Role(UUIDModel, TimeStampedModel):
     name = models.CharField(max_length=120, unique=True)
     description = models.TextField(blank=True)
     is_system_role = models.BooleanField(default=False)
+    is_active = models.BooleanField(default=True, db_index=True)
 
     class Meta:
         db_table = "roles"

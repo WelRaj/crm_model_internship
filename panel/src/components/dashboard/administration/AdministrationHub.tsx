@@ -32,8 +32,27 @@ import {
   Users,
   X,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { ChangeEvent, ComponentType, ReactNode } from "react";
+import { listAuditLogs, type AuditLogRecord } from "@/services/audit-api";
+import {
+  activateUser,
+  assignUserRoles,
+  createRole,
+  createUser,
+  deactivateUser,
+  listPermissions,
+  listRoles,
+  listUsers,
+  revokeUserSessions,
+  updateRole,
+  updateUser,
+  type AccountPermission,
+  type AccountRole,
+  type CreateUserPayload,
+  type RolePayload,
+  type UpdateUserPayload,
+} from "@/services/accounts-api";
 
 type AdminView = "users" | "roles" | "logs" | "approvals" | "settings";
 type Tone = "blue" | "green" | "amber" | "red" | "purple" | "slate" | "cyan";
@@ -73,26 +92,28 @@ type AdminUser = {
   updatedAt: string;
 };
 
-type UserForm = Pick<AdminUser, "employeeId" | "name" | "email" | "mobile" | "userType" | "role" | "team" | "designation" | "risk" | "accessReviewDate">;
-
-const initialUsers: AdminUser[] = [
-  { id: "USR-001", employeeId: "EMP-001", name: "Rajkumar Rathore", email: "rajkumar@dematadealgo.local", mobile: "9876543210", userType: "Employee", role: "Super Admin", team: "Leadership", designation: "Director", status: "Active", mfa: "Enabled", lastLoginAt: "2026-06-25T09:28:00.000Z", activeSessions: 2, risk: "Low", accessReviewDate: "2026-07-01", createdAt: "2025-01-10T10:00:00.000Z", updatedAt: "2026-06-20T10:00:00.000Z" },
-  { id: "USR-002", employeeId: "EMP-018", name: "Vikram Rathore", email: "vikram@dematadealgo.local", mobile: "9876543211", userType: "Employee", role: "Project Manager", team: "Delivery Projects", designation: "Senior Project Manager", status: "Active", mfa: "Enabled", lastLoginAt: "2026-06-25T09:16:00.000Z", activeSessions: 1, risk: "Low", accessReviewDate: "2026-07-15", createdAt: "2025-03-12T10:00:00.000Z", updatedAt: "2026-06-18T10:00:00.000Z" },
-  { id: "USR-003", employeeId: "EMP-026", name: "Sunita Sharma", email: "sunita@dematadealgo.local", mobile: "9876543212", userType: "Employee", role: "People Operations Manager", team: "People Operations", designation: "People Operations Manager", status: "Active", mfa: "Pending", lastLoginAt: "2026-06-25T08:30:00.000Z", activeSessions: 1, risk: "Medium", accessReviewDate: "2026-06-20", createdAt: "2025-05-22T10:00:00.000Z", updatedAt: "2026-06-10T10:00:00.000Z" },
-  { id: "USR-004", employeeId: "EXT-009", name: "External Auditor", email: "audit.partner@vendor.in", mobile: "9876543213", userType: "External", role: "Auditor", team: "Compliance", designation: "Statutory Auditor", status: "Active", mfa: "Enabled", lastLoginAt: "2026-06-24T11:00:00.000Z", activeSessions: 0, risk: "Medium", accessReviewDate: "2026-06-30", createdAt: "2026-04-01T10:00:00.000Z", updatedAt: "2026-06-24T11:00:00.000Z" },
-];
+type UserForm = {
+  firstName: string;
+  lastName: string;
+  email: string;
+  mobile: string;
+  department: string;
+  designation: string;
+  password: string;
+  roleCode: string;
+  isVerified: boolean;
+};
 
 const emptyUserForm = (): UserForm => ({
-  employeeId: "",
-  name: "",
+  firstName: "",
+  lastName: "",
   email: "",
   mobile: "",
-  userType: "Employee",
-  role: "Viewer",
-  team: "",
+  department: "",
   designation: "",
-  risk: "Low",
-  accessReviewDate: new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10),
+  password: "",
+  roleCode: "employee",
+  isVerified: true,
 });
 
 const GLOBAL_MODULES = ["Dashboard", "Client Operations", "Growth Marketing", "Delivery Projects", "People Operations", "Finance Control", "Admin Control", "Support Desk"] as const;
@@ -122,14 +143,6 @@ type AdminRole = {
 };
 
 type RoleForm = Pick<AdminRole, "name" | "description" | "dataScope" | "sensitiveScope" | "risk" | "nextReviewDate" | "status">;
-
-const initialRoles: AdminRole[] = [
-  { id: "ROLE-001", name: "Super Admin", description: "Protected platform owner for identity, policy, security, and organization controls.", users: 2, modules: [...GLOBAL_MODULES], actions: [...GLOBAL_ACTIONS], dataScope: "All Company", sensitiveScope: "All sensitive data", status: "Active", protected: true, risk: "High", lastReviewedAt: "2026-06-01", nextReviewDate: "2026-07-01", updatedAt: "2026-06-01T10:00:00.000Z" },
-  { id: "ROLE-002", name: "Finance Manager", description: "Company finance oversight with delegated Finance Control policy and approval responsibility.", users: 4, modules: ["Dashboard", "People Operations", "Finance Control"], actions: ["View", "Create", "Edit", "Approve", "Export"], dataScope: "All Company", sensitiveScope: "Invoices, payroll and tax data", status: "Active", protected: false, risk: "High", lastReviewedAt: "2026-06-05", nextReviewDate: "2026-07-05", updatedAt: "2026-06-05T10:00:00.000Z" },
-  { id: "ROLE-003", name: "Project Manager", description: "Owns project delivery, assigned client context, milestones, tasks, and team tracking.", users: 11, modules: ["Dashboard", "Client Operations", "Delivery Projects", "Support Desk"], actions: ["View", "Create", "Edit", "Export"], dataScope: "Business Unit", sensitiveScope: "Assigned client delivery data", status: "Active", protected: false, risk: "Medium", lastReviewedAt: "2026-06-10", nextReviewDate: "2026-07-10", updatedAt: "2026-06-10T10:00:00.000Z" },
-  { id: "ROLE-004", name: "People Operations Manager", description: "Manages employee lifecycle, onboarding, attendance, leave, payroll readiness, and exits.", users: 3, modules: ["Dashboard", "People Operations", "Support Desk"], actions: ["View", "Create", "Edit", "Approve", "Export"], dataScope: "All Company", sensitiveScope: "Employee KYC and compensation", status: "Active", protected: false, risk: "High", lastReviewedAt: "2026-06-08", nextReviewDate: "2026-07-08", updatedAt: "2026-06-08T10:00:00.000Z" },
-  { id: "ROLE-005", name: "Viewer", description: "Read-only business visibility without export, approval, or administrative authority.", users: 18, modules: ["Dashboard", "Client Operations", "Delivery Projects"], actions: ["View"], dataScope: "Department", sensitiveScope: "Masked operational data", status: "Active", protected: false, risk: "Low", lastReviewedAt: "2026-06-15", nextReviewDate: "2026-09-15", updatedAt: "2026-06-15T10:00:00.000Z" },
-];
 
 const emptyRoleForm = (): RoleForm => ({
   name: "",
@@ -165,14 +178,6 @@ type SystemAuditEvent = {
   investigationStatus: InvestigationStatus;
   investigationNote: string;
 };
-
-const initialSystemEvents: SystemAuditEvent[] = [
-  { id: "SYS-EVT-1005", sequence: 1005, timestamp: "2026-06-25T12:14:00.000Z", actorId: "USR-001", actorName: "Rajkumar Rathore", actorRole: "Super Admin", action: "Updated global role permissions", module: "Admin Control", resource: "Role", resourceId: "ROLE-002", sessionId: "SES-A91F", ipAddress: "103.87.***.21", device: "Chrome / Windows", result: "Success", risk: "High", reason: "Quarterly finance access review", changedFields: ["modules", "actions", "nextReviewDate"], investigationStatus: "Clear", investigationNote: "" },
-  { id: "SYS-EVT-1004", sequence: 1004, timestamp: "2026-06-25T11:42:00.000Z", actorId: "USR-003", actorName: "Sunita Sharma", actorRole: "People Operations Manager", action: "Approved leave exception", module: "People Operations", resource: "Leave Request", resourceId: "LV-2041", sessionId: "SES-C11B", ipAddress: "49.36.***.88", device: "Edge / Windows", result: "Success", risk: "Low", reason: "Medical exception approved by People Operations", changedFields: ["status", "approvedBy"], investigationStatus: "Clear", investigationNote: "" },
-  { id: "SYS-EVT-1003", sequence: 1003, timestamp: "2026-06-25T10:57:00.000Z", actorId: "USR-004", actorName: "External Auditor", actorRole: "Auditor", action: "Exported GST invoice register", module: "Finance Control", resource: "Report Export", resourceId: "EXP-GST-0625", sessionId: "SES-D02C", ipAddress: "115.96.***.14", device: "Chrome / macOS", result: "Reviewed", risk: "High", reason: "Statutory audit evidence request", changedFields: [], investigationStatus: "Flagged", investigationNote: "Confirm export approval and retention reference." },
-  { id: "SYS-EVT-1002", sequence: 1002, timestamp: "2026-06-25T09:33:00.000Z", actorId: "UNKNOWN", actorName: "Unknown login", actorRole: "Unauthenticated", action: "Repeated failed password attempt", module: "Security", resource: "Authentication", resourceId: "rajkumar@dematadealgo.local", sessionId: "NO-SESSION", ipAddress: "45.129.***.10", device: "Unknown browser", result: "Blocked", risk: "High", reason: "Password policy threshold exceeded", changedFields: [], investigationStatus: "Investigating", investigationNote: "IP reputation and account targeting under review." },
-  { id: "SYS-EVT-1001", sequence: 1001, timestamp: "2026-06-25T08:51:00.000Z", actorId: "USR-002", actorName: "Vikram Rathore", actorRole: "Project Manager", action: "Updated project deadline", module: "Delivery Projects", resource: "Project", resourceId: "PRJ-108", sessionId: "SES-B87E", ipAddress: "122.161.***.44", device: "Chrome / Windows", result: "Success", risk: "Medium", reason: "Client approved delivery extension", changedFields: ["dueDate", "status"], investigationStatus: "Clear", investigationNote: "" },
-];
 
 type GlobalApprovalType = "Access Change" | "Data Export" | "Security Exception" | "Integration" | "Policy Change" | "Operational Exception";
 type GlobalApprovalStatus = "Pending" | "In Review" | "Clarification Required" | "Approved" | "Rejected" | "Cancelled";
@@ -411,31 +416,262 @@ function ToggleField({
   );
 }
 
+function splitFullName(fullName: string) {
+  const parts = fullName.trim().split(/\s+/).filter(Boolean);
+  return {
+    firstName: parts[0] || "",
+    lastName: parts.slice(1).join(" "),
+  };
+}
+
+function mapApiUserToAdminUser(user: {
+  id: string | number;
+  employee_id: string | null;
+  first_name: string;
+  last_name: string;
+  full_name: string;
+  email: string | null;
+  mobile: string | null;
+  department: string;
+  designation: string;
+  is_active: boolean;
+  is_verified: boolean;
+  active_sessions?: number;
+  roles: Array<{ code: string; name: string }>;
+  created_at?: string;
+  updated_at?: string;
+}): AdminUser {
+  const fullName = user.full_name || [user.first_name, user.last_name].filter(Boolean).join(" ").trim() || user.email || "CRM User";
+  const role = user.roles[0]?.name || "Employee";
+  const status: UserStatus = user.is_active ? "Active" : "Deactivated";
+
+  return {
+    id: String(user.id),
+    employeeId: user.employee_id || "Pending",
+    name: fullName,
+    email: user.email || "",
+    mobile: user.mobile || "",
+    userType: "Employee",
+    role,
+    team: user.department || "",
+    designation: user.designation || "",
+    status,
+    mfa: user.is_verified ? "Enabled" : "Pending",
+    lastLoginAt: null,
+    activeSessions: user.active_sessions ?? 0,
+    risk: "Low",
+    accessReviewDate: new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10),
+    createdAt: user.created_at || "",
+    updatedAt: user.updated_at || "",
+  };
+}
+
+const MODULE_LABELS: Record<string, GlobalModule> = {
+  accounts: "Admin Control",
+  audit: "Admin Control",
+  files: "Dashboard",
+  leads: "Growth Marketing",
+  clients: "Client Operations",
+  projects: "Delivery Projects",
+  finance: "Finance Control",
+  hrms: "People Operations",
+  marketing: "Growth Marketing",
+  support: "Support Desk",
+  notifications: "Dashboard",
+};
+
+const MODULE_CODES: Record<GlobalModule, string[]> = {
+  Dashboard: ["files", "notifications"],
+  "Client Operations": ["clients"],
+  "Growth Marketing": ["leads", "marketing"],
+  "Delivery Projects": ["projects"],
+  "People Operations": ["hrms"],
+  "Finance Control": ["finance"],
+  "Admin Control": ["accounts", "audit"],
+  "Support Desk": ["support"],
+};
+
+const ACTION_LABELS: Record<string, GlobalAction> = {
+  view: "View",
+  create: "Create",
+  edit: "Edit",
+  delete: "Administer",
+  approve: "Approve",
+  reject: "Approve",
+  export: "Export",
+  assign: "Administer",
+};
+
+const ACTION_CODES: Record<GlobalAction, string[]> = {
+  View: ["view"],
+  Create: ["create"],
+  Edit: ["edit"],
+  Approve: ["approve", "reject"],
+  Export: ["export"],
+  Administer: ["delete", "assign"],
+};
+
+function uniqueItems<T>(items: T[]) {
+  return Array.from(new Set(items));
+}
+
+function permissionCodesForSelection(modules: GlobalModule[], actions: GlobalAction[], permissions: AccountPermission[]) {
+  const moduleCodes = new Set(modules.flatMap((module) => MODULE_CODES[module] || []));
+  const actionCodes = new Set(actions.flatMap((action) => ACTION_CODES[action] || []));
+  return permissions
+    .filter((permission) => moduleCodes.has(permission.module) && actionCodes.has(permission.action))
+    .map((permission) => permission.code);
+}
+
+function mapApiRoleToAdminRole(role: AccountRole): AdminRole {
+  const modules = uniqueItems(role.permissions.map((permission) => MODULE_LABELS[permission.module]).filter(Boolean));
+  const actions = uniqueItems(role.permissions.map((permission) => ACTION_LABELS[permission.action]).filter(Boolean));
+  const hasAdminControl = modules.includes("Admin Control");
+  const hasAdminAction = actions.includes("Administer");
+  const risk: UserRisk = role.is_system_role || hasAdminAction ? "High" : actions.includes("Approve") || hasAdminControl ? "Medium" : "Low";
+
+  return {
+    id: role.id,
+    name: role.name,
+    description: role.description || `${role.name} access policy.`,
+    users: role.users,
+    modules: modules.length ? modules : ["Dashboard"],
+    actions: actions.length ? actions : ["View"],
+    dataScope: role.is_system_role || hasAdminControl ? "All Company" : "Department",
+    sensitiveScope: hasAdminControl ? "Identity, access and audit data" : role.description || "Department operational data",
+    status: role.is_active ? "Active" : "Inactive",
+    protected: role.is_system_role,
+    risk,
+    lastReviewedAt: role.is_system_role ? todayString() : new Date().toISOString().slice(0, 10),
+    nextReviewDate: new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10),
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+function todayString() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function titleCase(value: string) {
+  return value
+    .replaceAll("_", " ")
+    .replaceAll(".", " ")
+    .split(" ")
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function auditRisk(record: AuditLogRecord): UserRisk {
+  if (["deactivate", "assign", "create_role", "update_role", "revoke_sessions", "delete"].includes(record.action)) return "High";
+  if (["update", "activate", "create"].includes(record.action)) return "Medium";
+  return "Low";
+}
+
+function auditResult(record: AuditLogRecord): SystemEventResult {
+  if (record.action.includes("failed") || record.action.includes("blocked")) return "Blocked";
+  return "Success";
+}
+
+function changedFields(record: AuditLogRecord) {
+  return uniqueItems([
+    ...Object.keys(record.old_values || {}),
+    ...Object.keys(record.new_values || {}),
+  ]);
+}
+
+function mapAuditRecordToEvent(record: AuditLogRecord, index: number): SystemAuditEvent {
+  const changed = changedFields(record);
+  return {
+    id: String(record.id).slice(0, 8).toUpperCase(),
+    sequence: index + 1,
+    timestamp: record.created_at,
+    actorId: record.actor_id,
+    actorName: record.actor_name,
+    actorRole: record.actor_role,
+    action: titleCase(record.action),
+    module: titleCase(record.module),
+    resource: record.entity_type,
+    resourceId: record.entity_id,
+    sessionId: "SERVER",
+    ipAddress: record.ip_address || "Unknown IP",
+    device: record.user_agent || "Unknown device",
+    result: auditResult(record),
+    risk: auditRisk(record),
+    reason: changed.length
+      ? `Changed ${changed.join(", ")} on ${record.entity_type}.`
+      : `${titleCase(record.action)} ${record.entity_type}.`,
+    changedFields: changed,
+    investigationStatus: "Clear",
+    investigationNote: "",
+  };
+}
+
 function UsersView() {
-  const [userRecords, setUserRecords] = useState<AdminUser[]>(initialUsers);
+  const [userRecords, setUserRecords] = useState<AdminUser[]>([]);
+  const [roleOptions, setRoleOptions] = useState<AccountRole[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [query, setQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"All" | UserStatus>("All");
+  const [statusFilter, setStatusFilter] = useState<"All" | "active" | "inactive">("All");
   const [riskFilter, setRiskFilter] = useState<"All" | UserRisk>("All");
+  const [page, setPage] = useState(1);
+  const [limit] = useState(12);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [form, setForm] = useState<UserForm>(emptyUserForm);
   const [formError, setFormError] = useState("");
   const [notice, setNotice] = useState("");
+  const [totalUsers, setTotalUsers] = useState(0);
 
   const today = new Date().toISOString().slice(0, 10);
   const activeUsers = userRecords.filter((user) => user.status === "Active");
   const mfaCoverage = activeUsers.length
     ? Math.round((activeUsers.filter((user) => user.mfa === "Enabled").length / activeUsers.length) * 100)
     : 0;
-  const privilegedUsers = activeUsers.filter((user) => ["Super Admin", "Finance Manager", "HR Manager"].includes(user.role)).length;
+  const privilegedUsers = activeUsers.filter((user) => ["Super Admin", "Finance Manager", "HR Manager", "Project Manager", "Admin"].includes(user.role)).length;
   const reviewsDue = activeUsers.filter((user) => user.accessReviewDate <= today).length;
   const selectedUser = userRecords.find((user) => user.id === selectedId) ?? null;
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadData() {
+      try {
+        setIsLoading(true);
+        const [usersResponse, rolesResponse] = await Promise.all([
+          listUsers({
+            page,
+            limit,
+            search: query.trim() || undefined,
+            status: statusFilter === "All" ? undefined : statusFilter,
+          }),
+          listRoles(),
+        ]);
+
+        if (!isMounted) return;
+        setUserRecords(usersResponse.data.map(mapApiUserToAdminUser));
+        setRoleOptions(rolesResponse);
+        setTotalUsers(usersResponse.pagination.total);
+      } catch (error) {
+        if (!isMounted) return;
+        setNotice(error instanceof Error ? error.message : "Unable to load admin users.");
+      } finally {
+        if (isMounted) setIsLoading(false);
+      }
+    }
+
+    void loadData();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [page, limit, query, statusFilter]);
 
   const filteredUsers = useMemo(() => {
     const normalized = query.trim().toLowerCase();
     return userRecords.filter((user) => {
-      const matchesStatus = statusFilter === "All" || user.status === statusFilter;
+      const matchesStatus = statusFilter === "All" || (statusFilter === "active" ? user.status === "Active" : user.status !== "Active");
       const matchesRisk = riskFilter === "All" || user.risk === riskFilter;
       const matchesQuery = !normalized || [
         user.id, user.employeeId, user.name, user.email, user.mobile,
@@ -451,7 +687,10 @@ function UsersView() {
 
   const openCreate = () => {
     setEditingId(null);
-    setForm(emptyUserForm());
+    setForm({
+      ...emptyUserForm(),
+      roleCode: roleOptions[0]?.code || "employee",
+    });
     setFormError("");
     setShowForm(true);
   };
@@ -459,16 +698,15 @@ function UsersView() {
   const openEdit = (user: AdminUser) => {
     setEditingId(user.id);
     setForm({
-      employeeId: user.employeeId,
-      name: user.name,
+      firstName: splitFullName(user.name).firstName,
+      lastName: splitFullName(user.name).lastName,
       email: user.email,
       mobile: user.mobile,
-      userType: user.userType,
-      role: user.role,
-      team: user.team,
+      department: user.team,
       designation: user.designation,
-      risk: user.risk,
-      accessReviewDate: user.accessReviewDate,
+      password: "",
+      roleCode: roleOptions.find((role) => role.name === user.role || role.code === user.role)?.code || "employee",
+      isVerified: user.mfa === "Enabled",
     });
     setFormError("");
     setShowForm(true);
@@ -483,7 +721,9 @@ function UsersView() {
   const saveUser = () => {
     const email = form.email.trim().toLowerCase();
     const mobile = form.mobile.replace(/\D/g, "");
-    if ([form.employeeId, form.name, email, mobile, form.role, form.team, form.designation, form.accessReviewDate].some((value) => !value.trim())) {
+    const firstName = form.firstName.trim();
+    const lastName = form.lastName.trim();
+    if ([firstName, email, mobile, form.department, form.designation].some((value) => !value.trim())) {
       setFormError("Complete all required identity and access fields.");
       return;
     }
@@ -495,87 +735,80 @@ function UsersView() {
       setFormError("Enter a valid 10 digit Indian mobile number.");
       return;
     }
-    if (form.accessReviewDate < today) {
-      setFormError("Access review date cannot be in the past.");
-      return;
-    }
-    const duplicate = userRecords.find((user) =>
-      user.id !== editingId && (
-        user.email.toLowerCase() === email
-        || user.mobile === mobile
-        || user.employeeId.toLowerCase() === form.employeeId.trim().toLowerCase()
-      ),
-    );
-    if (duplicate) {
-      setFormError("Employee ID, email, or mobile is already mapped to another user.");
-      return;
-    }
-    if (form.userType === "External" && form.role === "Super Admin") {
-      setFormError("External users cannot receive the Super Admin role.");
+    if (!editingId && form.password.trim().length < 8) {
+      setFormError("Password must be at least 8 characters.");
       return;
     }
 
-    const timestamp = new Date().toISOString();
-    if (editingId) {
-      setUserRecords((current) => current.map((user) => user.id === editingId ? {
-        ...user,
-        ...form,
-        employeeId: form.employeeId.trim().toUpperCase(),
-        name: form.name.trim(),
-        email,
-        mobile,
-        team: form.team.trim(),
-        designation: form.designation.trim(),
-        updatedAt: timestamp,
-      } : user));
-      setNotice(`${form.name.trim()} user profile updated. Role changes require backend audit enforcement.`);
-    } else {
-      const nextId = Math.max(0, ...userRecords.map((user) => Number(user.id.match(/\d+/)?.[0] ?? 0))) + 1;
-      setUserRecords((current) => [{
-        id: `USR-${String(nextId).padStart(3, "0")}`,
-        ...form,
-        employeeId: form.employeeId.trim().toUpperCase(),
-        name: form.name.trim(),
-        email,
-        mobile,
-        team: form.team.trim(),
-        designation: form.designation.trim(),
-        status: "Invited",
-        mfa: "Pending",
-        lastLoginAt: null,
-        activeSessions: 0,
-        createdAt: timestamp,
-        updatedAt: timestamp,
-      }, ...current]);
-      setNotice(`${form.name.trim()} invited. Account remains inactive until identity setup is completed.`);
-    }
-    closeForm();
+    const save = async () => {
+      if (editingId) {
+        const updatePayload: UpdateUserPayload = {
+          first_name: firstName,
+          last_name: lastName,
+          email,
+          mobile,
+          department: form.department.trim(),
+          designation: form.designation.trim(),
+          is_verified: form.isVerified,
+        };
+        const updated = await updateUser(Number(editingId), updatePayload);
+        const updatedRole = await assignUserRoles(Number(editingId), [form.roleCode]);
+        setNotice(`${updated.full_name} updated successfully.`);
+        void updatedRole;
+      } else {
+        const payload: CreateUserPayload = {
+          first_name: firstName,
+          last_name: lastName,
+          email,
+          mobile,
+          department: form.department.trim(),
+          designation: form.designation.trim(),
+          password: form.password,
+          role_codes: [form.roleCode],
+        };
+        const created = await createUser(payload);
+        setNotice(`${created.full_name} created successfully.`);
+      }
+      closeForm();
+      setPage(1);
+      const usersResponse = await listUsers({ page: 1, limit, search: query.trim() || undefined, status: statusFilter === "All" ? undefined : statusFilter });
+      setUserRecords(usersResponse.data.map(mapApiUserToAdminUser));
+      setTotalUsers(usersResponse.pagination.total);
+    };
+
+    void save().catch((error) => {
+      setFormError(error instanceof Error ? error.message : "Unable to save user.");
+    });
   };
 
   const setLifecycle = (user: AdminUser, status: UserStatus) => {
-    if (user.role === "Super Admin" && status !== "Active") {
-      const activeAdmins = userRecords.filter((item) => item.role === "Super Admin" && item.status === "Active");
-      if (activeAdmins.length <= 1) {
-        setNotice("The last active Super Admin cannot be suspended or deactivated.");
-        return;
+    void (async () => {
+      if (status === "Active") {
+        await activateUser(Number(user.id));
+      } else if (status === "Deactivated") {
+        await deactivateUser(Number(user.id));
+      } else {
+        throw new Error("Suspended status is not supported by the backend yet.");
       }
-    }
-    setUserRecords((current) => current.map((item) => item.id === user.id ? {
-      ...item,
-      status,
-      activeSessions: status === "Active" ? item.activeSessions : 0,
-      updatedAt: new Date().toISOString(),
-    } : item));
-    setNotice(`${user.name} is now ${status.toLowerCase()}. ${status === "Active" ? "" : "All local sessions were revoked."}`);
+      const usersResponse = await listUsers({ page, limit, search: query.trim() || undefined, status: statusFilter === "All" ? undefined : statusFilter });
+      setUserRecords(usersResponse.data.map(mapApiUserToAdminUser));
+      setTotalUsers(usersResponse.pagination.total);
+      setNotice(`${user.name} is now ${status.toLowerCase()}.`);
+    })().catch((error) => {
+      setNotice(error instanceof Error ? error.message : "Unable to update user status.");
+    });
   };
 
   const revokeSessions = (user: AdminUser) => {
-    setUserRecords((current) => current.map((item) => item.id === user.id ? {
-      ...item,
-      activeSessions: 0,
-      updatedAt: new Date().toISOString(),
-    } : item));
-    setNotice(`${user.name}'s active sessions were revoked.`);
+    void (async () => {
+      await revokeUserSessions(Number(user.id));
+      const usersResponse = await listUsers({ page, limit, search: query.trim() || undefined, status: statusFilter === "All" ? undefined : statusFilter });
+      setUserRecords(usersResponse.data.map(mapApiUserToAdminUser));
+      setTotalUsers(usersResponse.pagination.total);
+      setNotice(`All active sessions for ${user.name} were revoked.`);
+    })().catch((error) => {
+      setNotice(error instanceof Error ? error.message : "Unable to revoke sessions.");
+    });
   };
 
   const exportUsers = () => {
@@ -630,8 +863,10 @@ function UsersView() {
             <Search className="absolute left-3 top-3 text-slate-400" size={17} />
             <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search user, employee ID, email, role, or team" className="h-11 w-full rounded-xl border border-border bg-white pl-10 pr-3 text-sm font-semibold text-primary outline-none focus:border-primary focus:ring-4 focus:ring-primary/10" />
           </label>
-          <select value={statusFilter} onChange={(event: ChangeEvent<HTMLSelectElement>) => setStatusFilter(event.target.value as "All" | UserStatus)} className="h-11 rounded-xl border border-border bg-white px-3 text-sm font-semibold text-primary outline-none">
-            {["All", "Invited", "Active", "Suspended", "Deactivated"].map((status) => <option key={status} value={status}>{status} Status</option>)}
+          <select value={statusFilter} onChange={(event: ChangeEvent<HTMLSelectElement>) => setStatusFilter(event.target.value as "All" | "active" | "inactive")} className="h-11 rounded-xl border border-border bg-white px-3 text-sm font-semibold text-primary outline-none">
+            <option value="All">All Status</option>
+            <option value="active">Active Status</option>
+            <option value="inactive">Inactive Status</option>
           </select>
           <select value={riskFilter} onChange={(event: ChangeEvent<HTMLSelectElement>) => setRiskFilter(event.target.value as "All" | UserRisk)} className="h-11 rounded-xl border border-border bg-white px-3 text-sm font-semibold text-primary outline-none">
             {["All", "Low", "Medium", "High"].map((risk) => <option key={risk} value={risk}>{risk} Risk</option>)}
@@ -678,17 +913,41 @@ function UsersView() {
                   <button type="button" onClick={() => openEdit(user)} className="rounded-lg border border-border bg-white p-2 text-slate-500 hover:text-primary" title="Edit user"><UserCog size={15} /></button>
                   <button type="button" onClick={() => revokeSessions(user)} className="rounded-lg border border-border bg-white p-2 text-slate-500 hover:text-amber-600" title="Revoke sessions"><LogOut size={15} /></button>
                   {user.status === "Active" ? (
-                    <button type="button" onClick={() => setLifecycle(user, "Suspended")} className="rounded-lg border border-border bg-white p-2 text-slate-500 hover:text-red-600" title="Suspend user"><UserX size={15} /></button>
+                    <button type="button" onClick={() => setLifecycle(user, "Deactivated")} className="rounded-lg border border-border bg-white p-2 text-slate-500 hover:text-red-700" title="Deactivate user"><ShieldAlert size={15} /></button>
                   ) : (
                     <button type="button" onClick={() => setLifecycle(user, "Active")} className="rounded-lg border border-border bg-white p-2 text-slate-500 hover:text-green-600" title="Reactivate user"><RotateCcw size={15} /></button>
                   )}
-                  {user.status !== "Deactivated" ? <button type="button" onClick={() => setLifecycle(user, "Deactivated")} className="rounded-lg border border-border bg-white p-2 text-slate-500 hover:text-red-700" title="Deactivate user"><ShieldAlert size={15} /></button> : null}
                 </div>
               </div>
             </div>
           ))}
         </div>
-        {filteredUsers.length === 0 ? <p className="py-10 text-center text-sm font-semibold text-slate-500">No user matches the current filters.</p> : null}
+        {filteredUsers.length === 0 ? <p className="py-10 text-center text-sm font-semibold text-slate-500">{isLoading ? "Loading users..." : "No user matches the current filters."}</p> : null}
+        {totalUsers > limit ? (
+          <div className="mt-5 flex items-center justify-between gap-3 border-t border-border pt-4">
+            <p className="text-xs font-semibold text-slate-500">
+              Showing {Math.min((page - 1) * limit + 1, totalUsers)} to {Math.min(page * limit, totalUsers)} of {totalUsers}
+            </p>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setPage((current) => Math.max(1, current - 1))}
+                disabled={page === 1}
+                className="rounded-xl border border-border bg-white px-4 py-2 text-xs font-black uppercase tracking-widest text-primary disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Previous
+              </button>
+              <button
+                type="button"
+                onClick={() => setPage((current) => current + 1)}
+                disabled={page * limit >= totalUsers}
+                className="rounded-xl border border-border bg-white px-4 py-2 text-xs font-black uppercase tracking-widest text-primary disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        ) : null}
       </section>
 
       {showForm ? (
@@ -702,21 +961,20 @@ function UsersView() {
               <button type="button" onClick={closeForm} className="rounded-lg border border-border p-2 text-slate-500" title="Close"><X size={18} /></button>
             </div>
             <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2">
-              <label className="space-y-1.5"><span className="text-xs font-black uppercase tracking-widest text-slate-500">User Type *</span><select value={form.userType} onChange={(event) => updateForm("userType", event.target.value as UserType)} className="h-11 w-full rounded-xl border border-border px-3 text-sm font-semibold"><option>Employee</option><option>External</option></select></label>
-              <label className="space-y-1.5"><span className="text-xs font-black uppercase tracking-widest text-slate-500">Employee / External ID *</span><input value={form.employeeId} onChange={(event) => updateForm("employeeId", event.target.value)} className="h-11 w-full rounded-xl border border-border px-3 text-sm font-semibold" /></label>
-              <label className="space-y-1.5"><span className="text-xs font-black uppercase tracking-widest text-slate-500">Full Name *</span><input value={form.name} onChange={(event) => updateForm("name", event.target.value)} className="h-11 w-full rounded-xl border border-border px-3 text-sm font-semibold" /></label>
+              <label className="space-y-1.5"><span className="text-xs font-black uppercase tracking-widest text-slate-500">First Name *</span><input value={form.firstName} onChange={(event) => updateForm("firstName", event.target.value)} className="h-11 w-full rounded-xl border border-border px-3 text-sm font-semibold" /></label>
+              <label className="space-y-1.5"><span className="text-xs font-black uppercase tracking-widest text-slate-500">Last Name</span><input value={form.lastName} onChange={(event) => updateForm("lastName", event.target.value)} className="h-11 w-full rounded-xl border border-border px-3 text-sm font-semibold" /></label>
               <label className="space-y-1.5"><span className="text-xs font-black uppercase tracking-widest text-slate-500">Official Email *</span><input type="email" value={form.email} onChange={(event) => updateForm("email", event.target.value)} className="h-11 w-full rounded-xl border border-border px-3 text-sm font-semibold" /></label>
               <label className="space-y-1.5"><span className="text-xs font-black uppercase tracking-widest text-slate-500">Mobile *</span><input inputMode="numeric" value={form.mobile} onChange={(event) => updateForm("mobile", event.target.value)} className="h-11 w-full rounded-xl border border-border px-3 text-sm font-semibold" /></label>
-              <label className="space-y-1.5"><span className="text-xs font-black uppercase tracking-widest text-slate-500">Role *</span><select value={form.role} onChange={(event) => updateForm("role", event.target.value)} className="h-11 w-full rounded-xl border border-border px-3 text-sm font-semibold">{["Viewer", "Auditor", "Sales", "Accountant", "Finance Manager", "Project Manager", "HR Manager", "Super Admin"].map((role) => <option key={role}>{role}</option>)}</select></label>
-              <label className="space-y-1.5"><span className="text-xs font-black uppercase tracking-widest text-slate-500">Department / Team *</span><input value={form.team} onChange={(event) => updateForm("team", event.target.value)} className="h-11 w-full rounded-xl border border-border px-3 text-sm font-semibold" /></label>
+              <label className="space-y-1.5"><span className="text-xs font-black uppercase tracking-widest text-slate-500">Department *</span><input value={form.department} onChange={(event) => updateForm("department", event.target.value)} className="h-11 w-full rounded-xl border border-border px-3 text-sm font-semibold" /></label>
               <label className="space-y-1.5"><span className="text-xs font-black uppercase tracking-widest text-slate-500">Designation *</span><input value={form.designation} onChange={(event) => updateForm("designation", event.target.value)} className="h-11 w-full rounded-xl border border-border px-3 text-sm font-semibold" /></label>
-              <label className="space-y-1.5"><span className="text-xs font-black uppercase tracking-widest text-slate-500">Risk Classification *</span><select value={form.risk} onChange={(event) => updateForm("risk", event.target.value as UserRisk)} className="h-11 w-full rounded-xl border border-border px-3 text-sm font-semibold"><option>Low</option><option>Medium</option><option>High</option></select></label>
-              <label className="space-y-1.5"><span className="text-xs font-black uppercase tracking-widest text-slate-500">Next Access Review *</span><input type="date" min={today} value={form.accessReviewDate} onChange={(event) => updateForm("accessReviewDate", event.target.value)} className="h-11 w-full rounded-xl border border-border px-3 text-sm font-semibold" /></label>
+              <label className="space-y-1.5"><span className="text-xs font-black uppercase tracking-widest text-slate-500">Role *</span><select value={form.roleCode} onChange={(event) => updateForm("roleCode", event.target.value)} className="h-11 w-full rounded-xl border border-border px-3 text-sm font-semibold">{roleOptions.length ? roleOptions.map((role) => <option key={role.code} value={role.code}>{role.name}</option>) : ["employee"].map((role) => <option key={role} value={role}>{role}</option>)}</select></label>
+              <label className="space-y-1.5"><span className="text-xs font-black uppercase tracking-widest text-slate-500">Password {editingId ? "" : "*"}</span><input type="password" value={form.password} onChange={(event) => updateForm("password", event.target.value)} className="h-11 w-full rounded-xl border border-border px-3 text-sm font-semibold" placeholder={editingId ? "Leave blank to keep existing password" : ""} /></label>
+              <label className="flex items-center justify-between rounded-xl border border-border px-3 py-2"><span className="text-xs font-black uppercase tracking-widest text-slate-500">Verified</span><input type="checkbox" checked={form.isVerified} onChange={(event) => updateForm("isVerified", event.target.checked)} className="h-5 w-5 accent-primary" /></label>
             </div>
             {formError ? <div className="mt-5 flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700"><ShieldAlert className="mt-0.5 shrink-0" size={17} />{formError}</div> : null}
             <div className="mt-6 flex justify-end gap-3 border-t border-border pt-5">
               <ActionButton icon={X} onClick={closeForm}>Cancel</ActionButton>
-              <ActionButton icon={editingId ? UserCog : Plus} variant="accent" onClick={saveUser}>{editingId ? "Update User" : "Send Invite"}</ActionButton>
+              <ActionButton icon={editingId ? UserCog : Plus} variant="accent" onClick={saveUser}>{editingId ? "Update User" : "Create User"}</ActionButton>
             </div>
           </div>
         </div>
@@ -750,7 +1008,9 @@ function UsersView() {
 }
 
 function RolesView() {
-  const [roleRecords, setRoleRecords] = useState<AdminRole[]>(initialRoles);
+  const [roleRecords, setRoleRecords] = useState<AdminRole[]>([]);
+  const [permissionOptions, setPermissionOptions] = useState<AccountPermission[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"All" | RoleStatus>("All");
   const [showForm, setShowForm] = useState(false);
@@ -769,6 +1029,43 @@ function RolesView() {
   const reviewsDue = activeRoles.filter((role) => role.nextReviewDate <= today).length;
   const editingRole = roleRecords.find((role) => role.id === editingId) ?? null;
   const detailRole = roleRecords.find((role) => role.id === detailId) ?? null;
+
+  const loadRoles = async () => {
+    const [rolesResponse, permissionsResponse] = await Promise.all([
+      listRoles(),
+      listPermissions(),
+    ]);
+    setRoleRecords(rolesResponse.map(mapApiRoleToAdminRole));
+    setPermissionOptions(permissionsResponse);
+  };
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadData() {
+      try {
+        setIsLoading(true);
+        const [rolesResponse, permissionsResponse] = await Promise.all([
+          listRoles(),
+          listPermissions(),
+        ]);
+        if (!isMounted) return;
+        setRoleRecords(rolesResponse.map(mapApiRoleToAdminRole));
+        setPermissionOptions(permissionsResponse);
+      } catch (error) {
+        if (!isMounted) return;
+        setNotice(error instanceof Error ? error.message : "Unable to load roles and permissions.");
+      } finally {
+        if (isMounted) setIsLoading(false);
+      }
+    }
+
+    void loadData();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const filteredRoles = useMemo(() => {
     const normalized = query.trim().toLowerCase();
@@ -863,44 +1160,31 @@ function RolesView() {
       return;
     }
 
-    const timestamp = new Date().toISOString();
-    if (editingRole) {
-      setRoleRecords((current) => current.map((role) => role.id === editingRole.id ? {
-        ...role,
-        name: role.protected ? role.name : form.name.trim(),
-        description: form.description.trim(),
-        modules: role.protected ? [...GLOBAL_MODULES] : selectedModules,
-        actions: role.protected ? [...GLOBAL_ACTIONS] : selectedActions,
-        dataScope: form.dataScope,
-        sensitiveScope: form.sensitiveScope.trim(),
-        risk: role.protected ? "High" : form.risk,
-        status: role.protected ? "Active" : form.status,
-        lastReviewedAt: today,
-        nextReviewDate: form.nextReviewDate,
-        updatedAt: timestamp,
-      } : role));
-      setNotice(`${editingRole.name} policy updated in the global role register.`);
-    } else {
-      const nextId = Math.max(0, ...roleRecords.map((role) => Number(role.id.match(/\d+/)?.[0] ?? 0))) + 1;
-      setRoleRecords((current) => [...current, {
-        id: `ROLE-${String(nextId).padStart(3, "0")}`,
-        name: form.name.trim(),
-        description: form.description.trim(),
-        users: 0,
-        modules: selectedModules,
-        actions: selectedActions,
-        dataScope: form.dataScope,
-        sensitiveScope: form.sensitiveScope.trim(),
-        status: form.status,
-        protected: false,
-        risk: form.risk,
-        lastReviewedAt: today,
-        nextReviewDate: form.nextReviewDate,
-        updatedAt: timestamp,
-      }]);
-      setNotice(`${form.name.trim()} created with zero assigned users.`);
-    }
-    closeRoleForm();
+    const permissionCodes = permissionCodesForSelection(
+      editingRole?.protected ? [...GLOBAL_MODULES] : selectedModules,
+      editingRole?.protected ? [...GLOBAL_ACTIONS] : selectedActions,
+      permissionOptions,
+    );
+    const payload: RolePayload = {
+      name: form.name.trim(),
+      description: form.description.trim(),
+      is_active: editingRole?.protected ? true : form.status === "Active",
+      permission_codes: permissionCodes,
+    };
+
+    void (async () => {
+      if (editingRole) {
+        await updateRole(editingRole.id, payload);
+        setNotice(`${editingRole.name} policy updated in the backend role register.`);
+      } else {
+        const created = await createRole(payload);
+        setNotice(`${created.name} created with zero assigned users.`);
+      }
+      await loadRoles();
+      closeRoleForm();
+    })().catch((error) => {
+      setFormError(error instanceof Error ? error.message : "Unable to save role.");
+    });
   };
 
   const toggleRoleStatus = (role: AdminRole) => {
@@ -913,8 +1197,18 @@ function RolesView() {
       return;
     }
     const status: RoleStatus = role.status === "Active" ? "Inactive" : "Active";
-    setRoleRecords((current) => current.map((item) => item.id === role.id ? { ...item, status, updatedAt: new Date().toISOString() } : item));
-    setNotice(`${role.name} is now ${status.toLowerCase()}.`);
+    void (async () => {
+      await updateRole(role.id, {
+        name: role.name,
+        description: role.description,
+        is_active: status === "Active",
+        permission_codes: permissionCodesForSelection(role.modules, role.actions, permissionOptions),
+      });
+      await loadRoles();
+      setNotice(`${role.name} is now ${status.toLowerCase()}.`);
+    })().catch((error) => {
+      setNotice(error instanceof Error ? error.message : "Unable to update role status.");
+    });
   };
 
   const exportRoles = () => {
@@ -1009,7 +1303,7 @@ function RolesView() {
             </div>
           )})}
         </div>
-        {filteredRoles.length === 0 ? <p className="py-10 text-center text-sm font-semibold text-slate-500">No role matches the current filters.</p> : null}
+        {filteredRoles.length === 0 ? <p className="py-10 text-center text-sm font-semibold text-slate-500">{isLoading ? "Loading roles..." : "No role matches the current filters."}</p> : null}
       </section>
 
       {showForm ? (
@@ -1061,32 +1355,58 @@ function RolesView() {
 }
 
 function LogsView() {
-  const [events, setEvents] = useState<SystemAuditEvent[]>(initialSystemEvents);
+  const [events, setEvents] = useState<SystemAuditEvent[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [query, setQuery] = useState("");
   const [moduleFilter, setModuleFilter] = useState("All");
   const [riskFilter, setRiskFilter] = useState<"All" | UserRisk>("All");
   const [investigationFilter, setInvestigationFilter] = useState<"All" | InvestigationStatus>("All");
+  const [page, setPage] = useState(1);
+  const [limit] = useState(20);
+  const [totalEvents, setTotalEvents] = useState(0);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [investigationStatus, setInvestigationStatus] = useState<InvestigationStatus>("Clear");
   const [investigationNote, setInvestigationNote] = useState("");
   const [investigationError, setInvestigationError] = useState("");
   const [notice, setNotice] = useState("");
 
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadData() {
+      try {
+        setIsLoading(true);
+        const response = await listAuditLogs({
+          page,
+          limit,
+          search: query.trim() || undefined,
+        });
+        if (!isMounted) return;
+        setEvents(response.data.map(mapAuditRecordToEvent));
+        setTotalEvents(response.pagination.total);
+      } catch (error) {
+        if (!isMounted) return;
+        setNotice(error instanceof Error ? error.message : "Unable to load audit logs.");
+      } finally {
+        if (isMounted) setIsLoading(false);
+      }
+    }
+
+    void loadData();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [page, limit, query]);
+
   const modules = ["All", ...Array.from(new Set(events.map((event) => event.module)))];
   const filteredEvents = useMemo(() => {
-    const normalized = query.trim().toLowerCase();
     return events.filter((event) => {
-      const matchesQuery = !normalized || [
-        event.id, event.actorId, event.actorName, event.actorRole, event.action,
-        event.module, event.resource, event.resourceId, event.sessionId,
-        event.ipAddress, event.result, event.reason,
-      ].join(" ").toLowerCase().includes(normalized);
-      return matchesQuery
-        && (moduleFilter === "All" || event.module === moduleFilter)
+      return (moduleFilter === "All" || event.module === moduleFilter)
         && (riskFilter === "All" || event.risk === riskFilter)
         && (investigationFilter === "All" || event.investigationStatus === investigationFilter);
     });
-  }, [events, investigationFilter, moduleFilter, query, riskFilter]);
+  }, [events, investigationFilter, moduleFilter, riskFilter]);
 
   const selectedEvent = events.find((event) => event.id === selectedId) ?? null;
   const highRiskEvents = events.filter((event) => event.risk === "High").length;
@@ -1149,7 +1469,7 @@ function LogsView() {
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-4">
-        <MetricCard label="System Events" value={String(events.length)} helper={`${uniqueSessions} authenticated sessions`} icon={Activity} tone="blue" />
+        <MetricCard label="System Events" value={String(totalEvents)} helper={`${uniqueSessions} server sessions shown`} icon={Activity} tone="blue" />
         <MetricCard label="High Risk Events" value={String(highRiskEvents)} helper="Security, access, and exports" icon={AlertTriangle} tone="red" />
         <MetricCard label="Blocked Actions" value={String(blockedEvents)} helper="Authentication or policy prevented" icon={ShieldCheck} tone="green" />
         <MetricCard label="Open Investigations" value={String(openInvestigations)} helper="Flagged or under review" icon={History} tone={openInvestigations ? "amber" : "purple"} />
@@ -1176,7 +1496,7 @@ function LogsView() {
         <div className="mb-5 grid grid-cols-1 gap-3 lg:grid-cols-[1fr_180px_160px_190px]">
           <label className="relative block">
             <Search className="absolute left-3 top-3 text-slate-400" size={17} />
-            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search event, actor, session, IP, resource, or reason" className="h-11 w-full rounded-xl border border-border bg-white pl-10 pr-3 text-sm font-semibold text-primary outline-none focus:border-primary focus:ring-4 focus:ring-primary/10" />
+            <input value={query} onChange={(event) => { setQuery(event.target.value); setPage(1); }} placeholder="Search event, actor, session, IP, resource, or reason" className="h-11 w-full rounded-xl border border-border bg-white pl-10 pr-3 text-sm font-semibold text-primary outline-none focus:border-primary focus:ring-4 focus:ring-primary/10" />
           </label>
           <select value={moduleFilter} onChange={(event) => setModuleFilter(event.target.value)} className="h-11 rounded-xl border border-border bg-white px-3 text-sm font-semibold text-primary outline-none">{modules.map((module) => <option key={module}>{module}</option>)}</select>
           <select value={riskFilter} onChange={(event) => setRiskFilter(event.target.value as "All" | UserRisk)} className="h-11 rounded-xl border border-border bg-white px-3 text-sm font-semibold text-primary outline-none">{["All", "Low", "Medium", "High"].map((risk) => <option key={risk}>{risk} Risk</option>)}</select>
@@ -1208,7 +1528,32 @@ function LogsView() {
             </tbody>
           </table>
         </div>
-        {filteredEvents.length === 0 ? <p className="py-10 text-center text-sm font-semibold text-slate-500">No system event matches the current filters.</p> : null}
+        {filteredEvents.length === 0 ? <p className="py-10 text-center text-sm font-semibold text-slate-500">{isLoading ? "Loading audit logs..." : "No system event matches the current filters."}</p> : null}
+        {totalEvents > limit ? (
+          <div className="mt-5 flex items-center justify-between gap-3 border-t border-border pt-4">
+            <p className="text-xs font-semibold text-slate-500">
+              Showing {Math.min((page - 1) * limit + 1, totalEvents)} to {Math.min(page * limit, totalEvents)} of {totalEvents}
+            </p>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setPage((current) => Math.max(1, current - 1))}
+                disabled={page === 1}
+                className="rounded-xl border border-border bg-white px-4 py-2 text-xs font-black uppercase tracking-widest text-primary disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Previous
+              </button>
+              <button
+                type="button"
+                onClick={() => setPage((current) => current + 1)}
+                disabled={page * limit >= totalEvents}
+                className="rounded-xl border border-border bg-white px-4 py-2 text-xs font-black uppercase tracking-widest text-primary disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        ) : null}
       </section>
 
       {selectedEvent ? (
