@@ -1,12 +1,26 @@
 import hashlib
+import secrets
+from datetime import timedelta
 
+from django.conf import settings
+from django.contrib.auth.hashers import check_password, make_password
 from django.contrib.auth.models import update_last_login
 from django.db import transaction
 from django.utils import timezone
 from rest_framework.exceptions import AuthenticationFailed, ValidationError
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from apps.accounts.models import LoginHistory, Permission, Role, RolePermission, User, UserProfile, UserRole, UserSession
+from apps.accounts.models import (
+    LoginHistory,
+    PasswordResetRequest,
+    Permission,
+    Role,
+    RolePermission,
+    User,
+    UserProfile,
+    UserRole,
+    UserSession,
+)
 from apps.accounts.selectors import get_user_by_identifier
 from apps.audit.services import record_audit_log
 from apps.core.models import Sequence
@@ -51,6 +65,10 @@ def _next_employee_id():
 
 def _role_code_from_name(name: str) -> str:
     return "_".join(name.strip().lower().split())
+
+
+def _generate_otp() -> str:
+    return f"{secrets.randbelow(1_000_000):06d}"
 
 
 class AuthService:
@@ -177,6 +195,96 @@ class AuthService:
 
         token = RefreshToken(refresh_token)
         token.blacklist()
+
+    @staticmethod
+    @transaction.atomic
+    def request_password_reset(*, identifier: str, request=None):
+        user = get_user_by_identifier(identifier)
+        expires_in_minutes = getattr(settings, "PASSWORD_RESET_OTP_MINUTES", 10)
+
+        if not user or not user.is_active:
+            return {"otp": None, "expires_in_seconds": expires_in_minutes * 60}
+
+        PasswordResetRequest.objects.filter(user=user, is_used=False).update(
+            is_used=True,
+            used_at=timezone.now(),
+        )
+
+        otp = _generate_otp()
+        reset_request = PasswordResetRequest.objects.create(
+            user=user,
+            otp_hash=make_password(otp),
+            expires_at=timezone.now() + timedelta(minutes=expires_in_minutes),
+        )
+
+        record_audit_log(
+            actor=user,
+            module="accounts",
+            action="password_reset_requested",
+            entity_type="PasswordResetRequest",
+            entity_id=reset_request.id,
+            new_values={"expires_at": reset_request.expires_at.isoformat()},
+            request=request,
+        )
+        return {"otp": otp, "expires_in_seconds": expires_in_minutes * 60}
+
+    @staticmethod
+    @transaction.atomic
+    def reset_password(*, identifier: str, otp: str, new_password: str, request=None):
+        user = get_user_by_identifier(identifier)
+        if not user or not user.is_active:
+            raise ValidationError({"identifier": "Invalid or expired password reset request."})
+
+        reset_request = (
+            PasswordResetRequest.objects.select_for_update()
+            .filter(user=user, is_used=False, expires_at__gt=timezone.now())
+            .order_by("-created_at")
+            .first()
+        )
+        if not reset_request or not check_password(otp, reset_request.otp_hash):
+            raise ValidationError({"otp": "Invalid or expired OTP."})
+
+        user.set_password(new_password)
+        user.save(update_fields=["password"])
+        reset_request.is_used = True
+        reset_request.used_at = timezone.now()
+        reset_request.save(update_fields=["is_used", "used_at", "updated_at"])
+        UserSession.objects.filter(user=user, is_active=True).update(is_active=False, revoked_at=timezone.now())
+
+        record_audit_log(
+            actor=user,
+            module="accounts",
+            action="password_reset_completed",
+            entity_type="User",
+            entity_id=user.id,
+            new_values={"sessions_revoked": True},
+            request=request,
+        )
+        return user
+
+    @staticmethod
+    @transaction.atomic
+    def change_password(*, user, current_password: str, new_password: str, request=None):
+        if not user.check_password(current_password):
+            raise ValidationError({"current_password": "Current password is incorrect."})
+
+        user.set_password(new_password)
+        user.save(update_fields=["password"])
+        revoked_count = UserSession.objects.filter(user=user, is_active=True).update(
+            is_active=False,
+            revoked_at=timezone.now(),
+        )
+
+        record_audit_log(
+            actor=user,
+            module="accounts",
+            action="password_changed",
+            entity_type="User",
+            entity_id=user.id,
+            new_values={"revoked_sessions": revoked_count},
+            request=request,
+        )
+        return user
 
 
 class AccountAdminService:
@@ -403,3 +511,57 @@ class AccountAdminService:
             request=request,
         )
         return revoked_count
+
+
+class ProfileService:
+    @staticmethod
+    def _profile_audit_values(profile):
+        return {
+            "date_of_joining": profile.date_of_joining.isoformat() if profile.date_of_joining else None,
+            "office_location": profile.office_location,
+            "employment_type": profile.employment_type,
+            "employee_status": profile.employee_status,
+        }
+
+    @staticmethod
+    @transaction.atomic
+    def update_current_profile(*, user, profile, data, request=None):
+        user_fields = ["first_name", "last_name", "mobile", "designation", "department"]
+        profile_fields = ["date_of_joining", "office_location", "employment_type", "employee_status"]
+        old_values = {
+            "user": {field: getattr(user, field) for field in user_fields},
+            "profile": ProfileService._profile_audit_values(profile),
+        }
+
+        user_update_fields = []
+        for field in user_fields:
+            if field in data:
+                setattr(user, field, data[field])
+                user_update_fields.append(field)
+        if user_update_fields:
+            user.save(update_fields=user_update_fields)
+
+        profile_update_fields = []
+        for field in profile_fields:
+            if field in data:
+                setattr(profile, field, data[field])
+                profile_update_fields.append(field)
+        if profile_update_fields:
+            profile.updated_by = user
+            profile_update_fields.extend(["updated_by", "updated_at"])
+            profile.save(update_fields=profile_update_fields)
+
+        record_audit_log(
+            actor=user,
+            module="accounts",
+            action="update_profile",
+            entity_type="UserProfile",
+            entity_id=profile.id,
+            old_values=old_values,
+            new_values={
+                "user": {field: getattr(user, field) for field in user_fields},
+                "profile": ProfileService._profile_audit_values(profile),
+            },
+            request=request,
+        )
+        return profile

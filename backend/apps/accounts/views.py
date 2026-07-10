@@ -1,3 +1,4 @@
+from django.conf import settings
 from rest_framework import permissions, status
 from django.db.models import Q
 from rest_framework.generics import get_object_or_404
@@ -9,11 +10,15 @@ from apps.accounts.permissions import IsAccountsAdmin
 from apps.accounts.serializers import (
     AdminUserCreateSerializer,
     AdminUserUpdateSerializer,
+    ChangePasswordSerializer,
+    CurrentUserProfileUpdateSerializer,
+    ForgotPasswordSerializer,
     LoginHistorySerializer,
     LoginSerializer,
     LogoutSerializer,
     AdminRoleWriteSerializer,
     PermissionSerializer,
+    ResetPasswordSerializer,
     RoleAssignmentSerializer,
     RoleSerializer,
     SignupSerializer,
@@ -21,7 +26,7 @@ from apps.accounts.serializers import (
     UserSummarySerializer,
 )
 from apps.accounts.selectors import get_users_queryset
-from apps.accounts.services import AccountAdminService, AuthService
+from apps.accounts.services import AccountAdminService, AuthService, ProfileService
 from apps.core.pagination import StandardPagination
 from apps.core.responses import success_response
 
@@ -88,6 +93,50 @@ class LogoutAllView(APIView):
         return success_response(message="All sessions logged out")
 
 
+class ForgotPasswordView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        serializer = ForgotPasswordSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        result = AuthService.request_password_reset(
+            identifier=serializer.validated_data["identifier"],
+            request=request,
+        )
+        data = {"expires_in_seconds": result["expires_in_seconds"]}
+        if settings.DEBUG and result.get("otp"):
+            data["otp"] = result["otp"]
+        return success_response(data=data, message="Password reset OTP sent if the account exists")
+
+
+class ResetPasswordView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        serializer = ResetPasswordSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        AuthService.reset_password(
+            identifier=serializer.validated_data["identifier"],
+            otp=serializer.validated_data["otp"],
+            new_password=serializer.validated_data["new_password"],
+            request=request,
+        )
+        return success_response(message="Password reset successful")
+
+
+class ChangePasswordView(APIView):
+    def post(self, request):
+        serializer = ChangePasswordSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        AuthService.change_password(
+            user=request.user,
+            current_password=serializer.validated_data["current_password"],
+            new_password=serializer.validated_data["new_password"],
+            request=request,
+        )
+        return success_response(message="Password changed successfully")
+
+
 class CurrentUserView(APIView):
     def get(self, request):
         return success_response(data=UserSummarySerializer(request.user).data)
@@ -100,10 +149,15 @@ class CurrentUserProfileView(APIView):
 
     def put(self, request):
         profile, _ = UserProfile.objects.get_or_create(user=request.user)
-        serializer = UserProfileSerializer(profile, data=request.data, partial=True)
+        serializer = CurrentUserProfileUpdateSerializer(data=request.data, partial=True, context={"user": request.user})
         serializer.is_valid(raise_exception=True)
-        serializer.save(updated_by=request.user)
-        return success_response(data=serializer.data, message="Profile updated")
+        updated_profile = ProfileService.update_current_profile(
+            user=request.user,
+            profile=profile,
+            data=serializer.validated_data,
+            request=request,
+        )
+        return success_response(data=UserProfileSerializer(updated_profile).data, message="Profile updated")
 
 
 class LoginHistoryView(APIView):

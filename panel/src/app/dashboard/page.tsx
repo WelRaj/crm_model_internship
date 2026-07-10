@@ -20,8 +20,9 @@ import MarketingHub from "@/components/dashboard/marketing/MarketingHub";
 import ProjectHub from "@/components/dashboard/projects/ProjectHub";
 import SupportHub from "@/components/dashboard/support/SupportHub";
 import AccountingWizard, { ACCOUNTING_MODULES, type AccountingModuleId } from "@/components/dashboard/accounting/AccountingWizard";
-import { clearAuthSession, getCurrentUser, logout, type AuthUser } from "@/services/auth-api";
+import { changePassword, clearAuthSession, getCurrentUser, logout, type AuthUser } from "@/services/auth-api";
 import { getStoredAuthTokens } from "@/lib/api-client";
+import { getCurrentProfile, updateCurrentProfile, type BackendUserProfile } from "@/services/profile-api";
 import { useRouter } from "next/navigation";
 
 type MarketingView = "campaigns" | "roi" | "sources";
@@ -65,7 +66,7 @@ type ProfileDrawerMode = "view" | "edit" | "password" | "forgot-password";
 
 const profileActivityTimeline = [
   { id: "ACT-01", title: "Profile reviewed", detail: "Employee profile opened from dashboard header", time: "Today, 10:42 AM", status: "Completed" },
-  { id: "ACT-02", title: "Password security checked", detail: "Email OTP password flow is available for this account", time: "Today, 10:40 AM", status: "Secure" },
+  { id: "ACT-02", title: "Password security checked", detail: "Backend password change flow is available for this account", time: "Today, 10:40 AM", status: "Secure" },
   { id: "ACT-03", title: "Role access synced", detail: "Admin role permissions are active for Client Operations, People Operations, Finance Control, Delivery Projects, and Admin Control", time: "05 Jul 2026, 06:20 PM", status: "Active" },
   { id: "ACT-04", title: "Profile details updated", detail: "Employment and account details are ready for backend profile API mapping", time: "04 Jul 2026, 03:15 PM", status: "Updated" },
 ];
@@ -224,7 +225,7 @@ function initialsFromName(name: string) {
   return `${parts[0]?.[0] || "U"}${parts[1]?.[0] || ""}`.toUpperCase();
 }
 
-function userToProfile(user: AuthUser): UserProfile {
+function userToProfile(user: AuthUser, backendProfile?: BackendUserProfile): UserProfile {
   const fullName = user.full_name || [user.first_name, user.last_name].filter(Boolean).join(" ") || user.email || user.mobile || "CRM User";
   const roleName = user.roles[0]?.name || "Employee";
 
@@ -238,14 +239,18 @@ function userToProfile(user: AuthUser): UserProfile {
     officialEmail: user.email || "",
     mobile: user.mobile ? `+91 ${user.mobile}` : "",
     role: roleName,
-    employeeStatus: user.is_active ? "Active" : "Inactive",
+    employeeStatus: backendProfile?.employee_status || (user.is_active ? "Active" : "Inactive"),
+    dateOfJoining: backendProfile?.date_of_joining || "",
+    officeLocation: backendProfile?.office_location || "",
+    employmentType: backendProfile?.employment_type || "Full-Time",
     username: user.email || user.mobile || "",
     lastLogin: "Current session",
   };
 }
 
-function makeDemoOtp() {
-  return String(Math.floor(100000 + Math.random() * 900000));
+function splitFullName(fullName: string) {
+  const parts = fullName.trim().split(/\s+/).filter(Boolean);
+  return { first_name: parts.shift() || "", last_name: parts.join(" ") };
 }
 
 function isStrongPassword(password: string) {
@@ -261,14 +266,11 @@ function ProfileDrawer({
   open: boolean;
   profile: UserProfile;
   onClose: () => void;
-  onSave: (profile: UserProfile) => void;
+  onSave: (profile: UserProfile) => Promise<UserProfile>;
 }) {
   const [mode, setMode] = useState<ProfileDrawerMode>("view");
   const [draft, setDraft] = useState<UserProfile>(profile);
   const [passwordForm, setPasswordForm] = useState({ currentPassword: "", newPassword: "", confirmPassword: "", otp: "" });
-  const [generatedOtp, setGeneratedOtp] = useState("");
-  const [otpSent, setOtpSent] = useState(false);
-  const [otpAttempts, setOtpAttempts] = useState(0);
   const [formMessage, setFormMessage] = useState("");
 
   if (!open) return null;
@@ -300,23 +302,11 @@ function ProfileDrawer({
 
   const openPassword = () => {
     setPasswordForm({ currentPassword: "", newPassword: "", confirmPassword: "", otp: "" });
-    setGeneratedOtp("");
-    setOtpSent(false);
-    setOtpAttempts(0);
     setFormMessage("");
     setMode("password");
   };
 
-  const openForgotPassword = () => {
-    setPasswordForm({ currentPassword: "", newPassword: "", confirmPassword: "", otp: "" });
-    setGeneratedOtp("");
-    setOtpSent(false);
-    setOtpAttempts(0);
-    setFormMessage("");
-    setMode("forgot-password");
-  };
-
-  const saveProfile = () => {
+  const saveProfile = async () => {
     if (!draft.fullName.trim() || !draft.employeeId.trim() || !draft.officialEmail.trim() || !draft.mobile.trim()) {
       setFormMessage("Full name, employee ID, official email, and mobile number are required.");
       return;
@@ -329,60 +319,50 @@ function ProfileDrawer({
       ...draft,
       photoInitials: initialsFromName(draft.fullName),
     };
-    onSave(nextProfile);
-    setDraft(nextProfile);
-    setFormMessage("Profile updated.");
-    setMode("view");
+    try {
+      const savedProfile = await onSave(nextProfile);
+      setDraft(savedProfile);
+      setFormMessage("Profile updated.");
+      setMode("view");
+    } catch (error) {
+      setFormMessage(error instanceof Error ? error.message : "Unable to update profile.");
+    }
   };
 
-  const sendOtp = () => {
+  const validatePasswordForm = () => {
     const isForgotFlow = mode === "forgot-password";
     if (!isForgotFlow && !passwordForm.currentPassword) {
       setFormMessage("Current password is required. Use forgot password if you do not remember it.");
-      return;
+      return false;
     }
     if (!passwordForm.newPassword || !passwordForm.confirmPassword) {
       setFormMessage("New password and confirm password are required.");
-      return;
+      return false;
     }
     if (!isStrongPassword(passwordForm.newPassword)) {
       setFormMessage("Password must include uppercase, lowercase, number, special character, and at least 8 characters.");
-      return;
+      return false;
     }
     if (passwordForm.newPassword !== passwordForm.confirmPassword) {
       setFormMessage("New password and confirm password do not match.");
-      return;
+      return false;
     }
-
-    const nextOtp = makeDemoOtp();
-    setGeneratedOtp(nextOtp);
-    setOtpSent(true);
-    setOtpAttempts(0);
-    setPasswordForm((current) => ({ ...current, otp: "" }));
-    setFormMessage(`OTP sent to official email ${profile.officialEmail}. Frontend demo OTP: ${nextOtp}`);
+    return true;
   };
 
-  const savePassword = () => {
-    if (!otpSent || !generatedOtp) {
-      setFormMessage("Send the official email OTP first.");
-      return;
-    }
-    if (otpAttempts >= 3) {
-      setFormMessage("OTP attempt limit exceeded. Resend the OTP.");
-      return;
-    }
-    if (passwordForm.otp !== generatedOtp) {
-      setOtpAttempts((current) => current + 1);
-      setFormMessage(`Invalid OTP. Attempts left: ${Math.max(0, 2 - otpAttempts)}.`);
+  const savePassword = async () => {
+    if (!validatePasswordForm()) {
       return;
     }
 
-    setPasswordForm({ currentPassword: "", newPassword: "", confirmPassword: "", otp: "" });
-    setGeneratedOtp("");
-    setOtpSent(false);
-    setOtpAttempts(0);
-    setFormMessage(mode === "forgot-password" ? "Password reset successful. Other sessions will be logged out." : "Password changed successfully. Other sessions will be logged out.");
-    setMode("view");
+    try {
+      await changePassword(passwordForm.currentPassword, passwordForm.newPassword);
+      setPasswordForm({ currentPassword: "", newPassword: "", confirmPassword: "", otp: "" });
+      setFormMessage("Password changed successfully. Sign in again with the new password if your session expires.");
+      setMode("view");
+    } catch (error) {
+      setFormMessage(error instanceof Error ? error.message : "Unable to change password.");
+    }
   };
 
   return (
@@ -454,7 +434,7 @@ function ProfileDrawer({
                 <ProfileInput label="Role" value={draft.role} onChange={(value) => setDraft((current) => ({ ...current, role: value }))} options={["Admin", "HR", "Sales", "Frontend Developer", "Backend Developer", "Accounts", "Manager"]} />
                 <ProfileInput label="Employee Status" value={draft.employeeStatus} onChange={(value) => setDraft((current) => ({ ...current, employeeStatus: value }))} options={["Active", "Inactive"]} />
                 <ProfileInput label="Reporting Manager" value={draft.reportingManager} onChange={(value) => setDraft((current) => ({ ...current, reportingManager: value }))} />
-                <ProfileInput label="Date of Joining" value={draft.dateOfJoining} onChange={(value) => setDraft((current) => ({ ...current, dateOfJoining: value }))} />
+                <ProfileInput label="Date of Joining" type="date" value={draft.dateOfJoining} onChange={(value) => setDraft((current) => ({ ...current, dateOfJoining: value }))} />
                 <ProfileInput label="Office Location" value={draft.officeLocation} onChange={(value) => setDraft((current) => ({ ...current, officeLocation: value }))} />
                 <ProfileInput label="Employment Type" value={draft.employmentType} onChange={(value) => setDraft((current) => ({ ...current, employmentType: value }))} options={["Intern", "Full-Time", "Part-Time", "Contract"]} />
                 <ProfileInput label="Username" value={draft.username} onChange={(value) => setDraft((current) => ({ ...current, username: value }))} />
@@ -464,9 +444,9 @@ function ProfileDrawer({
             <section className="mt-6 space-y-5 rounded-3xl border border-slate-100 bg-white p-5 shadow-sm">
               <div>
                 <p className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-400">Account Security</p>
-                <h3 className="mt-1 text-lg font-black text-primary">{mode === "forgot-password" ? "Reset Password Using Email OTP" : "Change Password"}</h3>
+                <h3 className="mt-1 text-lg font-black text-primary">{mode === "forgot-password" ? "Reset Password" : "Change Password"}</h3>
                 <p className="mt-1 text-xs font-semibold leading-5 text-slate-500">
-                  {mode === "forgot-password" ? "Current password is not required. Verification will use official email OTP." : "Current password and official email OTP are required."}
+                  {mode === "forgot-password" ? "Use the sign-in screen forgot-password flow if you do not remember your current password." : "Current password is required before setting a new password."}
                 </p>
               </div>
               <div className="space-y-4">
@@ -475,15 +455,9 @@ function ProfileDrawer({
                 ) : null}
                 <ProfileInput label="New Password" type="password" value={passwordForm.newPassword} onChange={(value) => setPasswordForm((current) => ({ ...current, newPassword: value }))} />
                 <ProfileInput label="Confirm Password" type="password" value={passwordForm.confirmPassword} onChange={(value) => setPasswordForm((current) => ({ ...current, confirmPassword: value }))} />
-                <button type="button" onClick={sendOtp} className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-blue-100 bg-blue-50 px-4 text-xs font-black uppercase tracking-widest text-blue-700 hover:border-blue-200">
-                  <Mail size={16} /> {otpSent ? "Resend Email OTP" : "Send OTP To Official Email"}
-                </button>
-                {otpSent ? (
-                  <ProfileInput label="Email OTP" value={passwordForm.otp} onChange={(value) => setPasswordForm((current) => ({ ...current, otp: value.replace(/\D/g, "").slice(0, 6) }))} />
-                ) : null}
                 {mode === "password" ? (
-                  <button type="button" onClick={openForgotPassword} className="text-left text-xs font-black uppercase tracking-widest text-primary hover:underline">
-                    Forgot current password? Reset using email OTP
+                  <button type="button" onClick={() => { clearAuthSession(); window.location.href = "/auth/signin"; }} className="text-left text-xs font-black uppercase tracking-widest text-primary hover:underline">
+                    Forgot current password? Use sign-in reset
                   </button>
                 ) : (
                   <button type="button" onClick={openPassword} className="text-left text-xs font-black uppercase tracking-widest text-primary hover:underline">
@@ -582,7 +556,7 @@ function ProfileDrawer({
                 Cancel
               </button>
               <button type="button" onClick={savePassword} className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-primary px-4 text-xs font-black uppercase tracking-widest text-white hover:bg-primary/90">
-                <KeyRound size={16} /> Verify OTP & Update
+                <KeyRound size={16} /> Update Password
               </button>
             </div>
           ) : (
@@ -622,9 +596,9 @@ export default function Dashboard() {
       }
 
       try {
-        const user = await getCurrentUser();
+        const [user, profile] = await Promise.all([getCurrentUser(), getCurrentProfile()]);
         if (!isMounted) return;
-        setUserProfile(userToProfile(user));
+        setUserProfile(userToProfile(user, profile));
         setIsAuthChecking(false);
       } catch {
         clearAuthSession();
@@ -643,6 +617,23 @@ export default function Dashboard() {
     setShowProfile(false);
     await logout();
     router.replace("/auth/signin");
+  };
+
+  const handleSaveProfile = async (profile: UserProfile) => {
+    const nameParts = splitFullName(profile.fullName);
+    const updatedProfile = await updateCurrentProfile({
+      ...nameParts,
+      mobile: profile.mobile,
+      designation: profile.designation,
+      department: profile.department,
+      date_of_joining: profile.dateOfJoining || null,
+      office_location: profile.officeLocation,
+      employment_type: profile.employmentType,
+      employee_status: profile.employeeStatus,
+    });
+    const nextProfile = userToProfile(updatedProfile.user, updatedProfile);
+    setUserProfile(nextProfile);
+    return nextProfile;
   };
 
   const menuGroups = [
@@ -851,7 +842,7 @@ export default function Dashboard() {
             </div>
         </main>
       </div>
-      <ProfileDrawer open={showProfileDrawer} profile={userProfile} onSave={setUserProfile} onClose={() => setShowProfileDrawer(false)} />
+      <ProfileDrawer open={showProfileDrawer} profile={userProfile} onSave={handleSaveProfile} onClose={() => setShowProfileDrawer(false)} />
     </div>
   );
 }

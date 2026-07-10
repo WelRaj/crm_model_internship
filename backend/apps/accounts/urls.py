@@ -1,13 +1,16 @@
 from django.urls import path
 
 from apps.accounts.views import (
+    ChangePasswordView,
     CurrentUserProfileView,
     CurrentUserView,
+    ForgotPasswordView,
     LoginHistoryView,
     LoginView,
     LogoutAllView,
     LogoutView,
     RefreshView,
+    ResetPasswordView,
     PermissionListView,
     RoleDetailView,
     RoleListView,
@@ -26,6 +29,9 @@ urlpatterns = [
     path("auth/refresh/", RefreshView.as_view(), name="auth-refresh"),
     path("auth/logout/", LogoutView.as_view(), name="auth-logout"),
     path("auth/logout-all/", LogoutAllView.as_view(), name="auth-logout-all"),
+    path("auth/password/forgot/", ForgotPasswordView.as_view(), name="auth-password-forgot"),
+    path("auth/password/reset/", ResetPasswordView.as_view(), name="auth-password-reset"),
+    path("auth/password/change/", ChangePasswordView.as_view(), name="auth-password-change"),
     path("auth/me/", CurrentUserView.as_view(), name="auth-me"),
     path("profile/me/", CurrentUserProfileView.as_view(), name="profile-me"),
     path("profile/me/login-history/", LoginHistoryView.as_view(), name="profile-login-history"),

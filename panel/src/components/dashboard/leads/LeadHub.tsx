@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Briefcase, Headphones, Target } from "lucide-react";
 import ProjectLeadStepWizard from "./ProjectLeadStepWizard";
 import TradingLeadCreate from "./TradingLeadCreate";
 import { projectLeadSeedData, tradingLeadSeedData, wonProjectLeadStorageKey, type ProjectLead, type TradingLead } from "./leadTypes";
+import { createLead, listLeads, type LeadRecord as BackendLeadRecord } from "@/services/leads-api";
 
 type CreateMode = "home" | "project" | "trading";
 
@@ -13,18 +14,77 @@ export default function LeadHub() {
   const [projectCreated, setProjectCreated] = useState<ProjectLead[]>(projectLeadSeedData);
   const [tradingCreated, setTradingCreated] = useState<TradingLead[]>(tradingLeadSeedData);
   const [recentLeadIds, setRecentLeadIds] = useState<string[]>([]);
+  const [apiError, setApiError] = useState("");
+  const [isLoadingLeads, setIsLoadingLeads] = useState(true);
 
-  const addProjectLead = (lead: ProjectLead) => {
-    setProjectCreated((current) => [lead, ...current]);
-    setRecentLeadIds((current) => [lead.id, ...current]);
-    if (lead.status === "Won" || lead.status === "Project Created") {
-      syncWonProjectLead(lead);
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadLeads() {
+      try {
+        const response = await listLeads({ limit: 100 });
+        if (!isMounted) return;
+        const projectLeads = response.data.filter((lead) => lead.lead_type === "project").map(backendToProjectLead);
+        const tradingLeads = response.data.filter((lead) => lead.lead_type === "trading").map(backendToTradingLead);
+        setProjectCreated(projectLeads);
+        setTradingCreated(tradingLeads);
+        setApiError("");
+      } catch (error) {
+        if (isMounted) setApiError(error instanceof Error ? error.message : "Unable to load leads.");
+      } finally {
+        if (isMounted) setIsLoadingLeads(false);
+      }
+    }
+
+    void loadLeads();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const addProjectLead = async (lead: ProjectLead) => {
+    try {
+      const saved = await createLead({
+        lead_type: "project",
+        source: lead.source,
+        company_name: lead.projectType,
+        contact_name: `${lead.firstName} ${lead.lastName}`.trim(),
+        email: lead.email === "N/A" ? "" : lead.email,
+        mobile: lead.mobile,
+        city: "",
+        requirement_summary: lead.requirementSummary,
+        estimated_value: String(lead.budget || 0),
+      });
+      const savedLead = backendToProjectLead(saved);
+      setProjectCreated((current) => [savedLead, ...current]);
+      setRecentLeadIds((current) => [savedLead.id, ...current]);
+      setApiError("");
+      if (savedLead.status === "Won" || savedLead.status === "Project Created") syncWonProjectLead(savedLead);
+    } catch (error) {
+      setApiError(error instanceof Error ? error.message : "Unable to save project lead.");
     }
   };
 
-  const addTradingLead = (lead: TradingLead) => {
-    setTradingCreated((current) => [lead, ...current]);
-    setRecentLeadIds((current) => [lead.id, ...current]);
+  const addTradingLead = async (lead: TradingLead) => {
+    try {
+      const saved = await createLead({
+        lead_type: "trading",
+        source: lead.source,
+        company_name: "",
+        contact_name: `${lead.firstName} ${lead.lastName}`.trim(),
+        email: lead.email === "N/A" ? "" : lead.email,
+        mobile: lead.mobile,
+        city: "",
+        requirement_summary: lead.lastCallNote || lead.tradingInterest,
+        estimated_value: String(lead.budget || 0),
+      });
+      const savedLead = backendToTradingLead(saved);
+      setTradingCreated((current) => [savedLead, ...current]);
+      setRecentLeadIds((current) => [savedLead.id, ...current]);
+      setApiError("");
+    } catch (error) {
+      setApiError(error instanceof Error ? error.message : "Unable to save trading lead.");
+    }
   };
 
   if (mode === "project") {
@@ -42,6 +102,9 @@ export default function LeadHub() {
         <h2 className="mt-2 text-3xl font-black tracking-tight text-primary">Lead Desk</h2>
         <p className="mt-1 text-sm font-semibold text-secondary">Capture software enquiries, trading account interest, platform support requests, and client follow-up ownership.</p>
       </div>
+
+      {apiError ? <div className="rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">{apiError}</div> : null}
+      {isLoadingLeads ? <div className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm font-bold text-blue-700">Loading backend leads...</div> : null}
 
       <div className="grid gap-5 lg:grid-cols-2">
         <button onClick={() => setMode("project")} className="rounded-[2rem] border border-border bg-white p-8 text-left shadow-sm transition-all hover:border-primary hover:shadow-xl">
@@ -78,6 +141,67 @@ export default function LeadHub() {
       <LeadViewTable projectLeads={projectCreated} tradingLeads={tradingCreated} recentLeadIds={recentLeadIds} />
     </div>
   );
+}
+
+function backendToProjectLead(lead: BackendLeadRecord): ProjectLead {
+  const [firstName, ...lastNameParts] = lead.contact_name.split(" ");
+  return {
+    id: lead.lead_number,
+    firstName: firstName || "Unnamed",
+    lastName: lastNameParts.join(" "),
+    mobile: lead.mobile,
+    email: lead.email || "N/A",
+    source: lead.source || "Direct",
+    status: "New Enquiry",
+    assignedTo: lead.assigned_to?.full_name || "Unassigned",
+    currentOwnerId: "Tele-1",
+    teamLeaderId: "TL-1",
+    transferHistory: [],
+    remarks: lead.requirement_summary,
+    followUpDate: lead.created_at.split("T")[0],
+    department: "Projects",
+    projectType: lead.company_name || "Project Enquiry",
+    requirementSummary: lead.requirement_summary || "Requirement discussion pending.",
+    budget: Number(lead.estimated_value || 0),
+    timeline: "To be discussed",
+    proposalStatus: "Pending",
+    quotationStatus: "Draft",
+    meetingDate: lead.created_at.split("T")[0],
+    developmentStatus: "Not Started",
+    developmentProgress: 0,
+    developmentOwner: "Unassigned",
+  };
+}
+
+function backendToTradingLead(lead: BackendLeadRecord): TradingLead {
+  const [firstName, ...lastNameParts] = lead.contact_name.split(" ");
+  return {
+    id: lead.lead_number,
+    firstName: firstName || "Unnamed",
+    lastName: lastNameParts.join(" "),
+    mobile: lead.mobile,
+    email: lead.email || "N/A",
+    source: lead.source || "Direct",
+    status: "New",
+    assignedTo: lead.assigned_to?.full_name || "Unassigned",
+    currentOwnerId: "Tele-1",
+    teamLeaderId: "TL-1",
+    transferHistory: [],
+    remarks: lead.requirement_summary,
+    followUpDate: lead.created_at.split("T")[0],
+    department: "Trading",
+    interestLevel: "Medium",
+    tradingInterest: lead.requirement_summary || "Trading enquiry",
+    budget: Number(lead.estimated_value || 0),
+    experienceLevel: "Beginner",
+    riskAppetite: "Low",
+    kycStatus: "Pending",
+    dematStatus: "Not Opened",
+    accountStatus: "Needs Account Opening",
+    issueType: "General Query",
+    availability: "Available",
+    lastCallNote: lead.requirement_summary,
+  };
 }
 
 function syncWonProjectLead(lead: ProjectLead) {

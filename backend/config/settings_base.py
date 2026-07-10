@@ -24,6 +24,7 @@ INSTALLED_APPS = [
     "apps.accounts",
     "apps.audit",
     "apps.files",
+    "apps.crm",
 ]
 
 MIDDLEWARE = [
@@ -111,6 +112,8 @@ SIMPLE_JWT = {
     "BLACKLIST_AFTER_ROTATION": True,
     "UPDATE_LAST_LOGIN": True,
 }
+
+PASSWORD_RESET_OTP_MINUTES = config("PASSWORD_RESET_OTP_MINUTES", default=10, cast=int)
 
 CORS_ALLOWED_ORIGINS = config(
     "CORS_ALLOWED_ORIGINS",

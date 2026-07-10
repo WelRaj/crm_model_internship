@@ -62,6 +62,32 @@ export async function signup(payload: SignupPayload) {
   return response.data;
 }
 
+export async function requestPasswordReset(identifier: string) {
+  const response = await api.post<ApiResponse<{ expires_in_seconds: number; otp?: string }>>(
+    "/auth/password/forgot/",
+    { identifier },
+    { auth: false }
+  );
+  return response.data;
+}
+
+export async function resetPassword(identifier: string, otp: string, newPassword: string) {
+  const response = await api.post<ApiResponse<Record<string, never>>>(
+    "/auth/password/reset/",
+    { identifier, otp, new_password: newPassword },
+    { auth: false }
+  );
+  return response.data;
+}
+
+export async function changePassword(currentPassword: string, newPassword: string) {
+  const response = await api.post<ApiResponse<Record<string, never>>>("/auth/password/change/", {
+    current_password: currentPassword,
+    new_password: newPassword,
+  });
+  return response.data;
+}
+
 export async function getCurrentUser() {
   const response = await api.get<ApiResponse<AuthUser>>("/auth/me/");
   return response.data;

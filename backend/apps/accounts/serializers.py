@@ -1,3 +1,4 @@
+from django.contrib.auth.password_validation import validate_password
 from rest_framework import serializers
 
 from apps.accounts.models import LoginHistory, Permission, Role, RolePermission, User, UserProfile, UserRole
@@ -201,6 +202,34 @@ class LogoutSerializer(serializers.Serializer):
     refresh_token = serializers.CharField()
 
 
+class ForgotPasswordSerializer(serializers.Serializer):
+    identifier = serializers.CharField(max_length=160)
+
+
+class ResetPasswordSerializer(serializers.Serializer):
+    identifier = serializers.CharField(max_length=160)
+    otp = serializers.CharField(min_length=6, max_length=6)
+    new_password = serializers.CharField(write_only=True, min_length=8, trim_whitespace=False)
+
+    def validate_otp(self, value):
+        if not value.isdigit():
+            raise serializers.ValidationError("Enter a valid 6-digit OTP.")
+        return value
+
+    def validate_new_password(self, value):
+        validate_password(value)
+        return value
+
+
+class ChangePasswordSerializer(serializers.Serializer):
+    current_password = serializers.CharField(write_only=True, trim_whitespace=False)
+    new_password = serializers.CharField(write_only=True, min_length=8, trim_whitespace=False)
+
+    def validate_new_password(self, value):
+        validate_password(value)
+        return value
+
+
 class UserProfileSerializer(serializers.ModelSerializer):
     user = UserSummarySerializer(read_only=True)
 
@@ -220,6 +249,29 @@ class UserProfileSerializer(serializers.ModelSerializer):
             "address",
         )
         read_only_fields = ("id", "user", "profile_photo_file_id")
+
+
+class CurrentUserProfileUpdateSerializer(serializers.Serializer):
+    first_name = serializers.CharField(max_length=150, required=False)
+    last_name = serializers.CharField(max_length=150, required=False, allow_blank=True)
+    mobile = serializers.CharField(max_length=20, required=False)
+    designation = serializers.CharField(max_length=120, required=False, allow_blank=True)
+    department = serializers.CharField(max_length=80, required=False)
+    date_of_joining = serializers.DateField(required=False, allow_null=True)
+    office_location = serializers.CharField(max_length=160, required=False, allow_blank=True)
+    employment_type = serializers.ChoiceField(choices=UserProfile.EmploymentType.choices, required=False)
+    employee_status = serializers.ChoiceField(choices=UserProfile.EmployeeStatus.choices, required=False)
+
+    def validate_mobile(self, value):
+        user = self.context["user"]
+        digits = "".join(char for char in value if char.isdigit())
+        if len(digits) == 12 and digits.startswith("91"):
+            digits = digits[2:]
+        if len(digits) != 10:
+            raise serializers.ValidationError("Enter a valid 10-digit mobile number.")
+        if User.objects.filter(mobile=digits).exclude(id=user.id).exists():
+            raise serializers.ValidationError("A user with this mobile already exists.")
+        return digits
 
 
 class LoginHistorySerializer(serializers.ModelSerializer):

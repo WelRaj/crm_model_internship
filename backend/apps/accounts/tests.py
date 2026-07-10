@@ -1,9 +1,10 @@
 from datetime import timedelta
 
+from django.test import override_settings
 from rest_framework.test import APITestCase
 from django.utils import timezone
 
-from apps.accounts.models import Permission, Role, RolePermission, User, UserProfile, UserRole, UserSession
+from apps.accounts.models import PasswordResetRequest, Permission, Role, RolePermission, User, UserProfile, UserRole, UserSession
 from apps.audit.models import AuditLog
 
 
@@ -59,6 +60,114 @@ class SignupSigninTests(APITestCase):
         duplicate_response = self.client.post("/api/v1/auth/signup/", payload, format="json")
 
         self.assertEqual(duplicate_response.status_code, 400)
+
+
+class PasswordResetTests(APITestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            email="reset.user@example.com",
+            mobile="9876543222",
+            password="OldPass@12345",
+            first_name="Reset",
+            is_active=True,
+        )
+        UserSession.objects.create(
+            user=self.user,
+            refresh_token_hash="active-reset-session",
+            is_active=True,
+            expires_at=timezone.now() + timedelta(days=7),
+        )
+
+    @override_settings(DEBUG=True)
+    def test_password_reset_uses_hashed_otp_and_revokes_sessions(self):
+        forgot_response = self.client.post(
+            "/api/v1/auth/password/forgot/",
+            {"identifier": "reset.user@example.com"},
+            format="json",
+        )
+        self.assertEqual(forgot_response.status_code, 200)
+        otp = forgot_response.data["data"]["otp"]
+        reset_request = PasswordResetRequest.objects.get(user=self.user)
+        self.assertNotEqual(reset_request.otp_hash, otp)
+
+        wrong_otp_response = self.client.post(
+            "/api/v1/auth/password/reset/",
+            {"identifier": "reset.user@example.com", "otp": "000000", "new_password": "NewPass@12345"},
+            format="json",
+        )
+        self.assertEqual(wrong_otp_response.status_code, 400)
+
+        reset_response = self.client.post(
+            "/api/v1/auth/password/reset/",
+            {"identifier": "reset.user@example.com", "otp": otp, "new_password": "NewPass@12345"},
+            format="json",
+        )
+        self.assertEqual(reset_response.status_code, 200)
+
+        reset_request.refresh_from_db()
+        self.assertTrue(reset_request.is_used)
+        self.assertFalse(UserSession.objects.get(user=self.user).is_active)
+        self.assertTrue(AuditLog.objects.filter(module="accounts", action="password_reset_completed").exists())
+
+        login_response = self.client.post(
+            "/api/v1/auth/login/",
+            {"identifier": "reset.user@example.com", "password": "NewPass@12345"},
+            format="json",
+        )
+        self.assertEqual(login_response.status_code, 200)
+
+    def test_authenticated_user_can_change_password(self):
+        self.client.force_authenticate(user=self.user)
+
+        wrong_response = self.client.post(
+            "/api/v1/auth/password/change/",
+            {"current_password": "WrongPass@123", "new_password": "ChangedPass@12345"},
+            format="json",
+        )
+        self.assertEqual(wrong_response.status_code, 400)
+
+        response = self.client.post(
+            "/api/v1/auth/password/change/",
+            {"current_password": "OldPass@12345", "new_password": "ChangedPass@12345"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(UserSession.objects.get(user=self.user).is_active)
+        self.assertTrue(AuditLog.objects.filter(module="accounts", action="password_changed").exists())
+
+        self.client.force_authenticate(user=None)
+        login_response = self.client.post(
+            "/api/v1/auth/login/",
+            {"identifier": "reset.user@example.com", "password": "ChangedPass@12345"},
+            format="json",
+        )
+        self.assertEqual(login_response.status_code, 200)
+
+    def test_authenticated_user_can_update_profile(self):
+        self.client.force_authenticate(user=self.user)
+
+        response = self.client.put(
+            "/api/v1/profile/me/",
+            {
+                "first_name": "Updated",
+                "last_name": "User",
+                "mobile": "+91 9876543333",
+                "designation": "Senior Executive",
+                "department": "People Operations",
+                "date_of_joining": "2026-07-10",
+                "office_location": "Jaipur",
+                "employment_type": "Full-Time",
+                "employee_status": "Active",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.first_name, "Updated")
+        self.assertEqual(self.user.mobile, "9876543333")
+        self.assertEqual(self.user.profile.office_location, "Jaipur")
+        self.assertTrue(AuditLog.objects.filter(module="accounts", action="update_profile").exists())
 
 
 class AccountAdminApiTests(APITestCase):

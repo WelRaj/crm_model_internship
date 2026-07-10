@@ -1,6 +1,6 @@
 # Backend Information
 
-Last updated: 2026-07-08
+Last updated: 2026-07-10
 
 ## 1. Purpose
 
@@ -83,6 +83,13 @@ Current status:
 - Admin Role Management APIs now expose permissions, create/update roles, assign permission codes, audit role changes, and drive the Roles & Permissions UI from backend data.
 - Audit Log APIs now expose admin-only paginated/searchable audit events and drive the Admin Control System Audit Trail UI from backend data.
 - Roles now have persisted active/inactive status, protected system-role safeguards, inactive-role assignment blocking, and live UI status toggles.
+- Admin Control `Revoke sessions` is connected end to end: the admin-only backend action revokes all active tracked sessions for the selected user, creates an audit log, and refreshes the live frontend user list.
+- Forgot password/reset password OTP flow is implemented end to end from the browser sign-in screen: backend hashed OTP storage, expiry, one-time reset requests, audit logs, session revocation after reset, centralized frontend auth API wrappers, and sign-in UI reset flow.
+- Logged-in change password flow is connected from My Profile to backend with current-password verification, password validation, session revocation, audit logging, and centralized frontend auth wrapper.
+- My Profile edit flow now saves from dashboard to backend `/profile/me/`, updates current user/profile fields in one transaction, audits the mutation, and reloads persisted values through centralized profile API wrappers.
+- CRM app foundation is created with Lead model, migration, admin registration, create/list/search/filter API, duplicate validation, service-layer lead number generation, audit logging, backend tests, and centralized frontend leads API wrapper.
+- Lead Desk frontend now loads project/trading leads from backend and saves Project Lead Wizard plus Trading Lead form submissions through centralized `leads-api`.
+- Current state is stable for auth, profile, admin control, and lead intake. Next backend work should continue with lead detail, status updates, assignment, and follow-up workflow.
 
 ## 4. Production Architecture Reference
 
@@ -464,6 +471,24 @@ Implemented Admin User Management APIs:
 | `POST` | `/api/v1/accounts/users/{id}/activate/` | Activate user |
 | `POST` | `/api/v1/accounts/users/{id}/deactivate/` | Deactivate user and revoke active sessions |
 | `POST` | `/api/v1/accounts/users/{id}/roles/` | Replace assigned roles |
+| `POST` | `/api/v1/accounts/users/{id}/sessions/revoke/` | Revoke all active tracked sessions without deactivating the user |
+
+Implemented Auth Password APIs:
+
+| Method | Endpoint | Purpose |
+| --- | --- | --- |
+| `POST` | `/api/v1/auth/password/forgot/` | Request password reset OTP |
+| `POST` | `/api/v1/auth/password/reset/` | Reset password with OTP |
+| `POST` | `/api/v1/auth/password/change/` | Change password while logged in |
+| `GET` | `/api/v1/profile/me/` | Load current user's profile |
+| `PUT` | `/api/v1/profile/me/` | Update current user's profile/account fields |
+
+Implemented CRM Lead APIs:
+
+| Method | Endpoint | Purpose |
+| --- | --- | --- |
+| `GET` | `/api/v1/leads/` | List leads with pagination, search, status filter, and type filter |
+| `POST` | `/api/v1/leads/` | Create lead with duplicate validation and audit log |
 
 ## 13. Session Resume Checklist
 
@@ -505,3 +530,10 @@ Session continuity rule:
 | 2026-07-09 | Connected Roles & Permissions to backend role/permission data with role create/update APIs, permission assignment, audit logging, frontend API wrappers, and tests. |
 | 2026-07-09 | Added admin-only audit log listing API with search/pagination, connected System Audit Trail UI to live backend audit events, and added audit API tests. |
 | 2026-07-09 | Added persisted role active/inactive status with migration, backend validation, assignment safeguards, audited UI toggles, and regression tests. |
+| 2026-07-10 | Connected Admin Control session revocation to an admin-only backend service/API, added audit logging and regression coverage, fixed refresh-token blacklisting in logout, and verified 7 accounts tests, Django system check, frontend TypeScript, lint, and production build. |
+| 2026-07-10 | Added forgot password and reset password OTP APIs with hashed OTP storage, expiry, one-time use, audit logs, session revocation after password reset, centralized frontend auth wrappers, regression tests, and browser sign-in screen reset flow. |
+| 2026-07-10 | Connected My Profile change password to backend current-password verification with audit logging, session revocation, frontend wrapper, and regression test. |
+| 2026-07-10 | Connected My Profile edit form to backend profile update API with transactional user/profile updates, audit logging, frontend profile service wrapper, dashboard hydration, and regression test. |
+| 2026-07-10 | Created CRM app foundation and lead create/list API with lead number sequence, duplicate checks, audit logging, migration, admin registration, backend tests, and frontend `leads-api` wrapper. |
+| 2026-07-10 | Connected Lead Desk frontend to backend lead list/create APIs, applied CRM migration locally, and verified frontend TypeScript/lint plus CRM backend tests. |
+| 2026-07-10 | Saved current milestone progress in continuity notes and verified the browser-facing auth/profile/CRM flow state before pushing the latest code. |
