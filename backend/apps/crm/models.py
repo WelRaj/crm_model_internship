@@ -47,3 +47,36 @@ class Lead(BaseModel):
     def __str__(self) -> str:
         return f"{self.lead_number} - {self.contact_name}"
 
+
+class LeadFollowUp(BaseModel):
+    class Channel(models.TextChoices):
+        CALL = "call", "Call"
+        WHATSAPP = "whatsapp", "WhatsApp"
+        EMAIL = "email", "Email"
+        MEETING = "meeting", "Meeting"
+        OTHER = "other", "Other"
+
+    class Outcome(models.TextChoices):
+        PENDING = "pending", "Pending"
+        CONTACTED = "contacted", "Contacted"
+        INTERESTED = "interested", "Interested"
+        NOT_INTERESTED = "not_interested", "Not Interested"
+        CALLBACK = "callback", "Callback"
+        ESCALATED = "escalated", "Escalated"
+        DONE = "done", "Done"
+
+    lead = models.ForeignKey(Lead, on_delete=models.CASCADE, related_name="follow_ups")
+    channel = models.CharField(max_length=20, choices=Channel.choices, default=Channel.CALL, db_index=True)
+    outcome = models.CharField(max_length=30, choices=Outcome.choices, default=Outcome.PENDING, db_index=True)
+    note = models.TextField()
+    next_follow_up_at = models.DateTimeField(null=True, blank=True, db_index=True)
+
+    class Meta:
+        db_table = "lead_follow_ups"
+        indexes = [
+            models.Index(fields=["lead", "-created_at"]),
+            models.Index(fields=["outcome", "next_follow_up_at"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.lead.lead_number} - {self.outcome}"

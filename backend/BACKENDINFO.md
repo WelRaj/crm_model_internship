@@ -89,7 +89,18 @@ Current status:
 - My Profile edit flow now saves from dashboard to backend `/profile/me/`, updates current user/profile fields in one transaction, audits the mutation, and reloads persisted values through centralized profile API wrappers.
 - CRM app foundation is created with Lead model, migration, admin registration, create/list/search/filter API, duplicate validation, service-layer lead number generation, audit logging, backend tests, and centralized frontend leads API wrapper.
 - Lead Desk frontend now loads project/trading leads from backend and saves Project Lead Wizard plus Trading Lead form submissions through centralized `leads-api`.
-- Current state is stable for auth, profile, admin control, and lead intake. Next backend work should continue with lead detail, status updates, assignment, and follow-up workflow.
+- Lead Hub now supports backend-driven lead detail, status update, and assignment in a drawer UI with active user selection, transactional save, and audited mutations.
+- Current state is stable for auth, profile, admin control, lead intake, lead detail, assignment, and lead follow-ups. Next backend work should connect the broader CRM operational screens such as Lead Assignment and Telecaller Desk to these backend records.
+- CRM lead detail/update/assignment APIs are now added for `GET/PUT /api/v1/leads/{id}/` and `POST /api/v1/leads/{id}/assign/` with transactional updates, duplicate checks, audit logs, and frontend API wrappers.
+- CRM lead follow-up history is now backend-backed with `LeadFollowUp`, audited create flow, and Lead drawer add/list UI.
+- Lead Assignment screen now loads backend leads and active backend users, assigns selected leads through the centralized lead assignment API, and stores assignment notes as lead follow-ups.
+- Lead Assignment owner selection now uses a backend active-user dropdown instead of free text, preventing assignments from saving without a valid backend user id.
+- Local verification seed data includes 5 active telecaller users (`TEL-VERIFY-001` to `TEL-VERIFY-005`, password `Tele@12345`) and 5 unassigned fresh trading leads (`Trading Verify Lead 01` to `Trading Verify Lead 05`) for assignment testing.
+- Lead assignment is now idempotent for the same assignee: repeated clicks with the same `assigned_to_id` do not create extra reassignment audit events or churn the lead state.
+- Lead Assignment history is backend-owned: actual assignment changes create a `LeadFollowUp` history row in the backend, and the Lead Assignment history table renders selected-lead backend follow-ups instead of local-only activity state.
+- Calling Desk now loads backend assigned leads, groups them by backend assigned user, and saves call logs through centralized lead follow-up APIs instead of seed-only local call state.
+- Lead assignment now has backend smart balancing: if the requested telecaller already has 5 active open leads, the lead is assigned to the least-loaded active telecaller instead, with an auto-balance note saved in backend history.
+- Follow-ups screen now uses backend `LeadFollowUp` data through the centralized frontend leads API wrapper, including a global `/api/v1/follow-ups/` queue endpoint with basic filters.
 
 ## 4. Production Architecture Reference
 
@@ -489,6 +500,12 @@ Implemented CRM Lead APIs:
 | --- | --- | --- |
 | `GET` | `/api/v1/leads/` | List leads with pagination, search, status filter, and type filter |
 | `POST` | `/api/v1/leads/` | Create lead with duplicate validation and audit log |
+| `GET` | `/api/v1/leads/{id}/` | Fetch a lead detail |
+| `PUT` | `/api/v1/leads/{id}/` | Update lead fields and status |
+| `POST` | `/api/v1/leads/{id}/assign/` | Assign or reassign lead owner |
+| `GET` | `/api/v1/leads/{id}/follow-ups/` | List follow-up notes/history for a lead |
+| `POST` | `/api/v1/leads/{id}/follow-ups/` | Add a follow-up note, outcome, channel, and next action time |
+| `GET` | `/api/v1/follow-ups/` | List global follow-up queue with due status, lead type, owner, and search filters |
 
 ## 13. Session Resume Checklist
 
@@ -537,3 +554,16 @@ Session continuity rule:
 | 2026-07-10 | Created CRM app foundation and lead create/list API with lead number sequence, duplicate checks, audit logging, migration, admin registration, backend tests, and frontend `leads-api` wrapper. |
 | 2026-07-10 | Connected Lead Desk frontend to backend lead list/create APIs, applied CRM migration locally, and verified frontend TypeScript/lint plus CRM backend tests. |
 | 2026-07-10 | Saved current milestone progress in continuity notes and verified the browser-facing auth/profile/CRM flow state before pushing the latest code. |
+| 2026-07-10 | Added CRM lead detail, update, status, and assignment APIs with service-layer transactions, audit logs, regression tests, and centralized frontend lead wrappers. |
+| 2026-07-10 | Reworked Lead Hub with backend-driven detail drawer, active-user assignment picker, lead edit/save flow, and clean reload-safe UI state. |
+| 2026-07-10 | Fixed Lead Hub View action to display lead numbers while sending backend UUIDs to detail APIs, preventing the View drawer from failing with a generic error. |
+| 2026-07-10 | Added backend LeadFollowUp model/API, migration, audit logging, regression test, centralized frontend API wrappers, and Lead drawer follow-up add/history UI. |
+| 2026-07-10 | Connected Lead Assignment screen to backend lead/user data and centralized assignment/follow-up APIs with frontend TypeScript, lint, and CRM backend tests passing. |
+| 2026-07-10 | Hardened Lead Assignment owner selection by replacing free-text owner entry with backend active-user dropdown after Ravi Rathor assignment showed follow-up saved but no assigned user. |
+| 2026-07-10 | Seeded local DB with 5 active telecaller verification employees and 5 fresh unassigned trading leads for easier Lead Assignment testing. |
+| 2026-07-10 | Added idempotent assignment guard so repeated assign clicks with the same assignee no longer generate duplicate reassignment events. |
+| 2026-07-10 | Reworked Lead Assignment history so assignment changes are persisted as backend follow-up history and the UI reloads/display selected-lead backend history. |
+| 2026-07-10 | Connected Calling Desk to backend assigned leads and centralized follow-up APIs, including backend owner switch, assigned queue load, call log save, and selected-lead history reload. |
+| 2026-07-10 | Added backend smart assignment balancing so overloaded telecallers are skipped in favor of the least-loaded active telecaller, with regression coverage and history note. |
+| 2026-07-10 | Connected Follow-ups screen to backend global follow-up queue and centralized lead follow-up create/list APIs, replacing seed-only follow-up rows. |
+| 2026-07-11 | Verified the CRM backend after the latest follow-up and assignment changes: `apps.crm` tests passed and frontend TypeScript passed, with centralized lead/follow-up APIs still as the single integration path. |

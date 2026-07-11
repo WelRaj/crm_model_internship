@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type ComponentType, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ComponentType, type ReactNode } from "react";
 import {
   AlertTriangle,
   CalendarClock,
@@ -14,6 +14,9 @@ import {
   UserCheck,
 } from "lucide-react";
 import { projectLeadSeedData, telecallers, tradingLeadSeedData, type TelecallerId } from "@/components/dashboard/leads/leadTypes";
+import { listUsers } from "@/services/accounts-api";
+import { type AuthUser } from "@/services/auth-api";
+import { assignLead as assignBackendLead, listLeadFollowUps, listLeads, type LeadFollowUpRecord, type LeadRecord } from "@/services/leads-api";
 
 type LeadKind = "Project Lead" | "Trading Lead";
 type AssignmentStatus = "Waiting Assignment" | "Assigned" | "Reassigned" | "Escalated" | "Done";
@@ -22,6 +25,7 @@ type LeadFilter = "All" | "Waiting Assignment" | "Assigned" | "Reassigned" | "Es
 
 type AssignmentRow = {
   id: string;
+  backendId: string;
   leadType: LeadKind;
   customer: string;
   phone: string;
@@ -31,7 +35,8 @@ type AssignmentRow = {
   detail: string;
   value: number;
   assignedTo: string;
-  ownerId: TelecallerId | "";
+  ownerId: string;
+  assignedUserId: number | null;
   assignedEmployeeId: string;
   assignedBy: string;
   teamLeader: string;
@@ -45,23 +50,13 @@ type AssignmentRow = {
 };
 
 type AssignmentForm = {
-  telecallerId: TelecallerId | "";
+  telecallerId: string;
+  assignedUserId: number | null;
   telecallerEmployeeId: string;
   telecallerName: string;
   teamLeader: string;
   priority: AssignmentPriority;
   followUpDate: string;
-  note: string;
-};
-
-type ActivityItem = {
-  id: string;
-  leadId: string;
-  leadName: string;
-  leadType: LeadKind;
-  action: string;
-  owner: string;
-  time: string;
   note: string;
 };
 
@@ -127,6 +122,7 @@ function makeInitialRows(): AssignmentRow[] {
 
     return {
       id: lead.id,
+      backendId: lead.id,
       leadType: "Project Lead",
       customer: `${lead.firstName} ${lead.lastName}`,
       phone: lead.mobile,
@@ -137,6 +133,7 @@ function makeInitialRows(): AssignmentRow[] {
       value: lead.budget,
       assignedTo: waiting ? "Unassigned" : lead.assignedTo,
       ownerId: waiting ? "" : (lead.currentOwnerId as TelecallerId),
+      assignedUserId: null,
       assignedEmployeeId: waiting ? "" : employeeIdForOwner(lead.currentOwnerId),
       assignedBy: waiting ? "Pending" : "Rajkumar Rathore (TL-1)",
       teamLeader: "Rajkumar Rathore (TL-1)",
@@ -156,6 +153,7 @@ function makeInitialRows(): AssignmentRow[] {
 
     return {
       id: lead.id,
+      backendId: lead.id,
       leadType: "Trading Lead",
       customer: `${lead.firstName} ${lead.lastName}`,
       phone: lead.mobile,
@@ -166,6 +164,7 @@ function makeInitialRows(): AssignmentRow[] {
       value: lead.budget,
       assignedTo: waiting ? "Unassigned" : lead.assignedTo,
       ownerId: waiting ? "" : (lead.currentOwnerId as TelecallerId),
+      assignedUserId: null,
       assignedEmployeeId: waiting ? "" : employeeIdForOwner(lead.currentOwnerId),
       assignedBy: waiting ? "Pending" : "Rajkumar Rathore (TL-1)",
       teamLeader: "Rajkumar Rathore (TL-1)",
@@ -180,26 +179,6 @@ function makeInitialRows(): AssignmentRow[] {
   });
 
   return [...projectRows, ...tradingRows];
-}
-
-function makeInitialActivity(): ActivityItem[] {
-  const assignedRows = makeInitialRows().filter((lead) => lead.assignmentStatus !== "Waiting Assignment");
-  const projectRows = assignedRows.filter((lead) => lead.leadType === "Project Lead");
-  const tradingRows = assignedRows.filter((lead) => lead.leadType === "Trading Lead");
-  const balancedRows = Array.from({ length: Math.max(projectRows.length, tradingRows.length) }).flatMap((_, index) =>
-    [projectRows[index], tradingRows[index]].filter(Boolean) as AssignmentRow[],
-  );
-
-  return balancedRows.slice(0, 10).map((lead, index) => ({
-    id: `ACT-${lead.id}-${index}`,
-    leadId: lead.id,
-    leadName: lead.customer,
-    leadType: lead.leadType,
-    action: "Lead assigned",
-    owner: lead.assignedBy,
-    time: index % 2 === 0 ? "Today" : "Yesterday",
-    note: lead.lastActivity,
-  }));
 }
 
 function formatMoney(value: number) {
@@ -232,25 +211,66 @@ function availabilityTone(availability: string) {
   return "bg-rose-50 text-rose-700 border-rose-100";
 }
 
-function nowLabel() {
-  return new Date().toLocaleString("en-IN", {
-    day: "2-digit",
-    month: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+function userDisplayName(user: AuthUser) {
+  return user.full_name || [user.first_name, user.last_name].filter(Boolean).join(" ") || user.email || user.mobile || `User ${user.id}`;
+}
+
+function backendLeadToAssignmentRow(lead: LeadRecord): AssignmentRow {
+  const assignedUser = lead.assigned_to;
+  const waiting = !assignedUser;
+  return {
+    id: lead.lead_number,
+    backendId: lead.id,
+    leadType: lead.lead_type === "project" ? "Project Lead" : "Trading Lead",
+    customer: lead.contact_name || "Unnamed Lead",
+    phone: lead.mobile,
+    email: lead.email || "N/A",
+    source: lead.source || "Direct",
+    leadStatus: lead.status,
+    detail: lead.lead_type === "project" ? lead.company_name || "Project Enquiry" : lead.requirement_summary || "Trading Enquiry",
+    value: Number(lead.estimated_value || 0),
+    assignedTo: assignedUser ? userDisplayName(assignedUser) : "Unassigned",
+    ownerId: assignedUser ? String(assignedUser.id) : "",
+    assignedUserId: assignedUser?.id ?? null,
+    assignedEmployeeId: assignedUser?.employee_id || "",
+    assignedBy: waiting ? "Pending" : "Backend",
+    teamLeader: "CRM Manager",
+    projectOwner: lead.lead_type === "project" ? "Project Team" : "Not Required",
+    assignmentStatus: waiting ? "Waiting Assignment" : "Assigned",
+    priority: Number(lead.estimated_value || 0) >= 200000 ? "High" : "Medium",
+    followUpDate: lead.created_at.split("T")[0],
+    createdBy: lead.source || "CRM",
+    note: lead.requirement_summary || (waiting ? "Lead waiting for owner assignment." : "Lead assigned from backend."),
+    lastActivity: waiting ? "Lead created, assignment pending" : `Assigned to ${userDisplayName(assignedUser)}`,
+  };
+}
+
+function followUpSummary(item: LeadFollowUpRecord) {
+  return `${item.channel} / ${item.outcome.replace("_", " ")}`;
+}
+
+function formatHistoryTime(value: string) {
+  return new Intl.DateTimeFormat("en-IN", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(new Date(value));
 }
 
 export default function LeadAssign() {
   const [rows, setRows] = useState<AssignmentRow[]>(makeInitialRows);
   const [selectedLeadId, setSelectedLeadId] = useState(() => makeInitialRows()[0]?.id || "");
+  const [selectedLeadHistory, setSelectedLeadHistory] = useState<LeadFollowUpRecord[]>([]);
+  const [activeUsers, setActiveUsers] = useState<AuthUser[]>([]);
   const [activeFilter, setActiveFilter] = useState<LeadFilter>("Waiting Assignment");
   const [search, setSearch] = useState("");
-  const [activity, setActivity] = useState<ActivityItem[]>(makeInitialActivity);
+  const [apiError, setApiError] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSavingAssignment, setIsSavingAssignment] = useState(false);
   const [form, setForm] = useState<AssignmentForm>(() => {
     const firstLead = makeInitialRows()[0];
     return {
       telecallerId: firstLead?.ownerId || "",
+      assignedUserId: firstLead?.assignedUserId ?? null,
       telecallerEmployeeId: firstLead?.assignedEmployeeId || "",
       telecallerName: firstLead?.assignedTo === "Unassigned" ? "" : firstLead?.assignedTo || "",
       teamLeader: firstLead?.teamLeader || teamLeaders[0],
@@ -259,6 +279,63 @@ export default function LeadAssign() {
       note: firstLead?.note || "",
     };
   });
+
+  const loadLeadHistory = async (leadBackendId: string) => {
+    try {
+      const response = await listLeadFollowUps(leadBackendId);
+      setSelectedLeadHistory(response);
+    } catch {
+      setSelectedLeadHistory([]);
+    }
+  };
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadBackendAssignments() {
+      try {
+        const leadResponse = await listLeads({ limit: 100 });
+        if (!isMounted) return;
+
+        const backendRows = leadResponse.data.map(backendLeadToAssignmentRow);
+        setRows(backendRows);
+        setSelectedLeadId(backendRows[0]?.id || "");
+        if (backendRows[0]) {
+          setForm({
+            telecallerId: backendRows[0].ownerId,
+            assignedUserId: backendRows[0].assignedUserId,
+            telecallerEmployeeId: backendRows[0].assignedEmployeeId,
+            telecallerName: backendRows[0].assignedTo === "Unassigned" ? "" : backendRows[0].assignedTo,
+            teamLeader: backendRows[0].teamLeader,
+            priority: backendRows[0].priority,
+            followUpDate: backendRows[0].followUpDate,
+            note: backendRows[0].note,
+          });
+          void loadLeadHistory(backendRows[0].backendId);
+        }
+        setApiError("");
+
+        try {
+          const userResponse = await listUsers({ limit: 100, status: "active" });
+          if (!isMounted) return;
+          setActiveUsers(userResponse.data);
+        } catch {
+          if (!isMounted) return;
+          setActiveUsers([]);
+          setApiError("Assignment queue loaded, but active users could not be loaded. Sign in as admin or check user API permission.");
+        }
+      } catch (error) {
+        if (isMounted) setApiError(error instanceof Error ? error.message : "Unable to load assignment queue.");
+      } finally {
+        if (isMounted) setIsLoading(false);
+      }
+    }
+
+    void loadBackendAssignments();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const selectedLead = rows.find((lead) => lead.id === selectedLeadId) || rows[0];
 
@@ -294,8 +371,28 @@ export default function LeadAssign() {
   }, [rows]);
 
   const workload = useMemo(
-    () =>
-      telecallers.map((telecaller) => {
+    () => {
+      if (activeUsers.length > 0) {
+        return activeUsers.map((user) => {
+          const assignedNow = rows.filter((lead) => lead.assignedUserId === user.id && lead.assignmentStatus !== "Done").length;
+          const availability = availabilityFromLoad(assignedNow);
+          return {
+            id: String(user.id),
+            employeeId: user.employee_id || "Employee ID pending",
+            name: userDisplayName(user),
+            group: user.department || "CRM",
+            knowledge: [user.designation || "Lead Assignment", user.department || "Client Operations"],
+            bestFor: user.designation || "Lead follow-up and customer handling",
+            shift: "Active CRM user",
+            quality: user.is_verified ? "Verified account" : "Verification pending",
+            assignedNow,
+            availability,
+            backendUserId: user.id,
+          };
+        });
+      }
+
+      return telecallers.map((telecaller) => {
         const assignedNow = rows.filter((lead) => lead.ownerId === telecaller.id && lead.assignmentStatus !== "Done").length;
         const availability = availabilityFromLoad(assignedNow);
         return {
@@ -303,15 +400,18 @@ export default function LeadAssign() {
           ...telecallerProfiles[telecaller.id],
           assignedNow,
           availability,
+          backendUserId: null,
         };
-      }),
-    [rows],
+      });
+    },
+    [activeUsers, rows],
   );
 
   const selectLead = (lead: AssignmentRow) => {
     setSelectedLeadId(lead.id);
     setForm({
       telecallerId: lead.ownerId,
+      assignedUserId: lead.assignedUserId,
       telecallerEmployeeId: lead.assignedEmployeeId,
       telecallerName: lead.assignedTo === "Unassigned" ? "" : lead.assignedTo,
       teamLeader: lead.teamLeader,
@@ -319,60 +419,70 @@ export default function LeadAssign() {
       followUpDate: lead.followUpDate,
       note: lead.note,
     });
+    void loadLeadHistory(lead.backendId);
   };
 
-  const assignLead = () => {
+  const assignLead = async () => {
     const typedTelecaller = form.telecallerName.trim();
     if (!selectedLead || !typedTelecaller) return;
 
-    const matchedTelecaller = findTelecallerByInput(typedTelecaller);
-    const assignedName = matchedTelecaller?.name || typedTelecaller;
-    const assignedOwnerId = matchedTelecaller?.id || "";
-    const assignedEmployeeId = matchedTelecaller?.employeeId || "";
+    if (activeUsers.length === 0) {
+      setApiError("Active backend users are not loaded, so this assignment cannot be saved yet.");
+      return;
+    }
+    const matchedUser = activeUsers.find((user) => user.id === form.assignedUserId) || null;
+    const matchedTelecaller = matchedUser ? null : findTelecallerByInput(typedTelecaller);
+    if (!matchedUser) {
+      setApiError("Choose an active backend user from Calling Owner dropdown.");
+      return;
+    }
+
+    const assignedName = matchedUser ? userDisplayName(matchedUser) : matchedTelecaller?.name || typedTelecaller;
+    const assignedOwnerId = matchedUser ? String(matchedUser.id) : matchedTelecaller?.id || "";
+    const assignedUserId = matchedUser?.id ?? null;
+    const assignedEmployeeId = matchedUser?.employee_id || matchedTelecaller?.employeeId || "";
 
     const nextStatus: AssignmentStatus = selectedLead.assignmentStatus === "Waiting Assignment" ? "Assigned" : "Reassigned";
     const nextActivity = `${selectedLead.id} assigned to ${assignedName}${assignedOwnerId ? ` (${assignedOwnerId} | ${assignedEmployeeId})` : ""}`;
 
-    setRows((current) =>
-      current.map((lead) =>
-        lead.id === selectedLead.id
-          ? {
-              ...lead,
-              assignedTo: assignedName,
-              ownerId: assignedOwnerId,
-              assignedEmployeeId,
-              assignedBy: form.teamLeader,
-              teamLeader: form.teamLeader,
-              assignmentStatus: nextStatus,
-              priority: form.priority,
-              followUpDate: form.followUpDate,
-              note: form.note || `Assigned by ${form.teamLeader}.`,
-              lastActivity: nextActivity,
-            }
-          : lead,
-      ),
-    );
+    setIsSavingAssignment(true);
+    setApiError("");
 
-    setForm((current) => ({
-      ...current,
-      telecallerId: assignedOwnerId,
-      telecallerEmployeeId: assignedEmployeeId,
-      telecallerName: assignedName,
-    }));
+    try {
+      const updatedLead = await assignBackendLead(selectedLead.backendId, { assigned_to_id: assignedUserId });
 
-    setActivity((current) => [
-      {
-        id: `ACT-${selectedLead.id}-${Date.now()}`,
-        leadId: selectedLead.id,
-        leadName: selectedLead.customer,
-        leadType: selectedLead.leadType,
-        action: nextStatus,
-        owner: form.teamLeader,
-        time: nowLabel(),
-        note: form.note || nextActivity,
-      },
-      ...current,
-    ]);
+      setRows((current) =>
+        current.map((lead) =>
+          lead.id === selectedLead.id
+            ? {
+                ...lead,
+                ...backendLeadToAssignmentRow(updatedLead),
+                assignedBy: form.teamLeader,
+                teamLeader: form.teamLeader,
+                assignmentStatus: nextStatus,
+                priority: form.priority,
+                followUpDate: form.followUpDate,
+                note: form.note || `Assigned by ${form.teamLeader}.`,
+                lastActivity: nextActivity,
+              }
+            : lead,
+        ),
+      );
+
+      setForm((current) => ({
+        ...current,
+        telecallerId: assignedOwnerId,
+        assignedUserId,
+        telecallerEmployeeId: assignedEmployeeId,
+        telecallerName: assignedName,
+      }));
+
+      await loadLeadHistory(selectedLead.backendId);
+    } catch (error) {
+      setApiError(error instanceof Error ? error.message : "Unable to assign lead.");
+    } finally {
+      setIsSavingAssignment(false);
+    }
   };
 
   const markEscalated = () => {
@@ -394,19 +504,6 @@ export default function LeadAssign() {
       ),
     );
 
-    setActivity((current) => [
-      {
-        id: `ACT-ESC-${selectedLead.id}-${Date.now()}`,
-        leadId: selectedLead.id,
-        leadName: selectedLead.customer,
-        leadType: selectedLead.leadType,
-        action: "Escalated",
-        owner: form.teamLeader,
-        time: nowLabel(),
-        note: form.note || "Manager review required.",
-      },
-      ...current,
-    ]);
   };
 
   const markDone = () => {
@@ -425,19 +522,6 @@ export default function LeadAssign() {
       ),
     );
 
-    setActivity((current) => [
-      {
-        id: `ACT-DONE-${selectedLead.id}-${Date.now()}`,
-        leadId: selectedLead.id,
-        leadName: selectedLead.customer,
-        leadType: selectedLead.leadType,
-        action: "Done",
-        owner: form.teamLeader,
-        time: nowLabel(),
-        note: form.note || "Assignment closed.",
-      },
-      ...current,
-    ]);
   };
 
   const exportAssignments = () => {
@@ -485,6 +569,9 @@ export default function LeadAssign() {
           <Download size={16} /> Export
         </button>
       </div>
+
+      {apiError ? <div className="rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">{apiError}</div> : null}
+      {isLoading ? <div className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm font-bold text-blue-700">Loading backend assignment queue...</div> : null}
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <MetricCard label="Waiting Assignment" value={String(metrics.waiting)} helper="Leader action required" icon={Clock} tone="bg-amber-50 text-amber-700" />
@@ -590,24 +677,30 @@ export default function LeadAssign() {
               <table className="w-full min-w-[760px] text-left text-sm">
                 <thead className="bg-slate-50 text-[10px] font-black uppercase tracking-widest text-slate-400">
                   <tr>
-                    <th className="px-4 py-3">Lead</th>
-                    <th className="px-4 py-3">Action</th>
-                    <th className="px-4 py-3">Owner</th>
+                    <th className="px-4 py-3">When</th>
+                    <th className="px-4 py-3">History</th>
+                    <th className="px-4 py-3">Created By</th>
                     <th className="px-4 py-3">Note</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {activity.slice(0, 6).map((item) => (
+                  {selectedLeadHistory.slice(0, 6).map((item) => (
                     <tr key={item.id} className="hover:bg-slate-50/70">
                       <td className="px-4 py-4">
-                        <p className="font-black text-primary">{item.leadId}</p>
-                        <p className="text-xs font-semibold text-secondary">{item.leadName}</p>
+                        <p className="font-black text-primary">{formatHistoryTime(item.created_at)}</p>
                       </td>
-                      <td className="px-4 py-4 font-bold text-primary">{item.action}</td>
-                      <td className="px-4 py-4 font-semibold text-secondary">{item.owner}</td>
+                      <td className="px-4 py-4 font-bold text-primary">{followUpSummary(item)}</td>
+                      <td className="px-4 py-4 font-semibold text-secondary">{item.created_by?.full_name || item.created_by?.email || "Backend"}</td>
                       <td className="px-4 py-4 font-semibold text-secondary">{item.note}</td>
                     </tr>
                   ))}
+                  {selectedLeadHistory.length === 0 ? (
+                    <tr>
+                      <td className="px-4 py-5 text-sm font-semibold text-secondary" colSpan={4}>
+                        No backend history for this lead yet.
+                      </td>
+                    </tr>
+                  ) : null}
                 </tbody>
               </table>
             </div>
@@ -640,35 +733,30 @@ export default function LeadAssign() {
               </Field>
 
               <Field label="Assign Calling Owner">
-                <input
-                  value={form.telecallerName}
+                <select
+                  value={form.assignedUserId?.toString() || ""}
                   onChange={(event) => {
-                    const typedName = event.target.value;
-                    const matchedTelecaller = findTelecallerByInput(typedName);
+                    const userId = event.target.value ? Number(event.target.value) : null;
+                    const user = activeUsers.find((item) => item.id === userId) || null;
                     setForm((current) => ({
                       ...current,
-                      telecallerName: typedName,
-                      telecallerId: matchedTelecaller?.id || "",
-                      telecallerEmployeeId: matchedTelecaller?.employeeId || "",
+                      telecallerName: user ? userDisplayName(user) : "",
+                      telecallerId: user ? String(user.id) : "",
+                      assignedUserId: user?.id ?? null,
+                      telecallerEmployeeId: user?.employee_id || "",
                     }));
                   }}
-                  list="telecaller-name-options"
-                  placeholder="Type calling owner name"
                   className="w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm font-semibold outline-none focus:border-primary"
-                />
-                <datalist id="telecaller-name-options">
-                  {telecallers.map((telecaller) => (
-                    <option key={`${telecaller.id}-name`} value={telecaller.name} label={`${telecaller.id} | ${telecaller.employeeId} | ${telecaller.group}`} />
+                >
+                  <option value="">Select active backend user</option>
+                  {activeUsers.map((user) => (
+                    <option key={user.id} value={user.id}>
+                      {userDisplayName(user)} | {user.employee_id || "No employee ID"} | {user.department || "CRM"}
+                    </option>
                   ))}
-                  {telecallers.map((telecaller) => (
-                    <option key={`${telecaller.id}-tele-id`} value={telecaller.id} label={`${telecaller.name} | ${telecaller.employeeId}`} />
-                  ))}
-                  {telecallers.map((telecaller) => (
-                    <option key={`${telecaller.id}-emp-id`} value={telecaller.employeeId} label={`${telecaller.name} | ${telecaller.id}`} />
-                  ))}
-                </datalist>
+                </select>
                 <p className="mt-2 text-[11px] font-semibold text-slate-500">
-                  Choose a suggestion or type a name manually. Linked: {form.telecallerId || "Manual"} {form.telecallerEmployeeId ? `| ${form.telecallerEmployeeId}` : "| Employee ID not linked"}
+                  This list comes from backend active users. Linked: {form.telecallerId || "Pending"} {form.telecallerEmployeeId ? `| ${form.telecallerEmployeeId}` : "| Employee ID not linked"}
                 </p>
                 <div className="mt-3 grid gap-2 rounded-xl border border-slate-100 bg-slate-50 p-3 text-[11px] font-black uppercase tracking-widest text-slate-500 sm:grid-cols-3">
                   <span>Name: {form.telecallerName.trim() || "Pending"}</span>
@@ -711,8 +799,8 @@ export default function LeadAssign() {
               </Field>
 
               <div className="grid gap-3 sm:grid-cols-3">
-                <button onClick={assignLead} disabled={!form.telecallerName.trim()} className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-xs font-black uppercase tracking-widest text-white transition-all disabled:cursor-not-allowed disabled:bg-slate-300">
-                  <UserCheck size={16} /> Assign
+                <button onClick={assignLead} disabled={!form.assignedUserId || isSavingAssignment} className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-xs font-black uppercase tracking-widest text-white transition-all disabled:cursor-not-allowed disabled:bg-slate-300">
+                  <UserCheck size={16} /> {isSavingAssignment ? "Saving" : "Assign"}
                 </button>
                 <button onClick={markEscalated} className="inline-flex items-center justify-center gap-2 rounded-xl border border-rose-100 bg-rose-50 px-4 py-3 text-xs font-black uppercase tracking-widest text-rose-700 transition-all hover:border-rose-200">
                   <AlertTriangle size={16} /> Escalate
@@ -784,7 +872,7 @@ export default function LeadAssign() {
                   </div>
 
                   <button
-                    onClick={() => setForm((current) => ({ ...current, telecallerId: member.id, telecallerEmployeeId: member.employeeId, telecallerName: member.name }))}
+                    onClick={() => setForm((current) => ({ ...current, telecallerId: member.id, assignedUserId: member.backendUserId, telecallerEmployeeId: member.employeeId, telecallerName: member.name }))}
                     className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-white px-4 py-3 text-xs font-black uppercase tracking-widest text-primary transition-all hover:bg-primary hover:text-white"
                   >
                     <UserCheck size={15} /> Use For Assign

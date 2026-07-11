@@ -1,7 +1,7 @@
 from rest_framework import serializers
 
 from apps.accounts.serializers import UserSummarySerializer
-from apps.crm.models import Lead
+from apps.crm.models import Lead, LeadFollowUp
 from apps.crm.selectors import find_duplicate_leads
 
 
@@ -61,3 +61,76 @@ class LeadCreateSerializer(serializers.Serializer):
             raise serializers.ValidationError({"duplicate": "Lead already exists with same mobile, email, or company."})
         return attrs
 
+
+class LeadUpdateSerializer(serializers.Serializer):
+    lead_type = serializers.ChoiceField(choices=Lead.LeadType.choices, required=False)
+    status = serializers.ChoiceField(choices=Lead.LeadStatus.choices, required=False)
+    source = serializers.CharField(max_length=80, required=False, allow_blank=True)
+    company_name = serializers.CharField(max_length=180, required=False, allow_blank=True)
+    contact_name = serializers.CharField(max_length=160, required=False)
+    email = serializers.EmailField(required=False, allow_blank=True)
+    mobile = serializers.CharField(max_length=20, required=False)
+    city = serializers.CharField(max_length=120, required=False, allow_blank=True)
+    requirement_summary = serializers.CharField(required=False, allow_blank=True)
+    estimated_value = serializers.DecimalField(max_digits=14, decimal_places=2, required=False)
+
+    def validate_mobile(self, value):
+        digits = "".join(char for char in value if char.isdigit())
+        if len(digits) == 12 and digits.startswith("91"):
+            digits = digits[2:]
+        if len(digits) != 10:
+            raise serializers.ValidationError("Enter a valid 10-digit mobile number.")
+        return digits
+
+    def validate_email(self, value):
+        return value.lower() if value else ""
+
+    def validate(self, attrs):
+        lead = self.context["lead"]
+        duplicates = find_duplicate_leads(
+            mobile=attrs.get("mobile", lead.mobile),
+            email=attrs.get("email", lead.email),
+            company_name=attrs.get("company_name", lead.company_name),
+            exclude_lead_id=lead.id,
+        )
+        if duplicates.exists():
+            raise serializers.ValidationError({"duplicate": "Lead already exists with same mobile, email, or company."})
+        return attrs
+
+
+class LeadAssignSerializer(serializers.Serializer):
+    assigned_to_id = serializers.IntegerField(required=False, allow_null=True)
+
+
+class LeadFollowUpSerializer(serializers.ModelSerializer):
+    created_by = UserSummarySerializer(read_only=True)
+    lead_detail = LeadSerializer(source="lead", read_only=True)
+
+    class Meta:
+        model = LeadFollowUp
+        fields = (
+            "id",
+            "lead",
+            "lead_detail",
+            "channel",
+            "outcome",
+            "note",
+            "next_follow_up_at",
+            "created_by",
+            "created_at",
+            "updated_at",
+        )
+        read_only_fields = ("id", "lead", "created_by", "created_at", "updated_at")
+
+
+class LeadFollowUpCreateSerializer(serializers.Serializer):
+    channel = serializers.ChoiceField(choices=LeadFollowUp.Channel.choices, default=LeadFollowUp.Channel.CALL)
+    outcome = serializers.ChoiceField(choices=LeadFollowUp.Outcome.choices, default=LeadFollowUp.Outcome.PENDING)
+    note = serializers.CharField()
+    next_follow_up_at = serializers.DateTimeField(required=False, allow_null=True)
+
+    def validate_note(self, value):
+        note = value.strip()
+        if len(note) < 3:
+            raise serializers.ValidationError("Follow-up note must be at least 3 characters.")
+        return note
