@@ -14,7 +14,6 @@ import {
   ShieldAlert,
   UserCheck,
 } from "lucide-react";
-import { projectLeadSeedData, telecallers, tradingLeadSeedData, type TelecallerId } from "@/components/dashboard/leads/leadTypes";
 import { type AuthUser } from "@/services/auth-api";
 import {
   createLeadFollowUp,
@@ -95,60 +94,6 @@ const outcomeOptions: CallOutcome[] = ["Connected", "No Answer", "Busy", "Callba
 const availabilityOptions: Availability[] = ["Available", "Call Back Later", "Not Available"];
 const issueStatusOptions: IssueStatus[] = ["Pending", "In Progress", "Resolved", "Escalated", "Done"];
 const callHistoryFilters: CallHistoryFilter[] = ["All", "Connected", "Callback", "No Answer", "Busy", "Resolved", "Escalated"];
-
-function makeTelecallerRows(): TelecallerLead[] {
-  const projectRows: TelecallerLead[] = projectLeadSeedData.map((lead, index) => ({
-    id: lead.id,
-    backendId: lead.id,
-    leadType: "Project Lead",
-    customer: `${lead.firstName} ${lead.lastName}`,
-    phone: lead.mobile,
-    email: lead.email,
-    source: lead.source,
-    assignedTo: lead.assignedTo,
-    ownerId: lead.currentOwnerId as TelecallerId,
-    assignedUserId: null,
-    teamLeader,
-    leadStatus: lead.status,
-    detail: lead.requirementSummary,
-    priority: index % 3 === 0 ? "High" : index % 3 === 1 ? "Medium" : "Low",
-    nextFollowUp: index % 5 === 0 ? TODAY : lead.followUpDate,
-    nextFollowUpTime: `${String(10 + (index % 7)).padStart(2, "0")}:30`,
-    availability: index % 3 === 0 ? "Available" : index % 3 === 1 ? "Call Back Later" : "Not Available",
-    issueStatus: lead.status === "Project Created" || lead.status === "Won" ? "Resolved" : index % 7 === 0 ? "Escalated" : "Pending",
-    attempts: (index % 4) + 1,
-    lastOutcome: index % 4 === 0 ? "Connected" : index % 4 === 1 ? "No Answer" : index % 4 === 2 ? "Callback Requested" : "Interested",
-    lastNote: "Requirement discussion pending. The calling owner must update the next call note.",
-    lastUpdated: index % 2 === 0 ? "Today" : "Yesterday",
-  }));
-
-  const tradingRows: TelecallerLead[] = tradingLeadSeedData.map((lead, index) => ({
-    id: lead.id,
-    backendId: lead.id,
-    leadType: "Trading Lead",
-    customer: `${lead.firstName} ${lead.lastName}`,
-    phone: lead.mobile,
-    email: lead.email,
-    source: lead.source,
-    assignedTo: lead.assignedTo,
-    ownerId: lead.currentOwnerId as TelecallerId,
-    assignedUserId: null,
-    teamLeader,
-    leadStatus: lead.status,
-    detail: `${lead.issueType || lead.tradingInterest} . ${lead.accountStatus || "General Query"}`,
-    priority: lead.interestLevel === "High" ? "High" : lead.interestLevel === "Medium" ? "Medium" : "Low",
-    nextFollowUp: index % 4 === 0 ? TODAY : lead.followUpDate,
-    nextFollowUpTime: `${String(11 + (index % 6)).padStart(2, "0")}:00`,
-    availability: lead.availability || "Call Back Later",
-    issueStatus: lead.accountStatus === "Issue Resolved" || lead.status === "Converted" ? "Resolved" : index % 6 === 0 ? "Escalated" : "Pending",
-    attempts: (index % 5) + 1,
-    lastOutcome: index % 5 === 0 ? "No Answer" : index % 5 === 1 ? "Busy" : index % 5 === 2 ? "Connected" : index % 5 === 3 ? "Callback Requested" : "Interested",
-    lastNote: lead.lastCallNote || "Customer issue/update pending after the owner call.",
-    lastUpdated: index % 2 === 0 ? "Today" : "Yesterday",
-  }));
-
-  return [...projectRows, ...tradingRows];
-}
 
 function userDisplayName(user: AuthUser) {
   return user.full_name || [user.first_name, user.last_name].filter(Boolean).join(" ") || user.email || user.mobile || `User ${user.id}`;
@@ -245,10 +190,9 @@ function defaultForm(lead?: TelecallerLead): CallLogForm {
 }
 
 export default function TelecallerDesk() {
-  const [selectedTelecaller, setSelectedTelecaller] = useState<string>(telecallers[0]?.id || "Tele-1");
-  const [rows, setRows] = useState<TelecallerLead[]>(makeTelecallerRows);
-  const firstLeadForTelecaller = rows.find((lead) => lead.ownerId === selectedTelecaller) || rows[0];
-  const [selectedLeadId, setSelectedLeadId] = useState(firstLeadForTelecaller?.id || "");
+  const [selectedTelecaller, setSelectedTelecaller] = useState<string>("");
+  const [rows, setRows] = useState<TelecallerLead[]>([]);
+  const [selectedLeadId, setSelectedLeadId] = useState("");
   const [backendOwners, setBackendOwners] = useState<AuthUser[]>([]);
   const [activeFilter, setActiveFilter] = useState<QueueFilter>("Due Today");
   const [search, setSearch] = useState("");
@@ -257,22 +201,8 @@ export default function TelecallerDesk() {
   const [apiError, setApiError] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isSavingLog, setIsSavingLog] = useState(false);
-  const [form, setForm] = useState<CallLogForm>(() => defaultForm(firstLeadForTelecaller));
-  const [activity, setActivity] = useState<ActivityItem[]>(() =>
-    makeTelecallerRows()
-      .slice(0, 8)
-      .map((lead, index) => ({
-        id: `CALL-${lead.id}-${index}`,
-        leadId: lead.id,
-        customer: lead.customer,
-        telecaller: lead.assignedTo,
-        outcome: lead.lastOutcome,
-        issueStatus: lead.issueStatus,
-        nextFollowUp: `${lead.nextFollowUp} ${lead.nextFollowUpTime}`,
-        note: lead.lastNote,
-        time: lead.lastUpdated,
-      })),
-  );
+  const [form, setForm] = useState<CallLogForm>(() => defaultForm());
+  const [activity, setActivity] = useState<ActivityItem[]>([]);
 
   useEffect(() => {
     let isMounted = true;
@@ -320,10 +250,7 @@ export default function TelecallerDesk() {
   }, []);
 
   const selectedLead = rows.find((lead) => lead.id === selectedLeadId) || rows.find((lead) => lead.ownerId === selectedTelecaller) || rows[0];
-  const selectedMember =
-    backendOwners.find((member) => String(member.id) === selectedTelecaller) ||
-    telecallers.find((member) => member.id === selectedTelecaller) ||
-    telecallers[0];
+  const selectedMember = backendOwners.find((member) => String(member.id) === selectedTelecaller);
 
   const telecallerRows = useMemo(() => rows.filter((lead) => lead.ownerId === selectedTelecaller), [rows, selectedTelecaller]);
 
@@ -387,10 +314,10 @@ export default function TelecallerDesk() {
         group: owner.department || "Client Operations",
       }));
     }
-    return telecallers.map((member) => ({ id: member.id, name: member.name, group: member.group }));
+    return [];
   }, [backendOwners]);
 
-  const selectedMemberName = selectedMember && "full_name" in selectedMember ? userDisplayName(selectedMember) : selectedMember?.name || "Calling Owner";
+  const selectedMemberName = selectedMember ? userDisplayName(selectedMember) : "Calling Owner";
 
   const chooseTelecaller = async (telecallerId: string) => {
     const nextLead = rows.find((lead) => lead.ownerId === telecallerId) || rows[0];

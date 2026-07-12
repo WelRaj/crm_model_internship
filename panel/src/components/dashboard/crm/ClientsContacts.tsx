@@ -2,8 +2,17 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Briefcase, CalendarClock, CheckCircle2, Download, Link2, Mail, Phone, Rocket, Search, Users } from "lucide-react";
-import { projectLeadSeedData, wonProjectLeadStorageKey, type ProjectLead } from "@/components/dashboard/leads/leadTypes";
-import { projectHandoffEventName, projectHandoffStorageKey, type BillingModel, type ClientContactSnapshot, type CreatedProjectRecord, type DeliveryMethod, type ProjectPriority } from "@/components/dashboard/projects/projectHandoff";
+import { type BillingModel, type ClientContactSnapshot, type CreatedProjectRecord, type DeliveryMethod, type ProjectPriority } from "@/components/dashboard/projects/projectHandoff";
+import {
+  createProjectClient,
+  createProjectClientContact,
+  createProjectHandoff,
+  listProjectClients,
+  listProjectHandoffs,
+  updateProjectHandoff,
+  type ProjectClientRecord,
+  type ProjectHandoffRecord,
+} from "@/services/leads-api";
 
 type ContactRole = "Decision Maker" | "Technical" | "Finance" | "Daily Coordinator";
 type ProjectStatus = "Discovery" | "Development" | "UAT" | "Agreement Pending";
@@ -19,6 +28,8 @@ type ClientContact = {
 };
 
 type ProjectClient = {
+  backendId?: string;
+  sourceLeadBackendId?: string | null;
   clientId: string;
   projectId: string;
   sourceLeadId: string;
@@ -82,88 +93,85 @@ function money(value: number) {
   return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(value);
 }
 
-function makeProjectClientFromLead(lead: ProjectLead, index: number): ProjectClient {
-    const company = `${lead.lastName} ${lead.projectType.replace(/\s+/g, " ")} Pvt Ltd`;
-    const clientId = `ACC-${24001 + index}`;
-    const projectId = `PRJ-${String(index + 1).padStart(3, "0")}`;
-    const basePhone = Number(lead.mobile.slice(-8));
-
-    return {
-      clientId,
-      projectId,
-      sourceLeadId: lead.id,
-      company,
-      projectName: `${company} - ${lead.projectType}`,
-      projectType: lead.projectType,
-      projectStatus: lead.status === "Project Created" ? "Development" : "Discovery",
-      projectOwner: lead.developmentOwner || "Development Team",
-      teamLeader: "Rajkumar Rathore (TL-1)",
-      telecaller: lead.assignedTo,
-      agreementStatus: lead.status === "Project Created" ? "Signed" : "Drafted",
-      value: lead.budget,
-      contacts: [
-        {
-          id: `${clientId}-DM`,
-          role: "Decision Maker",
-          name: `${lead.firstName} ${lead.lastName}`,
-          designation: "Founder / Project Sponsor",
-          phone: lead.mobile,
-          email: lead.email,
-          responsibility: "Budget, scope approval, final sign-off",
-        },
-        {
-          id: `${clientId}-TECH`,
-          role: "Technical",
-          name: ["Raghav Sinha", "Komal Arora", "Imran Sheikh", "Neel Patel"][index % 4],
-          designation: "Technical Coordinator",
-          phone: `9${String(basePhone + 10101).slice(0, 9)}`,
-          email: `tech.${lead.id.toLowerCase()}@example.com`,
-          responsibility: "API, access, testing, technical clarification",
-        },
-        {
-          id: `${clientId}-FIN`,
-          role: "Finance",
-          name: ["Pallavi Rao", "Gaurav Jain", "Sneha Mehta", "Farhan Ali"][index % 4],
-          designation: "Accounts / Billing",
-          phone: `8${String(basePhone + 20202).slice(0, 9)}`,
-          email: `billing.${lead.id.toLowerCase()}@example.com`,
-          responsibility: "Invoice, payment schedule, GST details",
-        },
-        {
-          id: `${clientId}-OPS`,
-          role: "Daily Coordinator",
-          name: ["Ankit Verma", "Ritika Nair", "Sahil Khan", "Mansi Joshi"][index % 4],
-          designation: "Operations Coordinator",
-          phone: `7${String(basePhone + 30303).slice(0, 9)}`,
-          email: `ops.${lead.id.toLowerCase()}@example.com`,
-          responsibility: "Daily updates, meeting coordination, UAT feedback",
-        },
-      ],
-      internalTeam: ["Project Owner", "Frontend Dev", "Backend Dev", "QA", "Calling Handoff"],
-      nextAction: lead.status === "Project Created" ? "Sync with Projects module team tracking" : "Create agreement and then open project record",
-    };
+function roleToBackend(role: ContactRole) {
+  return role === "Decision Maker" ? "decision_maker" : role === "Daily Coordinator" ? "daily_coordinator" : role.toLowerCase();
 }
 
-function readStoredWonProjectLeads(): ProjectLead[] {
-  if (typeof window === "undefined") return [];
-
-  try {
-    const parsed = JSON.parse(window.localStorage.getItem(wonProjectLeadStorageKey) || "[]");
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter((lead): lead is ProjectLead => lead?.department === "Projects" && (lead.status === "Won" || lead.status === "Project Created"));
-  } catch {
-    return [];
-  }
+function backendPriority(priority: ProjectPriority) {
+  return priority.toLowerCase() as "low" | "medium" | "high" | "critical";
 }
 
-function makeProjectClients(): ProjectClient[] {
-  const finalProjectLeads = [
-    ...readStoredWonProjectLeads(),
-    ...projectLeadSeedData.filter((lead) => lead.status === "Won" || lead.status === "Project Created"),
-  ];
-  const uniqueLeads = Array.from(new Map(finalProjectLeads.map((lead) => [lead.id, lead])).values());
+function displayPriority(priority: ProjectHandoffRecord["priority"]) {
+  return priority === "critical" ? "Critical" : priority === "high" ? "High" : priority === "medium" ? "Medium" : "Low";
+}
 
-  return uniqueLeads.map(makeProjectClientFromLead);
+function projectClientFromBackend(client: ProjectClientRecord): ProjectClient {
+  return {
+    backendId: client.id,
+    sourceLeadBackendId: client.source_lead,
+    clientId: client.client_number,
+    projectId: `PRJ-${client.client_number.replace(/\D/g, "").slice(-3) || "001"}`,
+    sourceLeadId: client.source_lead_detail?.lead_number || "Manual",
+    company: client.company_name,
+    projectName: client.project_name,
+    projectType: client.project_type || "Project",
+    projectStatus: client.project_status_label as ProjectStatus,
+    projectOwner: client.project_owner || "Development Team",
+    teamLeader: client.team_leader || "Rajkumar Rathore (TL-1)",
+    telecaller: client.telecaller || client.source_lead_detail?.assigned_to?.full_name || "Manual Handoff",
+    agreementStatus: client.agreement_status_label as ProjectClient["agreementStatus"],
+    value: Number(client.value || 0),
+    contacts: client.contacts.map((contact) => ({
+      id: contact.id,
+      role: contact.role_label as ContactRole,
+      name: contact.name,
+      designation: contact.designation || contact.role_label,
+      phone: contact.phone,
+      email: contact.email || "not-provided@example.com",
+      responsibility: contact.responsibility || "Project coordination",
+    })),
+    internalTeam: ["Project Owner", "Development Team", "Calling Handoff"],
+    nextAction: client.next_action || "Create project and assign delivery team",
+  };
+}
+
+function projectRecordFromBackend(project: ProjectHandoffRecord): CreatedProjectRecord {
+  const client = project.client_detail;
+  const contacts = client.contacts.map((contact) => ({
+    id: contact.id,
+    role: contact.role_label,
+    name: contact.name,
+    designation: contact.designation,
+    phone: contact.phone,
+    email: contact.email,
+    responsibility: contact.responsibility,
+  })) as ClientContactSnapshot[];
+  const primaryContact = contacts.find((contact) => contact.role === "Decision Maker") || contacts[0];
+  return {
+    id: project.id,
+    clientId: client.client_number,
+    projectId: project.project_code,
+    sourceLeadId: client.source_lead_detail?.lead_number || "Manual",
+    company: client.company_name,
+    projectName: client.project_name,
+    projectType: client.project_type || "Project",
+    projectOwner: client.project_owner || "Development Team",
+    value: Number(client.value || 0),
+    primaryContact: primaryContact?.name || "Not assigned",
+    projectManager: project.project_manager,
+    startDate: project.start_date,
+    targetEndDate: project.target_end_date,
+    priority: displayPriority(project.priority),
+    billingModel: project.billing_model as BillingModel,
+    deliveryMethod: project.delivery_method as DeliveryMethod,
+    communicationChannel: project.communication_channel || "Not defined",
+    repositoryUrl: project.repository_url || "Not defined",
+    kickoffNotes: project.kickoff_notes,
+    clientContacts: contacts,
+    teamLeaderName: client.team_leader || "Rajkumar Rathore (TL-1)",
+    status: "Planning",
+    createdAt: project.created_at.split("T")[0],
+  };
 }
 
 function makeBlankContactForm(): ContactForm {
@@ -210,30 +218,8 @@ function makeBlankProjectForm(client?: ProjectClient): CreateProjectForm {
   };
 }
 
-function readCreatedProjectRecords(): CreatedProjectRecord[] {
-  if (typeof window === "undefined") return [];
-
-  try {
-    const parsed = JSON.parse(window.localStorage.getItem(projectHandoffStorageKey) || "[]");
-    if (!Array.isArray(parsed)) return [];
-    const validProjects = parsed.filter((project): project is CreatedProjectRecord => Boolean(project?.projectId && project?.clientId && project?.sourceLeadId));
-    return Array.from(new Map(validProjects.map((project) => [`${project.projectId}-${project.sourceLeadId}`, project])).values());
-  } catch {
-    return [];
-  }
-}
-
-function syncCreatedProjectRecord(project: CreatedProjectRecord) {
-  if (typeof window === "undefined") return;
-
-  const existingProjects = readCreatedProjectRecords();
-  const withoutCurrent = existingProjects.filter((item) => item.id !== project.id && item.projectId !== project.projectId && item.sourceLeadId !== project.sourceLeadId);
-  window.localStorage.setItem(projectHandoffStorageKey, JSON.stringify([project, ...withoutCurrent]));
-  window.dispatchEvent(new Event(projectHandoffEventName));
-}
-
 export default function ClientsContacts() {
-  const [clients, setClients] = useState<ProjectClient[]>(makeProjectClients);
+  const [clients, setClients] = useState<ProjectClient[]>([]);
   const [selectedClientId, setSelectedClientId] = useState("");
   const [roleFilter, setRoleFilter] = useState<"All" | ContactRole>("All");
   const [search, setSearch] = useState("");
@@ -244,9 +230,10 @@ export default function ClientsContacts() {
   const [showContactForm, setShowContactForm] = useState(false);
   const [showCreateProject, setShowCreateProject] = useState(false);
   const [projectForm, setProjectForm] = useState<CreateProjectForm>(makeBlankProjectForm);
-  const [createdProjects, setCreatedProjects] = useState<CreatedProjectRecord[]>(readCreatedProjectRecords);
+  const [createdProjects, setCreatedProjects] = useState<CreatedProjectRecord[]>([]);
   const [activeProjectId, setActiveProjectId] = useState("");
   const [editingProjectId, setEditingProjectId] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
   const selectedClient = clients.find((client) => client.clientId === selectedClientId);
   const activeProject = activeProjectId ? createdProjects.find((project) => project.id === activeProjectId) : undefined;
   const activeProjectClient = activeProject
@@ -255,21 +242,25 @@ export default function ClientsContacts() {
   const activeProjectContacts = activeProjectClient?.contacts || [];
 
   useEffect(() => {
-    const refreshWonProjectClients = () => {
-      setClients((current) => {
-        const syncedClients = makeProjectClients();
-        const manualClients = current.filter((client) => !syncedClients.some((synced) => synced.sourceLeadId === client.sourceLeadId));
-        return [...syncedClients, ...manualClients];
-      });
+    let isMounted = true;
+    const loadClientsAndProjects = async () => {
+      try {
+        const [clientResponse, projectResponse] = await Promise.all([listProjectClients(), listProjectHandoffs()]);
+        if (!isMounted) return;
+        setClients(clientResponse.map(projectClientFromBackend));
+        setCreatedProjects(projectResponse.map(projectRecordFromBackend));
+        setFormMessage("");
+      } catch (error) {
+        if (isMounted) setFormMessage(error instanceof Error ? error.message : "Unable to load backend clients.");
+      } finally {
+        if (isMounted) setIsLoading(false);
+      }
     };
 
-    refreshWonProjectClients();
-    window.addEventListener("storage", refreshWonProjectClients);
-    window.addEventListener("crm-won-project-leads-updated", refreshWonProjectClients);
-
+    const timer = window.setTimeout(loadClientsAndProjects, 0);
     return () => {
-      window.removeEventListener("storage", refreshWonProjectClients);
-      window.removeEventListener("crm-won-project-leads-updated", refreshWonProjectClients);
+      isMounted = false;
+      window.clearTimeout(timer);
     };
   }, []);
 
@@ -356,9 +347,9 @@ export default function ClientsContacts() {
     setFormMessage("");
   };
 
-  const addContactToSelectedClient = () => {
+  const addContactToSelectedClient = async () => {
     const targetClient = activeProjectClient || selectedClient;
-    if (!targetClient) {
+    if (!targetClient?.backendId) {
       setFormMessage("Open a project before adding contacts.");
       return;
     }
@@ -367,28 +358,40 @@ export default function ClientsContacts() {
       return;
     }
 
-    const newContact: ClientContact = {
-      id: `${targetClient.clientId}-${contactForm.role}-${targetClient.contacts.length + 1}`,
-      role: contactForm.role,
-      name: contactForm.name.trim(),
-      designation: contactForm.designation.trim() || contactForm.role,
-      phone: contactForm.phone.trim(),
-      email: contactForm.email.trim() || "not-provided@example.com",
-      responsibility: contactForm.responsibility.trim() || "Project coordination",
-    };
+    try {
+      const savedContact = await createProjectClientContact(targetClient.backendId, {
+        role: roleToBackend(contactForm.role) as "decision_maker" | "technical" | "finance" | "daily_coordinator",
+        name: contactForm.name.trim(),
+        designation: contactForm.designation.trim() || contactForm.role,
+        phone: contactForm.phone.trim(),
+        email: contactForm.email.trim(),
+        responsibility: contactForm.responsibility.trim() || "Project coordination",
+      });
+      const newContact: ClientContact = {
+        id: savedContact.id,
+        role: savedContact.role_label as ContactRole,
+        name: savedContact.name,
+        designation: savedContact.designation || savedContact.role_label,
+        phone: savedContact.phone,
+        email: savedContact.email || "not-provided@example.com",
+        responsibility: savedContact.responsibility || "Project coordination",
+      };
 
-    setClients((current) =>
-      current.map((client) =>
-        client.clientId === targetClient.clientId ? { ...client, contacts: [...client.contacts, newContact] } : client,
-      ),
-    );
-    setContactForm(makeBlankContactForm());
-    setShowContactForm(false);
-    setFormMessage("Contact added.");
+      setClients((current) =>
+        current.map((client) =>
+          client.clientId === targetClient.clientId ? { ...client, contacts: [...client.contacts, newContact] } : client,
+        ),
+      );
+      setContactForm(makeBlankContactForm());
+      setShowContactForm(false);
+      setFormMessage("Contact added.");
+    } catch (error) {
+      setFormMessage(error instanceof Error ? error.message : "Unable to save contact.");
+    }
   };
 
-  const createProjectFromSelectedClient = () => {
-    const sourceClient: ProjectClient | undefined = sourceEntryMode === "manual"
+  const createProjectFromSelectedClient = async () => {
+    let sourceClient: ProjectClient | undefined = sourceEntryMode === "manual"
       ? {
           clientId: manualSourceForm.clientId.trim() || `ACC-MAN-${projectForm.projectCode.trim() || "DRAFT"}`,
           projectId: projectForm.projectCode.trim(),
@@ -443,51 +446,75 @@ export default function ClientsContacts() {
       return;
     }
 
-    const primaryContact = sourceClient.contacts.find((contact) => contact.role === "Decision Maker") || sourceClient.contacts[0];
-    const createdProject: CreatedProjectRecord = {
-      id: editingProjectId || `${sourceClient.clientId}-${projectForm.projectCode.trim()}`,
-      clientId: sourceClient.clientId,
-      projectId: projectForm.projectCode.trim(),
-      sourceLeadId: sourceClient.sourceLeadId,
-      company: sourceClient.company,
-      projectName: sourceClient.projectName,
-      projectType: sourceClient.projectType,
-      projectOwner: sourceClient.projectOwner,
-      value: sourceClient.value,
-      primaryContact: primaryContact?.name || "Not assigned",
-      projectManager: projectForm.projectManager.trim(),
-      startDate: projectForm.startDate,
-      targetEndDate: projectForm.targetEndDate,
-      priority: projectForm.priority,
-      billingModel: projectForm.billingModel,
-      deliveryMethod: projectForm.deliveryMethod,
-      communicationChannel: projectForm.communicationChannel.trim() || "Not defined",
-      repositoryUrl: projectForm.repositoryUrl.trim() || "Not defined",
-      kickoffNotes: projectForm.kickoffNotes.trim(),
-      clientContacts: sourceClient.contacts as ClientContactSnapshot[],
-      teamLeaderName: sourceClient.teamLeader,
-      status: "Planning",
-      createdAt: createdProjects.find((project) => project.id === editingProjectId)?.createdAt || projectForm.startDate,
-    };
+    try {
+      if (!sourceClient.backendId) {
+        const primaryContact = sourceClient.contacts.find((contact) => contact.role === "Decision Maker") || sourceClient.contacts[0];
+        const savedClient = await createProjectClient({
+          source_lead_id: sourceClient.sourceLeadBackendId || null,
+          company_name: sourceClient.company,
+          project_name: sourceClient.projectName,
+          project_type: sourceClient.projectType,
+          project_owner: sourceClient.projectOwner,
+          team_leader: sourceClient.teamLeader,
+          telecaller: sourceClient.telecaller,
+          agreement_status: sourceClient.agreementStatus.toLowerCase() as "pending" | "drafted" | "signed",
+          value: String(sourceClient.value),
+          primary_contact: primaryContact
+            ? {
+                role: roleToBackend(primaryContact.role) as "decision_maker" | "technical" | "finance" | "daily_coordinator",
+                name: primaryContact.name,
+                designation: primaryContact.designation,
+                phone: primaryContact.phone,
+                email: primaryContact.email,
+                responsibility: primaryContact.responsibility,
+              }
+            : undefined,
+        });
+        sourceClient = projectClientFromBackend(savedClient);
+        setClients((current) => [sourceClient as ProjectClient, ...current]);
+      }
 
-    setCreatedProjects((current) => [
-      createdProject,
-      ...current.filter((project) => project.id !== createdProject.id && project.projectId !== createdProject.projectId && project.sourceLeadId !== createdProject.sourceLeadId),
-    ]);
-    syncCreatedProjectRecord(createdProject);
-    setClients((current) =>
-      current.some((client) => client.clientId === sourceClient.clientId)
-        ? current.map((client) =>
-            client.clientId === sourceClient.clientId
-              ? { ...client, projectId: createdProject.projectId, projectStatus: "Discovery", nextAction: "Project created. Prepare kickoff and delivery tracking." }
-              : client,
-          )
-        : [{ ...sourceClient, projectId: createdProject.projectId, projectStatus: "Discovery", nextAction: "Project created. Prepare kickoff and delivery tracking." }, ...current],
-    );
-    setShowCreateProject(false);
-    setActiveProjectId(createdProject.id);
-    setEditingProjectId("");
-    setFormMessage(editingProjectId ? "Project updated." : "Project created from client contact record.");
+      if (!sourceClient?.backendId) {
+        setFormMessage("Client backend record is required before project handoff.");
+        return;
+      }
+
+      const handoffPayload = {
+        client_id: sourceClient.backendId,
+        project_code: projectForm.projectCode.trim(),
+        project_manager: projectForm.projectManager.trim(),
+        start_date: projectForm.startDate,
+        target_end_date: projectForm.targetEndDate,
+        priority: backendPriority(projectForm.priority),
+        billing_model: projectForm.billingModel,
+        delivery_method: projectForm.deliveryMethod,
+        communication_channel: projectForm.communicationChannel.trim(),
+        repository_url: projectForm.repositoryUrl.trim(),
+        kickoff_notes: projectForm.kickoffNotes.trim(),
+      };
+      const savedProject = editingProjectId
+        ? await updateProjectHandoff(editingProjectId, handoffPayload)
+        : await createProjectHandoff(handoffPayload);
+      const createdProject = projectRecordFromBackend(savedProject);
+
+      setCreatedProjects((current) => [
+        createdProject,
+        ...current.filter((project) => project.id !== createdProject.id && project.projectId !== createdProject.projectId && project.sourceLeadId !== createdProject.sourceLeadId),
+      ]);
+      setClients((current) =>
+        current.map((client) =>
+          client.clientId === sourceClient?.clientId
+            ? { ...client, projectId: createdProject.projectId, projectStatus: "Development", nextAction: "Project created. Prepare kickoff and delivery tracking." }
+            : client,
+        ),
+      );
+      setShowCreateProject(false);
+      setActiveProjectId(createdProject.id);
+      setEditingProjectId("");
+      setFormMessage(editingProjectId ? "Project updated." : "Project created from client contact record.");
+    } catch (error) {
+      setFormMessage(error instanceof Error ? error.message : "Unable to save project.");
+    }
   };
 
   return (
@@ -495,7 +522,7 @@ export default function ClientsContacts() {
       <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
         <div>
           <p className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-400">Project Client Directory</p>
-          <h2 className="mt-2 text-3xl font-black tracking-tight text-primary">Project Clients & Contacts</h2>
+          <h2 className="mt-2 text-3xl font-black tracking-tight text-primary">Project Clients</h2>
           <p className="mt-1 max-w-3xl text-sm font-semibold leading-6 text-secondary">
             Won project leads automatically become project client records here. This page links client ID, project ID, source lead ID, project owner, and contact people.
           </p>
@@ -509,6 +536,12 @@ export default function ClientsContacts() {
           </button>
         </div>
       </div>
+
+      {isLoading ? (
+        <div className="rounded-2xl border border-blue-100 bg-blue-50 px-5 py-4 text-sm font-black text-blue-700">
+          Loading backend project clients...
+        </div>
+      ) : null}
 
       <div className="grid gap-4 md:grid-cols-4">
         {[

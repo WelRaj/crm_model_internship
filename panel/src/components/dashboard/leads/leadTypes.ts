@@ -2,7 +2,6 @@ import type { Dispatch, SetStateAction } from "react";
 
 export type LeadDepartment = "Trading" | "Projects";
 export type LeadRole = "Super Admin" | "Team Lead" | "Telecaller";
-export type TelecallerId = "Tele-1" | "Tele-2" | "Tele-3";
 export type LeadSource = "Website" | "Google Ads" | "Referral" | "LinkedIn" | "Walk In" | "WhatsApp" | "Email" | "Facebook" | "Instagram" | "Other Social Media";
 export type TradingLeadStatus = "New" | "Assigned" | "Contacted" | "Interested" | "Follow-up" | "Qualified" | "Converted" | "Lost" | "Not Interested";
 export type ProjectLeadStatus = "New Enquiry" | "Requirement Discussed" | "Proposal Pending" | "Proposal Sent" | "Negotiation" | "Won" | "Project Created" | "Lost";
@@ -34,7 +33,7 @@ export type TransferLog = {
 export type LeadAssignment = {
   id: string;
   leadType: LeadDepartment;
-  assignedTo: TelecallerId;
+  assignedTo: string;
   count: number;
   mode: "Auto" | "Manual";
   date: string;
@@ -73,90 +72,7 @@ export type ProjectLead = BaseLead & {
 
 export type Lead = TradingLead | ProjectLead;
 
-export const telecallers: Array<{ id: TelecallerId; employeeId: string; name: string; group: string; activeLeads: number }> = [
-  { id: "Tele-1", employeeId: "EMP-2024-021", name: "Asha Verma", group: "North Desk", activeLeads: 18 },
-  { id: "Tele-2", employeeId: "EMP-2024-022", name: "Neeraj Singh", group: "North Desk", activeLeads: 14 },
-  { id: "Tele-3", employeeId: "EMP-2024-023", name: "Pooja Khan", group: "North Desk", activeLeads: 11 },
-];
-
 export const leadSourceOptions: LeadSource[] = ["Website", "Google Ads", "Referral", "LinkedIn", "Walk In", "WhatsApp", "Email", "Facebook", "Instagram", "Other Social Media"];
-export const wonProjectLeadStorageKey = "crm_won_project_leads";
-
-const owners = ["Asha Verma", "Neeraj Singh", "Pooja Khan"];
-const ownerIds: TelecallerId[] = ["Tele-1", "Tele-2", "Tele-3"];
-const sources: LeadSource[] = ["Website", "Google Ads", "Referral", "LinkedIn", "WhatsApp", "Email", "Facebook", "Instagram", "Other Social Media", "Walk In"];
-
-export const projectLeadSeedData: ProjectLead[] = Array.from({ length: 20 }, (_, index) => {
-  const ownerIndex = index % ownerIds.length;
-  const statusList: ProjectLeadStatus[] = ["New Enquiry", "Requirement Discussed", "Proposal Pending", "Proposal Sent", "Negotiation", "Won", "Project Created", "Lost"];
-  const projectTypes = ["Trading Software Platform", "Strategy Automation Portal", "Mobile Trading App", "Website", "SaaS Dashboard", "DevOps Audit", "E-commerce Store", "Loan Automation Platform", "People Operations Portal", "Finance Control System"];
-  const budgets = [250000, 420000, 650000, 850000, 1200000, 1500000, 300000, 540000, 980000, 1750000];
-  const status = statusList[index % statusList.length];
-
-  return {
-    id: `PRJ-${String(2001 + index).padStart(4, "0")}`,
-    firstName: ["Aarav", "Priya", "Rohan", "Meera", "Kabir", "Anaya", "Dev", "Nisha", "Arjun", "Sara"][index % 10],
-    lastName: ["Mehta", "Nair", "Saini", "Singh", "Khan", "Sharma", "Patel", "Verma", "Gupta", "Rao"][index % 10],
-    mobile: `9${String(600000000 + index * 17321).slice(0, 9)}`,
-    email: `projectlead${index + 1}@example.com`,
-    source: sources[index % sources.length],
-    status,
-    assignedTo: owners[ownerIndex],
-    currentOwnerId: ownerIds[ownerIndex],
-    teamLeaderId: "TL-1",
-    transferHistory: [],
-    remarks: "Project enquiry captured for requirement discussion and proposal follow-up.",
-    followUpDate: `2026-07-${String((index % 20) + 1).padStart(2, "0")}`,
-    department: "Projects",
-    projectType: projectTypes[index % projectTypes.length],
-    requirementSummary: `${projectTypes[index % projectTypes.length]} requirement with role-based access, reporting, notifications, and admin workflow.`,
-    budget: budgets[index % budgets.length],
-    timeline: ["4 weeks", "8 weeks", "12 weeks", "16 weeks", "6 months"][index % 5],
-    proposalStatus: status === "Proposal Sent" || status === "Negotiation" || status === "Won" ? "Sent" : status === "Lost" ? "Lost" : "Pending",
-    quotationStatus: status === "Proposal Sent" || status === "Negotiation" || status === "Won" ? "Sent" : "Draft",
-    meetingDate: `2026-07-${String((index % 20) + 2).padStart(2, "0")}`,
-    developmentStatus: status === "Project Created" ? "Development" : status === "Won" ? "Discovery" : "Not Started",
-    developmentProgress: status === "Project Created" ? 45 : status === "Won" ? 12 : 0,
-    developmentOwner: status === "Project Created" || status === "Won" ? "Development Team" : "Unassigned",
-  };
-});
-
-export const tradingLeadSeedData: TradingLead[] = Array.from({ length: 20 }, (_, index) => {
-  const ownerIndex = index % ownerIds.length;
-  const statusList: TradingLeadStatus[] = ["New", "Assigned", "Contacted", "Interested", "Follow-up", "Qualified", "Converted", "Lost", "Not Interested"];
-  const issueTypes: NonNullable<TradingLead["issueType"]>[] = ["Account Opening", "Trading App", "Website", "Payment", "General Query"];
-  const accountStatuses: NonNullable<TradingLead["accountStatus"]>[] = ["Needs Account Opening", "Account Opened", "App Help Needed", "Issue Resolved"];
-  const interests = ["Account Opening", "Equity Intraday", "Options Advisory", "Mutual Funds", "Portfolio Review", "App Login Help", "Payment Help"];
-  const status = statusList[index % statusList.length];
-
-  return {
-    id: `TRD-${String(1001 + index).padStart(4, "0")}`,
-    firstName: ["Raj", "Meena", "Faiz", "Kavya", "Harsh", "Isha", "Manav", "Tara", "Yash", "Zoya"][index % 10],
-    lastName: ["Kumar", "Shah", "Ali", "Joshi", "Bora", "Kapoor", "Jain", "Mishra", "Yadav", "Qureshi"][index % 10],
-    mobile: `8${String(700000000 + index * 21987).slice(0, 9)}`,
-    email: `tradinglead${index + 1}@example.com`,
-    source: sources[index % sources.length],
-    status,
-    assignedTo: owners[ownerIndex],
-    currentOwnerId: ownerIds[ownerIndex],
-    teamLeaderId: "TL-1",
-    transferHistory: [],
-    remarks: "Calling owner lead for account opening, trading app support, or investment interest follow-up.",
-    followUpDate: `2026-07-${String((index % 20) + 1).padStart(2, "0")}`,
-    department: "Trading",
-    interestLevel: index % 3 === 0 ? "High" : index % 3 === 1 ? "Medium" : "Low",
-    tradingInterest: interests[index % interests.length],
-    budget: [15000, 30000, 50000, 75000, 100000, 125000, 200000][index % 7],
-    experienceLevel: index % 3 === 0 ? "Beginner" : index % 3 === 1 ? "Intermediate" : "Expert",
-    riskAppetite: index % 3 === 0 ? "Low" : index % 3 === 1 ? "Medium" : "High",
-    kycStatus: index % 2 === 0 ? "Pending" : "Completed",
-    dematStatus: index % 4 === 0 ? "Not Opened" : "Active",
-    accountStatus: accountStatuses[index % accountStatuses.length],
-    issueType: issueTypes[index % issueTypes.length],
-    availability: index % 3 === 0 ? "Available" : index % 3 === 1 ? "Call Back Later" : "Not Available",
-    lastCallNote: "Customer call note pending update after the next owner interaction.",
-  };
-});
 
 export type LeadDraft = {
   leadId: string;

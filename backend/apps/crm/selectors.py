@@ -1,6 +1,6 @@
 from django.db.models import Q
 
-from apps.crm.models import Lead
+from apps.crm.models import ProjectAgreement, ProjectClient, ProjectHandoff, Lead
 
 
 def get_leads_queryset():
@@ -17,3 +17,30 @@ def find_duplicate_leads(*, mobile: str, email: str = "", company_name: str = ""
     if exclude_lead_id:
         queryset = queryset.exclude(id=exclude_lead_id)
     return queryset
+
+
+def get_project_clients_queryset():
+    return (
+        ProjectClient.objects.filter(is_deleted=False)
+        .select_related("source_lead")
+        .prefetch_related("contacts")
+        .order_by("-created_at")
+    )
+
+
+def get_project_handoffs_queryset():
+    return (
+        ProjectHandoff.objects.filter(is_deleted=False)
+        .select_related("client", "client__source_lead")
+        .prefetch_related("client__contacts")
+        .order_by("-created_at")
+    )
+
+
+def get_project_agreements_queryset():
+    return (
+        ProjectAgreement.objects.filter(is_deleted=False)
+        .select_related("client", "project_handoff", "client__source_lead")
+        .prefetch_related("client__contacts")
+        .order_by("-created_at")
+    )

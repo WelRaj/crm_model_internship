@@ -13,7 +13,6 @@ import {
   ShieldCheck,
   UserCheck,
 } from "lucide-react";
-import { projectLeadSeedData, telecallers, tradingLeadSeedData, type TelecallerId } from "@/components/dashboard/leads/leadTypes";
 import { listUsers } from "@/services/accounts-api";
 import { type AuthUser } from "@/services/auth-api";
 import { assignLead as assignBackendLead, listLeadFollowUps, listLeads, type LeadFollowUpRecord, type LeadRecord } from "@/services/leads-api";
@@ -61,27 +60,6 @@ type AssignmentForm = {
 };
 
 const teamLeaders = ["Rajkumar Rathore (TL-1)", "CRM Manager", "Project Team Lead"];
-const telecallerProfiles: Record<TelecallerId, { knowledge: string[]; bestFor: string; shift: string; quality: string }> = {
-  "Tele-1": {
-    knowledge: ["Account Opening", "KYC", "Trading App Support"],
-    bestFor: "Trading support and account opening leads",
-    shift: "10:00 AM - 7:00 PM",
-    quality: "Fast issue closure",
-  },
-  "Tele-2": {
-    knowledge: ["Project Discovery", "Requirement Calls", "Proposal Follow-up"],
-    bestFor: "Project lead qualification and requirement discussion",
-    shift: "11:00 AM - 8:00 PM",
-    quality: "Strong requirement notes",
-  },
-  "Tele-3": {
-    knowledge: ["WhatsApp Leads", "Callback Handling", "Payment Queries"],
-    bestFor: "Busy customers, callbacks and social media leads",
-    shift: "9:30 AM - 6:30 PM",
-    quality: "High callback recovery",
-  },
-};
-
 const filters: Array<{ id: LeadFilter; label: string }> = [
   { id: "All", label: "All" },
   { id: "Waiting Assignment", label: "Waiting" },
@@ -91,95 +69,6 @@ const filters: Array<{ id: LeadFilter; label: string }> = [
   { id: "Project Lead", label: "Project" },
   { id: "Trading Lead", label: "Trading" },
 ];
-
-function findTelecallerById(ownerId: string) {
-  return telecallers.find((telecaller) => telecaller.id === ownerId);
-}
-
-function findTelecallerByInput(value: string) {
-  const normalizedValue = value.trim().toLowerCase();
-  return telecallers.find((telecaller) =>
-    telecaller.name.toLowerCase() === normalizedValue ||
-    telecaller.id.toLowerCase() === normalizedValue ||
-    telecaller.employeeId.toLowerCase() === normalizedValue ||
-    `${telecaller.id} - ${telecaller.employeeId} - ${telecaller.name}`.toLowerCase() === normalizedValue,
-  );
-}
-
-function employeeIdForOwner(ownerId: string) {
-  return findTelecallerById(ownerId)?.employeeId || "";
-}
-
-function telecallerAssignmentLabel(name: string, ownerId: string) {
-  const employeeId = employeeIdForOwner(ownerId);
-  return `${name}${ownerId ? ` (${ownerId} | ${employeeId || "Employee ID pending"})` : ""}`;
-}
-
-function makeInitialRows(): AssignmentRow[] {
-  const projectRows: AssignmentRow[] = projectLeadSeedData.map((lead, index) => {
-    const waiting = index % 5 === 0;
-    const priority: AssignmentPriority = index % 3 === 0 ? "High" : index % 3 === 1 ? "Medium" : "Low";
-
-    return {
-      id: lead.id,
-      backendId: lead.id,
-      leadType: "Project Lead",
-      customer: `${lead.firstName} ${lead.lastName}`,
-      phone: lead.mobile,
-      email: lead.email,
-      source: lead.source,
-      leadStatus: lead.status,
-      detail: lead.projectType,
-      value: lead.budget,
-      assignedTo: waiting ? "Unassigned" : lead.assignedTo,
-      ownerId: waiting ? "" : (lead.currentOwnerId as TelecallerId),
-      assignedUserId: null,
-      assignedEmployeeId: waiting ? "" : employeeIdForOwner(lead.currentOwnerId),
-      assignedBy: waiting ? "Pending" : "Rajkumar Rathore (TL-1)",
-      teamLeader: "Rajkumar Rathore (TL-1)",
-      projectOwner: waiting ? "Not Required" : lead.developmentOwner || "Development Team",
-      assignmentStatus: waiting ? "Waiting Assignment" : "Assigned",
-      priority,
-      followUpDate: lead.followUpDate,
-      createdBy: index % 2 === 0 ? "Marketing" : "Admin",
-      note: waiting ? "Fresh project lead waiting for leader assignment." : "Assigned for requirement discussion and proposal follow-up.",
-      lastActivity: waiting ? "Lead created, assignment pending" : `Assigned to ${telecallerAssignmentLabel(lead.assignedTo, lead.currentOwnerId)}`,
-    };
-  });
-
-  const tradingRows: AssignmentRow[] = tradingLeadSeedData.map((lead, index) => {
-    const waiting = index % 4 === 0;
-    const priority: AssignmentPriority = lead.interestLevel === "High" ? "High" : lead.interestLevel === "Medium" ? "Medium" : "Low";
-
-    return {
-      id: lead.id,
-      backendId: lead.id,
-      leadType: "Trading Lead",
-      customer: `${lead.firstName} ${lead.lastName}`,
-      phone: lead.mobile,
-      email: lead.email,
-      source: lead.source,
-      leadStatus: lead.status,
-      detail: lead.issueType || lead.tradingInterest,
-      value: lead.budget,
-      assignedTo: waiting ? "Unassigned" : lead.assignedTo,
-      ownerId: waiting ? "" : (lead.currentOwnerId as TelecallerId),
-      assignedUserId: null,
-      assignedEmployeeId: waiting ? "" : employeeIdForOwner(lead.currentOwnerId),
-      assignedBy: waiting ? "Pending" : "Rajkumar Rathore (TL-1)",
-      teamLeader: "Rajkumar Rathore (TL-1)",
-      projectOwner: "Not Required",
-      assignmentStatus: waiting ? "Waiting Assignment" : "Assigned",
-      priority,
-      followUpDate: lead.followUpDate,
-      createdBy: index % 2 === 0 ? "Website/API" : "Marketing",
-      note: waiting ? "Fresh trading lead waiting for calling owner assignment." : "Assigned for account opening, app support, or trading query.",
-      lastActivity: waiting ? "Lead created, assignment pending" : `Assigned to ${telecallerAssignmentLabel(lead.assignedTo, lead.currentOwnerId)}`,
-    };
-  });
-
-  return [...projectRows, ...tradingRows];
-}
 
 function formatMoney(value: number) {
   return new Intl.NumberFormat("en-IN", { maximumFractionDigits: 0 }).format(value);
@@ -257,8 +146,8 @@ function formatHistoryTime(value: string) {
 }
 
 export default function LeadAssign() {
-  const [rows, setRows] = useState<AssignmentRow[]>(makeInitialRows);
-  const [selectedLeadId, setSelectedLeadId] = useState(() => makeInitialRows()[0]?.id || "");
+  const [rows, setRows] = useState<AssignmentRow[]>([]);
+  const [selectedLeadId, setSelectedLeadId] = useState("");
   const [selectedLeadHistory, setSelectedLeadHistory] = useState<LeadFollowUpRecord[]>([]);
   const [activeUsers, setActiveUsers] = useState<AuthUser[]>([]);
   const [activeFilter, setActiveFilter] = useState<LeadFilter>("Waiting Assignment");
@@ -266,18 +155,15 @@ export default function LeadAssign() {
   const [apiError, setApiError] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isSavingAssignment, setIsSavingAssignment] = useState(false);
-  const [form, setForm] = useState<AssignmentForm>(() => {
-    const firstLead = makeInitialRows()[0];
-    return {
-      telecallerId: firstLead?.ownerId || "",
-      assignedUserId: firstLead?.assignedUserId ?? null,
-      telecallerEmployeeId: firstLead?.assignedEmployeeId || "",
-      telecallerName: firstLead?.assignedTo === "Unassigned" ? "" : firstLead?.assignedTo || "",
-      teamLeader: firstLead?.teamLeader || teamLeaders[0],
-      priority: firstLead?.priority || "High",
-      followUpDate: firstLead?.followUpDate || "2026-07-01",
-      note: firstLead?.note || "",
-    };
+  const [form, setForm] = useState<AssignmentForm>({
+    telecallerId: "",
+    assignedUserId: null,
+    telecallerEmployeeId: "",
+    telecallerName: "",
+    teamLeader: teamLeaders[0],
+    priority: "High",
+    followUpDate: new Date().toISOString().slice(0, 10),
+    note: "",
   });
 
   const loadLeadHistory = async (leadBackendId: string) => {
@@ -392,17 +278,7 @@ export default function LeadAssign() {
         });
       }
 
-      return telecallers.map((telecaller) => {
-        const assignedNow = rows.filter((lead) => lead.ownerId === telecaller.id && lead.assignmentStatus !== "Done").length;
-        const availability = availabilityFromLoad(assignedNow);
-        return {
-          ...telecaller,
-          ...telecallerProfiles[telecaller.id],
-          assignedNow,
-          availability,
-          backendUserId: null,
-        };
-      });
+      return [];
     },
     [activeUsers, rows],
   );
@@ -431,16 +307,15 @@ export default function LeadAssign() {
       return;
     }
     const matchedUser = activeUsers.find((user) => user.id === form.assignedUserId) || null;
-    const matchedTelecaller = matchedUser ? null : findTelecallerByInput(typedTelecaller);
     if (!matchedUser) {
       setApiError("Choose an active backend user from Calling Owner dropdown.");
       return;
     }
 
-    const assignedName = matchedUser ? userDisplayName(matchedUser) : matchedTelecaller?.name || typedTelecaller;
-    const assignedOwnerId = matchedUser ? String(matchedUser.id) : matchedTelecaller?.id || "";
-    const assignedUserId = matchedUser?.id ?? null;
-    const assignedEmployeeId = matchedUser?.employee_id || matchedTelecaller?.employeeId || "";
+    const assignedName = userDisplayName(matchedUser);
+    const assignedOwnerId = String(matchedUser.id);
+    const assignedUserId = matchedUser.id;
+    const assignedEmployeeId = matchedUser.employee_id || "";
 
     const nextStatus: AssignmentStatus = selectedLead.assignmentStatus === "Waiting Assignment" ? "Assigned" : "Reassigned";
     const nextActivity = `${selectedLead.id} assigned to ${assignedName}${assignedOwnerId ? ` (${assignedOwnerId} | ${assignedEmployeeId})` : ""}`;

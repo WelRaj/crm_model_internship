@@ -90,7 +90,7 @@ Current status:
 - CRM app foundation is created with Lead model, migration, admin registration, create/list/search/filter API, duplicate validation, service-layer lead number generation, audit logging, backend tests, and centralized frontend leads API wrapper.
 - Lead Desk frontend now loads project/trading leads from backend and saves Project Lead Wizard plus Trading Lead form submissions through centralized `leads-api`.
 - Lead Hub now supports backend-driven lead detail, status update, and assignment in a drawer UI with active user selection, transactional save, and audited mutations.
-- Current state is stable for auth, profile, admin control, lead intake, lead detail, assignment, and lead follow-ups. Next backend work should connect the broader CRM operational screens such as Lead Assignment and Telecaller Desk to these backend records.
+- Current state is stable for auth, profile, admin control, lead intake, lead detail, assignment, and lead follow-ups. Next backend work should connect the broader CRM operational screens such as Lead Assignment and Calling Desk to these backend records.
 - CRM lead detail/update/assignment APIs are now added for `GET/PUT /api/v1/leads/{id}/` and `POST /api/v1/leads/{id}/assign/` with transactional updates, duplicate checks, audit logs, and frontend API wrappers.
 - CRM lead follow-up history is now backend-backed with `LeadFollowUp`, audited create flow, and Lead drawer add/list UI.
 - Lead Assignment screen now loads backend leads and active backend users, assigns selected leads through the centralized lead assignment API, and stores assignment notes as lead follow-ups.
@@ -101,6 +101,9 @@ Current status:
 - Calling Desk now loads backend assigned leads, groups them by backend assigned user, and saves call logs through centralized lead follow-up APIs instead of seed-only local call state.
 - Lead assignment now has backend smart balancing: if the requested telecaller already has 5 active open leads, the lead is assigned to the least-loaded active telecaller instead, with an auto-balance note saved in backend history.
 - Follow-ups screen now uses backend `LeadFollowUp` data through the centralized frontend leads API wrapper, including a global `/api/v1/follow-ups/` queue endpoint with basic filters.
+- Lead Outcomes now immediately syncs project leads into Project Clients when a completed-follow-up project lead is saved as `won`.
+- Client Operations full verification seed data includes 5 trading leads (`LEAD-00014`, `LEAD-00016`, `LEAD-00018`, `LEAD-00020`, `LEAD-00022`) and 5 project leads (`LEAD-00015`, `LEAD-00017`, `LEAD-00019`, `LEAD-00021`, `LEAD-00023`) created through backend services for end-to-end testing.
+- Legal Agreements verification data includes 5 project handoffs (`PRJ-COPS-VERIFY-002` to `PRJ-COPS-VERIFY-006`) and 5 active agreements (`AGR-00001` to `AGR-00005`) linked to `ACC-24002` to `ACC-24006`.
 
 ## 4. Production Architecture Reference
 
@@ -205,7 +208,7 @@ Frontend component
 | `accounts` | Users, profile, authentication, sessions, roles, permissions |
 | `audit` | Audit logs, activity timeline, mutation tracking |
 | `files` | File metadata, upload handling, storage abstraction |
-| `crm` | Leads, clients, contacts, follow-ups, outcomes, agreements |
+| `crm` | Leads, clients, contacts, Follow-ups, Lead Outcomes, agreements |
 | `projects` | Delivery projects, team assignment, tasks, milestones, deadlines |
 | `finance` | Finance clients, vendors, quotations, invoices, payments, expenses, budgets, payroll, GST, TDS |
 | `hrms` | Employees, attendance, leave, onboarding, exit process |
@@ -259,16 +262,16 @@ Frontend component
 | `trading_lead_details` | Lead Desk | Trading/calling-specific lead details |
 | `lead_assignments` | Lead Assignment | Lead owner/team assignment |
 | `lead_transfer_logs` | Lead Assignment | Ownership transfer history |
-| `lead_followups` | Follow-ups, Telecaller Desk | Follow-up schedule and notes |
+| `lead_followups` | Follow-ups, Calling Desk | Follow-up schedule and notes |
 | `lead_proposals` | Lead Wizard, Finance | Proposal values and status |
 | `lead_approvals` | Lead Wizard | Approval/decision records |
-| `lead_status_history` | Lead Desk, outcomes | Status movement history |
+| `lead_status_history` | Lead Desk, Lead Outcomes | Status movement history |
 | `clients` | Client Operations, Finance | Client/company master |
 | `client_contacts` | Client Operations | Client-side contacts |
 | `client_projects` | Client Operations, Projects | Projects created from won leads/clients |
 | `project_contacts` | Client Operations, Projects | Contact mapping per project |
 | `project_agreements` | Agreements, files | Agreement records and document links |
-| `call_logs` | Telecaller Desk | Calling activity logs |
+| `call_logs` | Calling Desk | Calling activity logs |
 | `lead_outcomes` | Lead Outcomes | Won/lost/converted outcome tracking |
 
 ### Projects
@@ -505,7 +508,29 @@ Implemented CRM Lead APIs:
 | `POST` | `/api/v1/leads/{id}/assign/` | Assign or reassign lead owner |
 | `GET` | `/api/v1/leads/{id}/follow-ups/` | List follow-up notes/history for a lead |
 | `POST` | `/api/v1/leads/{id}/follow-ups/` | Add a follow-up note, outcome, channel, and next action time |
+| `POST` | `/api/v1/leads/{id}/outcome/` | Save lead outcome after a completed follow-up; validates flow, updates status, writes history/audit |
 | `GET` | `/api/v1/follow-ups/` | List global follow-up queue with due status, lead type, owner, and search filters |
+| `GET` | `/api/v1/project-clients/` | List backend project clients; missing won project leads are synced into client records |
+| `POST` | `/api/v1/project-clients/` | Create a manual/source project client with optional primary contact |
+| `POST` | `/api/v1/project-clients/{id}/contacts/` | Add a contact person to a project client |
+| `GET` | `/api/v1/project-handoffs/` | List project handoff records for project creation/output |
+| `POST` | `/api/v1/project-handoffs/` | Create a project handoff from a backend project client |
+| `PUT` | `/api/v1/project-handoffs/{id}/` | Update a project handoff |
+| `GET` | `/api/v1/project-agreements/` | List legal/project agreements with client, project handoff, and search filters |
+| `POST` | `/api/v1/project-agreements/` | Create a project agreement linked to backend project handoff/client |
+| `PUT` | `/api/v1/project-agreements/{id}/` | Update a project agreement |
+
+Canonical Client Operations page names:
+
+| Page Name | Backend Domain |
+| --- | --- |
+| Lead Desk | Lead intake and lead register |
+| Lead Assignment | Lead owner assignment and assignment history |
+| Calling Desk | Assigned lead calling workflow |
+| Follow-ups | Follow-up queue and follow-up completion |
+| Lead Outcomes | Completed follow-up decisions and won/lost outcomes |
+| Project Clients | Won project client records, contacts, and project handoffs |
+| Legal Agreements | Project agreement drafting and signing workflow |
 
 ## 13. Session Resume Checklist
 
@@ -567,3 +592,12 @@ Session continuity rule:
 | 2026-07-10 | Added backend smart assignment balancing so overloaded telecallers are skipped in favor of the least-loaded active telecaller, with regression coverage and history note. |
 | 2026-07-10 | Connected Follow-ups screen to backend global follow-up queue and centralized lead follow-up create/list APIs, replacing seed-only follow-up rows. |
 | 2026-07-11 | Verified the CRM backend after the latest follow-up and assignment changes: `apps.crm` tests passed and frontend TypeScript passed, with centralized lead/follow-up APIs still as the single integration path. |
+| 2026-07-12 | Added backend Project Client, Client Contact, and Project Handoff models/APIs; connected Project Clients UI through centralized lead API wrappers; won project leads now sync into backend project client records; applied local migration and verified CRM tests, TypeScript, and lint. |
+| 2026-07-12 | Connected Lead Outcomes screen to confirmed Follow-ups only: rows now come from backend follow-up records with `done` outcome, then outcome saves update lead status and persist an outcome note; project leads marked `won` continue into Project Clients. |
+| 2026-07-12 | Hardened Lead Outcomes with backend flow validation: outcome save now requires a completed follow-up, uses a dedicated `/leads/{id}/outcome/` endpoint, avoids duplicate same-status history, audits the closure, and is covered by regression tests. |
+| 2026-07-12 | Added backend Project Agreement model/APIs with project handoff linkage, duplicate agreement guard, active-agreement signed-client update, audit logs, regression tests, local migration, and connected Legal Agreements frontend through centralized wrappers. |
+| 2026-07-12 | Verified lead/client-operation pages for backend source-of-truth: removed old localStorage/seed-data bridges from Lead Desk, Lead Assignment, Calling Desk, Project Clients, Lead Outcomes, and Legal Agreements; frontend TypeScript/lint and CRM backend tests passed. |
+| 2026-07-12 | Standardized canonical Client Operations page names across frontend/backend documentation: Lead Desk, Lead Assignment, Calling Desk, Follow-ups, Lead Outcomes, Project Clients, and Legal Agreements. |
+| 2026-07-12 | Fixed Lead Outcomes to create Project Clients immediately when a project lead is saved as `won`; verified `LEAD-00013` synced to `ACC-24001` and added regression coverage. |
+| 2026-07-12 | Ran Client Operations end-to-end verification from starting flow with 5 trading and 5 project leads: created leads, assigned owners, saved done follow-ups, saved outcomes, and verified all 5 project leads synced into Project Clients (`ACC-24002` to `ACC-24006`). |
+| 2026-07-12 | Completed Legal Agreements verification for the same 5 project clients: created project handoffs, active signed agreements, verified `/api/v1/project-agreements/` returns all 5 records, and reran backend CRM tests plus frontend TypeScript/lint. |

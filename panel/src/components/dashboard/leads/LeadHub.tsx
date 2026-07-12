@@ -19,7 +19,7 @@ import {
 } from "@/services/leads-api";
 import ProjectLeadStepWizard from "./ProjectLeadStepWizard";
 import TradingLeadCreate from "./TradingLeadCreate";
-import { wonProjectLeadStorageKey, type ProjectLead, type TradingLead } from "./leadTypes";
+import { type ProjectLead, type TradingLead } from "./leadTypes";
 
 type CreateMode = "home" | "project" | "trading";
 
@@ -124,11 +124,9 @@ export default function LeadHub() {
         requirement_summary: lead.requirementSummary,
         estimated_value: String(lead.budget || 0),
       });
-      const savedLead = backendToProjectLead(saved);
       setBackendLeads((current) => [saved, ...current]);
       setRecentLeadIds((current) => [saved.id, ...current]);
       setApiError("");
-      if (savedLead.status === "Won" || savedLead.status === "Project Created") syncWonProjectLead(savedLead);
     } catch (error) {
       setApiError(error instanceof Error ? error.message : "Unable to save project lead.");
     }
@@ -313,7 +311,7 @@ export default function LeadHub() {
           </div>
           <div>
             <h3 className="text-sm font-black uppercase tracking-widest text-primary">Lead Desk Scope</h3>
-            <p className="mt-1 text-sm font-semibold text-secondary">Create and qualify leads here. Follow-ups, Clients & Contacts, and Project Agreements continue in Client Operations.</p>
+            <p className="mt-1 text-sm font-semibold text-secondary">Create and qualify leads here. Follow-ups, Project Clients, and Legal Agreements continue in Client Operations.</p>
           </div>
         </div>
       </div>
@@ -429,20 +427,6 @@ function backendToTradingLead(lead: BackendLeadRecord): TradingLead {
     availability: "Available",
     lastCallNote: lead.requirement_summary,
   };
-}
-
-function syncWonProjectLead(lead: ProjectLead) {
-  if (typeof window === "undefined") return;
-
-  try {
-    const existing = JSON.parse(window.localStorage.getItem(wonProjectLeadStorageKey) || "[]") as ProjectLead[];
-    const withoutCurrent = existing.filter((item) => item.id !== lead.id);
-    window.localStorage.setItem(wonProjectLeadStorageKey, JSON.stringify([lead, ...withoutCurrent]));
-    window.dispatchEvent(new Event("crm-won-project-leads-updated"));
-  } catch {
-    window.localStorage.setItem(wonProjectLeadStorageKey, JSON.stringify([lead]));
-    window.dispatchEvent(new Event("crm-won-project-leads-updated"));
-  }
 }
 
 function LeadViewTable({

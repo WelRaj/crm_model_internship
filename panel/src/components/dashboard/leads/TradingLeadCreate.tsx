@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { CheckCircle2, ChevronLeft, Save } from "lucide-react";
-import { leadSourceOptions, telecallers, type LeadSource, type TelecallerId, type TradingLead, type TradingLeadStatus } from "./leadTypes";
+import { leadSourceOptions, type LeadSource, type TradingLead, type TradingLeadStatus } from "./leadTypes";
 
 type TradingForm = {
   firstName: string;
@@ -11,7 +11,6 @@ type TradingForm = {
   email: string;
   source: LeadSource;
   sourceDetail: string;
-  assignedTo: TelecallerId;
   issueType: NonNullable<TradingLead["issueType"]>;
   accountStatus: NonNullable<TradingLead["accountStatus"]>;
   availability: NonNullable<TradingLead["availability"]>;
@@ -35,7 +34,6 @@ const initialForm: TradingForm = {
   email: "",
   source: "Website",
   sourceDetail: "",
-  assignedTo: "Tele-1",
   issueType: "Account Opening",
   accountStatus: "Needs Account Opening",
   availability: "Available",
@@ -89,7 +87,6 @@ export default function TradingLeadCreate({ onBack, onSave }: { onBack: () => vo
       return;
     }
 
-    const owner = telecallers.find((caller) => caller.id === form.assignedTo) || telecallers[0];
     onSave({
       id: `TRD-${Math.floor(3000 + Math.random() * 6000)}`,
       firstName: form.firstName,
@@ -98,8 +95,8 @@ export default function TradingLeadCreate({ onBack, onSave }: { onBack: () => vo
       email: form.email || "N/A",
       source: form.source === "Other Social Media" && form.sourceDetail ? `${form.source}: ${form.sourceDetail}` : form.source,
       status: form.status,
-      assignedTo: owner.name,
-      currentOwnerId: owner.id,
+      assignedTo: "Unassigned",
+      currentOwnerId: "",
       teamLeaderId: "TL-1",
       transferHistory: [],
       remarks: form.note,
@@ -153,7 +150,6 @@ export default function TradingLeadCreate({ onBack, onSave }: { onBack: () => vo
           <Field label="Email" value={form.email} onChange={(value) => update("email", value)} />
           <Field label="Source" options={leadSourceOptions} value={form.source} onChange={(value) => update("source", value)} />
           {form.source === "Other Social Media" ? <Field label="Source Detail *" value={form.sourceDetail} onChange={(value) => update("sourceDetail", value)} /> : null}
-          <Field label="Assign Calling Owner" options={telecallers.map((caller) => caller.id)} value={form.assignedTo} optionLabels={Object.fromEntries(telecallers.map((caller) => [caller.id, `${caller.name} (${caller.employeeId})`]))} onChange={(value) => update("assignedTo", value)} />
           <Field label="Issue Type" options={["Account Opening", "Trading App", "Website", "Payment", "General Query"]} value={form.issueType} onChange={(value) => update("issueType", value)} />
           <Field label="Account / App Status" options={["Needs Account Opening", "Account Opened", "App Help Needed", "Issue Resolved"]} value={form.accountStatus} onChange={(value) => update("accountStatus", value)} />
           <Field label="Customer Availability" options={["Available", "Not Available", "Call Back Later"]} value={form.availability} onChange={(value) => update("availability", value)} />

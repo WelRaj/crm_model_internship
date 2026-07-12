@@ -13,7 +13,14 @@ import {
   AccountingPage, ActionButton, DataTable, Field, 
   MetricCard, Panel, StatusBadge 
 } from "../accounting/AccountingComponents";
-import { projectHandoffEventName, projectHandoffStorageKey, type CreatedProjectRecord } from "../projects/projectHandoff";
+import type { CreatedProjectRecord } from "../projects/projectHandoff";
+import {
+  createProjectAgreement,
+  listProjectAgreements,
+  listProjectHandoffs,
+  type ProjectAgreementRecord,
+  type ProjectHandoffRecord,
+} from "@/services/leads-api";
 
 // --- Validation Schema ---
 const agreementSchema = z.object({
@@ -40,6 +47,9 @@ type AgreementFormInput = z.input<typeof agreementSchema>;
 type AgreementFormData = z.output<typeof agreementSchema>;
 
 type AgreementRecord = {
+  backendId?: string;
+  backendProjectHandoffId?: string | null;
+  backendClientId?: string;
   id: string;
   projectId: string;
   client: string;
@@ -53,39 +63,86 @@ type AgreementRecord = {
   attachmentName: string;
 };
 
-const clientOptions = ["Apex Finserve Pvt Ltd", "Nexa Retail Cloud", "Bluebird Logistics"];
-
-const initialAgreements: AgreementRecord[] = [
-  { id: "AGR-2024-001", projectId: "PRJ-002", client: "Nexa Retail Cloud", project: "E-commerce Mobile App", type: "MSA", date: "12 Jun 2024", expiryDate: "12 Jun 2025", value: "INR 12.5L", rawValue: 1250000, status: "Active", attachmentName: "AGR-2024-001-signed.pdf" },
-  { id: "AGR-2024-002", projectId: "PRJ-001", client: "Apex Finserve Pvt Ltd", project: "Loan Automation Platform", type: "SOW", date: "15 Jun 2024", expiryDate: "15 Dec 2024", value: "INR 8.4L", rawValue: 840000, status: "Under Review", attachmentName: "Pending upload" },
-];
-
-function readCreatedProjectRecords(): CreatedProjectRecord[] {
-  if (typeof window === "undefined") return [];
-
-  try {
-    const parsed = JSON.parse(window.localStorage.getItem(projectHandoffStorageKey) || "[]");
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter((project): project is CreatedProjectRecord => Boolean(project?.projectId && project?.clientId && project?.sourceLeadId));
-  } catch {
-    return [];
-  }
-}
-
 function formatDateLabel(date: string) {
   return new Date(date).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
 }
 
+function agreementTypeToBackend(value: string): ProjectAgreementRecord["agreement_type"] {
+  if (value.includes("Statement")) return "sow";
+  if (value.includes("Non-Disclosure")) return "nda";
+  if (value.includes("Service Level")) return "sla";
+  return "msa";
+}
+
+function agreementStatusToBackend(value: string): ProjectAgreementRecord["status"] {
+  if (value === "Under Review") return "under_review";
+  if (value === "Sent for Signature") return "sent_for_signature";
+  if (value === "Active") return "active";
+  if (value === "Expired") return "expired";
+  if (value === "Terminated") return "terminated";
+  return "draft";
+}
+
+function projectFromBackend(project: ProjectHandoffRecord): CreatedProjectRecord {
+  return {
+    id: project.id,
+    clientId: project.client_detail.client_number,
+    projectId: project.project_code,
+    sourceLeadId: project.client_detail.source_lead_detail?.lead_number || "Manual",
+    company: project.client_detail.company_name,
+    projectName: project.client_detail.project_name,
+    projectType: project.client_detail.project_type || "Project",
+    projectOwner: project.client_detail.project_owner,
+    value: Number(project.client_detail.value || 0),
+    primaryContact: project.client_detail.contacts[0]?.name || "Not assigned",
+    projectManager: project.project_manager,
+    startDate: project.start_date,
+    targetEndDate: project.target_end_date,
+    priority: project.priority_label as CreatedProjectRecord["priority"],
+    billingModel: project.billing_model as CreatedProjectRecord["billingModel"],
+    deliveryMethod: project.delivery_method as CreatedProjectRecord["deliveryMethod"],
+    communicationChannel: project.communication_channel || "Not defined",
+    repositoryUrl: project.repository_url || "Not defined",
+    kickoffNotes: project.kickoff_notes,
+    clientContacts: project.client_detail.contacts,
+    teamLeaderName: project.client_detail.team_leader,
+    status: "Planning",
+    createdAt: project.created_at.split("T")[0],
+  };
+}
+
+function agreementFromBackend(agreement: ProjectAgreementRecord): AgreementRecord {
+  return {
+    backendId: agreement.id,
+    backendProjectHandoffId: agreement.project_handoff,
+    backendClientId: agreement.client,
+    id: agreement.agreement_number,
+    projectId: agreement.project_handoff_detail?.project_code || "Manual",
+    client: agreement.client_detail.company_name,
+    project: agreement.client_detail.project_name,
+    type: agreement.agreement_type_label,
+    date: formatDateLabel(agreement.effective_date),
+    expiryDate: agreement.expiry_date ? formatDateLabel(agreement.expiry_date) : "Not set",
+    value: agreement.contract_value ? `INR ${(Number(agreement.contract_value) / 100000).toFixed(1)}L` : "TBD",
+    rawValue: Number(agreement.contract_value || 0),
+    status: agreement.status_label,
+    attachmentName: agreement.attachment_name || "Pending upload",
+  };
+}
+
 export default function ProjectAgreement() {
-  const [agreements, setAgreements] = useState<AgreementRecord[]>(initialAgreements);
+  const [agreements, setAgreements] = useState<AgreementRecord[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [successMsg, setSuccessMsg] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [clientEntryMode, setClientEntryMode] = useState<"existing" | "manual">("existing");
   const [projectEntryMode, setProjectEntryMode] = useState<"existing" | "manual">("existing");
-  const [createdProjects, setCreatedProjects] = useState<CreatedProjectRecord[]>(readCreatedProjectRecords);
+  const [createdProjects, setCreatedProjects] = useState<CreatedProjectRecord[]>([]);
+  const [backendProjects, setBackendProjects] = useState<ProjectHandoffRecord[]>([]);
   const [selectedFileName, setSelectedFileName] = useState("");
   const [fileError, setFileError] = useState("");
+  const [formError, setFormError] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
   const [todayTime] = useState(() => Date.now());
 
   const {
@@ -106,15 +163,25 @@ export default function ProjectAgreement() {
   const selectedProjectId = useWatch({ control, name: "projectId" });
 
   useEffect(() => {
-    const refreshCreatedProjects = () => setCreatedProjects(readCreatedProjectRecords());
-
-    refreshCreatedProjects();
-    window.addEventListener("storage", refreshCreatedProjects);
-    window.addEventListener(projectHandoffEventName, refreshCreatedProjects);
-
+    let isMounted = true;
+    const loadAgreements = async () => {
+      try {
+        const [projectResponse, agreementResponse] = await Promise.all([listProjectHandoffs(), listProjectAgreements()]);
+        if (!isMounted) return;
+        setBackendProjects(projectResponse);
+        setCreatedProjects(projectResponse.map(projectFromBackend));
+        setAgreements(agreementResponse.map(agreementFromBackend));
+        setFormError("");
+      } catch (error) {
+        if (isMounted) setFormError(error instanceof Error ? error.message : "Unable to load backend agreements.");
+      } finally {
+        if (isMounted) setIsLoading(false);
+      }
+    };
+    const timer = window.setTimeout(loadAgreements, 0);
     return () => {
-      window.removeEventListener("storage", refreshCreatedProjects);
-      window.removeEventListener(projectHandoffEventName, refreshCreatedProjects);
+      isMounted = false;
+      window.clearTimeout(timer);
     };
   }, []);
 
@@ -137,37 +204,43 @@ export default function ProjectAgreement() {
     [createdProjects],
   );
 
-  const combinedClientOptions = useMemo(
-    () => Array.from(new Set([...createdProjects.map((project) => project.company), ...clientOptions])),
-    [createdProjects],
-  );
+  const combinedClientOptions = useMemo(() => Array.from(new Set(createdProjects.map((project) => project.company))), [createdProjects]);
 
-  const onSubmit = (data: AgreementFormData) => {
-    const newAgreement: AgreementRecord = {
-      id: `AGR-${new Date().getFullYear()}-${String(agreements.length + 1).padStart(3, "0")}`,
-      projectId: data.projectId || "Manual",
-      client: data.clientName,
-      project: data.projectName,
-      type: data.agreementType.includes("MSA") ? "MSA" : "SOW",
-      date: formatDateLabel(data.effectiveDate),
-      expiryDate: data.expiryDate ? formatDateLabel(data.expiryDate) : "Not set",
-      value: data.contractValue ? `INR ${(data.contractValue / 100000).toFixed(1)}L` : "TBD",
-      rawValue: data.contractValue || 0,
-      status: data.status,
-      attachmentName: selectedFileName || "Pending upload",
-    };
+  const onSubmit = async (data: AgreementFormData) => {
+    setFormError("");
+    const selectedBackendProject = backendProjects.find((project) => project.project_code === data.projectId);
+    if (!selectedBackendProject) {
+      setFormError("Select a backend project handoff before creating agreement.");
+      return;
+    }
 
-    setAgreements((current) => [newAgreement, ...current]);
-    setSuccessMsg(true);
-    setTimeout(() => {
-      setSuccessMsg(false);
-      setShowForm(false);
-      reset();
-      setSelectedFileName("");
-      setFileError("");
-      setClientEntryMode("existing");
-      setProjectEntryMode("existing");
-    }, 2000);
+    try {
+      const savedAgreement = await createProjectAgreement({
+        project_handoff_id: selectedBackendProject.id,
+        client_id: selectedBackendProject.client,
+        agreement_type: agreementTypeToBackend(data.agreementType),
+        effective_date: data.effectiveDate,
+        expiry_date: data.expiryDate || null,
+        contract_value: String(data.contractValue || selectedBackendProject.client_detail.value || 0),
+        payment_terms: data.paymentTerms || "",
+        status: agreementStatusToBackend(data.status),
+        remarks: data.remarks || "",
+        attachment_name: selectedFileName,
+      });
+      setAgreements((current) => [agreementFromBackend(savedAgreement), ...current]);
+      setSuccessMsg(true);
+      setTimeout(() => {
+        setSuccessMsg(false);
+        setShowForm(false);
+        reset();
+        setSelectedFileName("");
+        setFileError("");
+        setClientEntryMode("existing");
+        setProjectEntryMode("existing");
+      }, 1200);
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : "Unable to save agreement.");
+    }
   };
 
   const filteredAgreements = agreements.filter((agreement) => {
@@ -278,6 +351,17 @@ export default function ProjectAgreement() {
         <MetricCard label="Contract Value" value={totalValueLabel} helper="Total book value" icon={ShieldCheck} tone="green" />
         <MetricCard label="Expiring Soon" value={String(expiringSoonCount).padStart(2, "0")} helper="Within 30 days" icon={AlertTriangle} tone="red" />
       </div>
+
+      {isLoading ? (
+        <div className="rounded-2xl border border-blue-100 bg-blue-50 px-5 py-4 text-sm font-black text-blue-700">
+          Loading backend agreements...
+        </div>
+      ) : null}
+      {formError ? (
+        <div className="rounded-2xl border border-rose-100 bg-rose-50 px-5 py-4 text-sm font-black text-rose-700">
+          {formError}
+        </div>
+      ) : null}
 
       {showForm && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 animate-in fade-in duration-200">

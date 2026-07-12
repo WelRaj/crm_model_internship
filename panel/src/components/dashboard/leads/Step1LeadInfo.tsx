@@ -5,7 +5,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { ArrowRight } from "lucide-react";
 import { ActionButton, Field } from "../accounting/AccountingComponents";
-import { leadSourceOptions, mergeLeadDraft, telecallers, type LeadStepProps } from "./leadTypes";
+import { leadSourceOptions, mergeLeadDraft, type LeadStepProps } from "./leadTypes";
 
 const leadInfoSchema = z.object({
   leadId: z.string().optional(),
@@ -21,7 +21,7 @@ const leadInfoSchema = z.object({
   officialEmail: z.string().email("Invalid email").or(z.literal("")),
   mobile: z.string().regex(/^[0-9]{10}$/, "Enter 10 digit mobile"),
   alternateMobile: z.string().regex(/^[0-9]{10}$/, "Enter 10 digit alternate mobile").or(z.literal("")).optional(),
-  assignedTo: z.string().min(1, "Owner required"),
+  assignedTo: z.string().optional(),
   city: z.string().min(2, "City required"),
   state: z.string().min(2, "State required"),
   country: z.string().min(2, "Country required"),
@@ -74,7 +74,7 @@ export default function Step1LeadInfo({ data, updateData, onNext }: LeadStepProp
 
         <Field label="Mobile Number" required inputMode="numeric" maxLength={10} register={register("mobile")} error={errors.mobile?.message} />
         <Field label="Alternate Mobile" inputMode="numeric" maxLength={10} register={register("alternateMobile")} error={errors.alternateMobile?.message} />
-        <Field label="Assigned Owner" required options={telecallers.map((caller) => caller.name)} register={register("assignedTo")} error={errors.assignedTo?.message} />
+        <Field label="Assigned Owner" options={["Assignment Pending"]} register={register("assignedTo")} error={errors.assignedTo?.message} />
       </div>
 
       <div className="pt-6 border-t border-slate-100">

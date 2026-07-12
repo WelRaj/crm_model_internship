@@ -1,18 +1,30 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { CheckCircle2, Download, Filter, Search, XCircle } from "lucide-react";
-import { projectLeadSeedData, tradingLeadSeedData } from "@/components/dashboard/leads/leadTypes";
+import { useEffect, useMemo, useState } from "react";
+import { CheckCircle2, Download, Filter, Save, Search, XCircle } from "lucide-react";
+import {
+  listFollowUps,
+  saveLeadOutcome,
+  type LeadFollowUpRecord,
+  type LeadRecord,
+} from "@/services/leads-api";
 
-type OutcomeFilter = "All" | "Final" | "Not Final";
+type OutcomeFilter = "All" | "Final" | "Not Final" | "Ready";
+type ClosureStatus = "qualified" | "proposal" | "won" | "lost";
+
+type OutcomeDraft = {
+  status: ClosureStatus;
+  note: string;
+};
 
 type OutcomeRow = {
   id: string;
+  backendId: string;
   name: string;
   type: "Project" | "Trading";
   source: string;
   telecaller: string;
-  status: string;
+  status: LeadRecord["status"];
   outcome: OutcomeFilter;
   reason: string;
   nextStep: string;
@@ -20,65 +32,123 @@ type OutcomeRow = {
   lastConversation: string;
 };
 
-const filters: OutcomeFilter[] = ["All", "Final", "Not Final"];
+const filters: OutcomeFilter[] = ["All", "Final", "Not Final", "Ready"];
+const closureOptions: Array<{ value: ClosureStatus; label: string }> = [
+  { value: "qualified", label: "Qualified" },
+  { value: "proposal", label: "Proposal" },
+  { value: "won", label: "Won" },
+  { value: "lost", label: "Lost" },
+];
 
 function money(value: number) {
   return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(value);
 }
 
-function makeOutcomeRows(): OutcomeRow[] {
-  const projectRows: OutcomeRow[] = projectLeadSeedData.flatMap((lead, index) => {
-    const isFinal = lead.status === "Won" || lead.status === "Project Created";
-    const isLost = lead.status === "Lost";
-    if (!isFinal && !isLost) return [];
+function statusLabel(status: LeadRecord["status"]) {
+  if (status === "new") return "New";
+  if (status === "contacted") return "Contacted";
+  if (status === "qualified") return "Qualified";
+  if (status === "proposal") return "Proposal";
+  if (status === "won") return "Won";
+  return "Lost";
+}
 
-    return {
-      id: lead.id,
-      name: `${lead.firstName} ${lead.lastName}`,
-      type: "Project",
-      source: lead.source,
-      telecaller: lead.assignedTo,
-      status: lead.status,
-      outcome: isFinal ? "Final" : "Not Final",
-      reason: isFinal ? "Client confirmed project scope and budget." : "Budget/timeline not matched after discussion.",
-      nextStep: isFinal ? "Move to project agreement and development handoff" : "Keep in not-final archive for manager review",
-      value: lead.budget,
-      lastConversation: index % 2 === 0 ? "Connected. Requirement note updated." : "Callback requested after internal discussion.",
-    };
-  });
+function outcomeForStatus(status: LeadRecord["status"]): OutcomeFilter {
+  if (status === "won") return "Final";
+  if (status === "lost") return "Not Final";
+  return "Ready";
+}
 
-  const tradingRows: OutcomeRow[] = tradingLeadSeedData.flatMap((lead, index) => {
-    const isFinal = lead.status === "Converted" || lead.accountStatus === "Issue Resolved";
-    const isLost = lead.status === "Lost" || lead.status === "Not Interested";
-    if (!isFinal && !isLost) return [];
-
-    return {
-      id: lead.id,
-      name: `${lead.firstName} ${lead.lastName}`,
-      type: "Trading",
-      source: lead.source,
-      telecaller: lead.assignedTo,
-      status: lead.status,
-      outcome: isFinal ? "Final" : "Not Final",
-      reason: isFinal ? "Account/issue closed successfully." : "Customer not interested or not reachable after calls.",
-      nextStep: isFinal ? "Mark customer done and close calling task" : "Archive with call reason and manager remark",
-      value: lead.budget,
-      lastConversation: index % 2 === 0 ? "Call connected. Customer update captured." : "No answer/callback needed.",
-    };
-  });
-
-  return [...projectRows, ...tradingRows];
+function leadToRow(lead: LeadRecord, followUp?: LeadFollowUpRecord): OutcomeRow {
+  const outcome = outcomeForStatus(lead.status);
+  return {
+    id: lead.lead_number,
+    backendId: lead.id,
+    name: lead.contact_name || "Unnamed Lead",
+    type: lead.lead_type === "project" ? "Project" : "Trading",
+    source: lead.source || "Direct",
+    telecaller: lead.assigned_to?.full_name || lead.assigned_to?.email || "Unassigned",
+    status: lead.status,
+    outcome,
+    reason:
+      outcome === "Final"
+        ? "Customer confirmed closure."
+        : outcome === "Not Final"
+          ? "Lead closed as lost or not final."
+          : "Follow-up completed. Awaiting final outcome decision.",
+    nextStep:
+      lead.status === "won" && lead.lead_type === "project"
+        ? "Open Project Clients to continue handoff"
+        : lead.status === "won"
+          ? "Close calling task"
+          : lead.status === "lost"
+            ? "Archive with loss reason"
+            : "Update outcome after next conversation",
+    value: Number(lead.estimated_value || 0),
+    lastConversation: followUp?.note || lead.requirement_summary || "Follow-up completed from queue.",
+  };
 }
 
 function outcomeTone(outcome: OutcomeFilter) {
   if (outcome === "Final") return "border-emerald-100 bg-emerald-50 text-emerald-700";
-  return "border-rose-100 bg-rose-50 text-rose-700";
+  if (outcome === "Not Final") return "border-rose-100 bg-rose-50 text-rose-700";
+  return "border-amber-100 bg-amber-50 text-amber-700";
+}
+
+function latestDoneRows(followUps: LeadFollowUpRecord[]) {
+  const byLead = new Map<string, LeadFollowUpRecord>();
+  followUps.forEach((item) => {
+    const lead = item.lead_detail;
+    if (!lead || item.outcome !== "done") return;
+    const current = byLead.get(lead.id);
+    if (!current || new Date(item.created_at).getTime() > new Date(current.created_at).getTime()) {
+      byLead.set(lead.id, item);
+    }
+  });
+  return Array.from(byLead.values()).map((item) => leadToRow(item.lead_detail as LeadRecord, item));
 }
 
 export default function LeadOutcomes() {
   const [activeFilter, setActiveFilter] = useState<OutcomeFilter>("All");
   const [search, setSearch] = useState("");
-  const rows = useMemo(() => makeOutcomeRows(), []);
+  const [rows, setRows] = useState<OutcomeRow[]>([]);
+  const [drafts, setDrafts] = useState<Record<string, OutcomeDraft>>({});
+  const [savingId, setSavingId] = useState("");
+  const [message, setMessage] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    let isMounted = true;
+    const loadOutcomes = async () => {
+      try {
+        const response = await listFollowUps({ due_status: "done" });
+        if (!isMounted) return;
+        const nextRows = latestDoneRows(response);
+        setRows(nextRows);
+        setDrafts(
+          Object.fromEntries(
+            nextRows.map((row) => [
+              row.backendId,
+              {
+                status: row.status === "won" || row.status === "lost" || row.status === "proposal" || row.status === "qualified" ? row.status : "qualified",
+                note: "",
+              },
+            ]),
+          ),
+        );
+      } catch (error) {
+        if (isMounted) setMessage(error instanceof Error ? error.message : "Unable to load confirmed follow-up outcomes.");
+      } finally {
+        if (isMounted) setIsLoading(false);
+      }
+    };
+
+    const timer = window.setTimeout(loadOutcomes, 0);
+    return () => {
+      isMounted = false;
+      window.clearTimeout(timer);
+    };
+  }, []);
 
   const filteredRows = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -90,7 +160,7 @@ export default function LeadOutcomes() {
         row.name.toLowerCase().includes(query) ||
         row.telecaller.toLowerCase().includes(query) ||
         row.source.toLowerCase().includes(query) ||
-        row.status.toLowerCase().includes(query);
+        statusLabel(row.status).toLowerCase().includes(query);
 
       return matchesFilter && matchesSearch;
     });
@@ -100,15 +170,46 @@ export default function LeadOutcomes() {
     () => ({
       final: rows.filter((row) => row.outcome === "Final").length,
       notFinal: rows.filter((row) => row.outcome === "Not Final").length,
+      open: rows.filter((row) => row.outcome === "Ready").length,
       value: rows.filter((row) => row.outcome === "Final").reduce((total, row) => total + row.value, 0),
     }),
     [rows],
   );
 
+  const updateDraft = (leadId: string, patch: Partial<OutcomeDraft>) => {
+    setDrafts((current) => ({
+      ...current,
+      [leadId]: { ...(current[leadId] || { status: "qualified", note: "" }), ...patch },
+    }));
+  };
+
+  const saveOutcome = async (row: OutcomeRow) => {
+    const draft = drafts[row.backendId];
+    if (!draft) return;
+    const note = draft.note.trim();
+    if ((draft.status === "won" || draft.status === "lost") && note.length < 10) {
+      setMessage("Won/Lost outcome ke liye kam se kam 10 character ka reason/note required hai.");
+      return;
+    }
+
+    setSavingId(row.backendId);
+    setMessage("");
+    try {
+      const updatedLead = await saveLeadOutcome(row.backendId, { status: draft.status, note });
+      setRows((current) => current.map((item) => (item.backendId === row.backendId ? leadToRow(updatedLead) : item)));
+      updateDraft(row.backendId, { status: draft.status, note: "" });
+      setMessage(draft.status === "won" && row.type === "Project" ? "Outcome saved. Project lead ab Project Clients me sync ho jayegi." : "Lead outcome saved.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Unable to save lead outcome.");
+    } finally {
+      setSavingId("");
+    }
+  };
+
   const exportRows = () => {
     const header = ["Lead ID", "Name", "Type", "Source", "Calling Owner", "Status", "Outcome", "Reason", "Next Step", "Value"];
     const csvRows = filteredRows.map((row) =>
-      [row.id, row.name, row.type, row.source, row.telecaller, row.status, row.outcome, row.reason, row.nextStep, row.value]
+      [row.id, row.name, row.type, row.source, row.telecaller, statusLabel(row.status), row.outcome, row.reason, row.nextStep, row.value]
         .map((value) => `"${String(value).replace(/"/g, '""')}"`)
         .join(","),
     );
@@ -128,7 +229,7 @@ export default function LeadOutcomes() {
           <p className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-400">After Conversation Result</p>
           <h2 className="mt-2 text-3xl font-black tracking-tight text-primary">Lead Outcomes</h2>
           <p className="mt-1 max-w-3xl text-sm font-semibold leading-6 text-secondary">
-            Final and not-final lead decisions appear here after calling owner or team leader review. Pending callbacks remain in Follow-ups.
+            Final decisions are saved to backend lead status and follow-up history. Won project leads continue into Project Clients.
           </p>
         </div>
         <button onClick={exportRows} className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs font-black uppercase tracking-widest text-primary shadow-sm hover:border-primary">
@@ -136,11 +237,15 @@ export default function LeadOutcomes() {
         </button>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-3">
+      {isLoading ? <div className="rounded-2xl border border-blue-100 bg-blue-50 px-5 py-4 text-sm font-black text-blue-700">Loading backend lead outcomes...</div> : null}
+      {message ? <div className="rounded-2xl border border-slate-100 bg-slate-50 px-5 py-4 text-sm font-black text-slate-600">{message}</div> : null}
+
+      <div className="grid gap-4 md:grid-cols-4">
         {[
           { label: "Final Leads", value: summary.final, detail: money(summary.value), icon: CheckCircle2, tone: "bg-emerald-50 text-emerald-700" },
           { label: "Not Final", value: summary.notFinal, detail: "Lost / not interested", icon: XCircle, tone: "bg-rose-50 text-rose-700" },
-          { label: "Closed Decisions", value: rows.length, detail: "Final + not final only", icon: CheckCircle2, tone: "bg-blue-50 text-blue-700" },
+          { label: "Ready Decisions", value: summary.open, detail: "From done follow-ups", icon: Filter, tone: "bg-amber-50 text-amber-700" },
+          { label: "Total Reviewed", value: rows.length, detail: "Confirmed follow-ups", icon: CheckCircle2, tone: "bg-blue-50 text-blue-700" },
         ].map((item) => (
           <div key={item.label} className="rounded-2xl border border-border bg-white p-5 shadow-sm">
             <div className="flex items-start justify-between gap-3">
@@ -184,39 +289,72 @@ export default function LeadOutcomes() {
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[1120px] text-left">
+          <table className="w-full min-w-[1320px] text-left">
             <thead>
               <tr className="border-b border-slate-100 bg-slate-50/60">
-                {["Lead", "Type", "Calling Owner", "Status", "Outcome", "Conversation", "Next Step", "Value"].map((head) => (
+                {["Lead", "Type", "Calling Owner", "Current", "Outcome", "Conversation", "Next Step", "Value", "Update Outcome"].map((head) => (
                   <th key={head} className="px-5 py-4 text-[10px] font-black uppercase tracking-widest text-slate-400">{head}</th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
-              {filteredRows.map((row) => (
-                <tr key={row.id} className="hover:bg-slate-50/60">
-                  <td className="px-5 py-4">
-                    <p className="text-sm font-black text-primary">{row.name}</p>
-                    <p className="mt-1 text-xs font-bold text-slate-400">{row.id} . {row.source}</p>
-                  </td>
-                  <td className="px-5 py-4 text-sm font-bold text-secondary">{row.type}</td>
-                  <td className="px-5 py-4 text-sm font-bold text-secondary">{row.telecaller}</td>
-                  <td className="px-5 py-4 text-sm font-bold text-secondary">{row.status}</td>
-                  <td className="px-5 py-4">
-                    <span className={`inline-flex rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-widest ${outcomeTone(row.outcome)}`}>
-                      {row.outcome}
-                    </span>
-                  </td>
-                  <td className="px-5 py-4">
-                    <p className="text-sm font-semibold text-secondary">{row.lastConversation}</p>
-                    <p className="mt-1 text-xs font-semibold text-slate-400">{row.reason}</p>
-                  </td>
-                  <td className="px-5 py-4 text-sm font-semibold text-secondary">{row.nextStep}</td>
-                  <td className="px-5 py-4 text-sm font-black text-primary">{money(row.value)}</td>
-                </tr>
-              ))}
+              {filteredRows.map((row) => {
+                const draft = drafts[row.backendId] || { status: "qualified", note: "" };
+                return (
+                  <tr key={row.backendId} className="hover:bg-slate-50/60">
+                    <td className="px-5 py-4">
+                      <p className="text-sm font-black text-primary">{row.name}</p>
+                      <p className="mt-1 text-xs font-bold text-slate-400">{row.id} . {row.source}</p>
+                    </td>
+                    <td className="px-5 py-4 text-sm font-bold text-secondary">{row.type}</td>
+                    <td className="px-5 py-4 text-sm font-bold text-secondary">{row.telecaller}</td>
+                    <td className="px-5 py-4 text-sm font-bold text-secondary">{statusLabel(row.status)}</td>
+                    <td className="px-5 py-4">
+                      <span className={`inline-flex rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-widest ${outcomeTone(row.outcome)}`}>
+                        {row.outcome}
+                      </span>
+                    </td>
+                    <td className="px-5 py-4">
+                      <p className="text-sm font-semibold text-secondary">{row.lastConversation}</p>
+                      <p className="mt-1 text-xs font-semibold text-slate-400">{row.reason}</p>
+                    </td>
+                    <td className="px-5 py-4 text-sm font-semibold text-secondary">{row.nextStep}</td>
+                    <td className="px-5 py-4 text-sm font-black text-primary">{money(row.value)}</td>
+                    <td className="px-5 py-4">
+                      <div className="grid w-[23rem] gap-2">
+                        <select
+                          value={draft.status}
+                          onChange={(event) => updateDraft(row.backendId, { status: event.target.value as ClosureStatus })}
+                          className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-xs font-black uppercase tracking-widest text-primary outline-none focus:border-primary"
+                        >
+                          {closureOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                        </select>
+                        <div className="flex gap-2">
+                          <input
+                            value={draft.note}
+                            onChange={(event) => updateDraft(row.backendId, { note: event.target.value })}
+                            placeholder="Outcome note / loss reason..."
+                            className="h-10 min-w-0 flex-1 rounded-xl border border-slate-200 px-3 text-xs font-semibold outline-none focus:border-primary"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => saveOutcome(row)}
+                            disabled={savingId === row.backendId}
+                            className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-primary px-3 text-[10px] font-black uppercase tracking-widest text-white disabled:opacity-60"
+                          >
+                            <Save size={13} /> {savingId === row.backendId ? "Saving" : "Save"}
+                          </button>
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
+          {!isLoading && filteredRows.length === 0 ? (
+            <div className="p-8 text-center text-sm font-black uppercase tracking-widest text-slate-400">No confirmed follow-ups found</div>
+          ) : null}
         </div>
       </section>
     </div>

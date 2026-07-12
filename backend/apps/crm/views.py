@@ -7,16 +7,25 @@ from rest_framework.views import APIView
 from apps.core.pagination import StandardPagination
 from apps.core.responses import success_response
 from apps.crm.models import Lead, LeadFollowUp
-from apps.crm.selectors import get_leads_queryset
+from apps.crm.selectors import get_leads_queryset, get_project_agreements_queryset, get_project_clients_queryset, get_project_handoffs_queryset
 from apps.crm.serializers import (
+    ClientContactCreateSerializer,
+    ClientContactSerializer,
     LeadAssignSerializer,
     LeadCreateSerializer,
     LeadFollowUpCreateSerializer,
     LeadFollowUpSerializer,
+    LeadOutcomeSerializer,
     LeadSerializer,
     LeadUpdateSerializer,
+    ProjectClientCreateSerializer,
+    ProjectClientSerializer,
+    ProjectAgreementCreateUpdateSerializer,
+    ProjectAgreementSerializer,
+    ProjectHandoffCreateUpdateSerializer,
+    ProjectHandoffSerializer,
 )
-from apps.crm.services import LeadService
+from apps.crm.services import LeadService, ProjectAgreementService, ProjectClientService
 
 
 class LeadListCreateView(APIView):
@@ -86,6 +95,21 @@ class LeadAssignView(APIView):
         return success_response(data=LeadSerializer(assigned_lead).data, message="Lead assignment updated")
 
 
+class LeadOutcomeView(APIView):
+    def post(self, request, lead_id):
+        lead = get_object_or_404(Lead, id=lead_id, is_deleted=False)
+        serializer = LeadOutcomeSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        updated_lead = LeadService.close_outcome(
+            lead=lead,
+            status=serializer.validated_data["status"],
+            note=serializer.validated_data.get("note", ""),
+            actor=request.user,
+            request=request,
+        )
+        return success_response(data=LeadSerializer(updated_lead).data, message="Lead outcome saved")
+
+
 class LeadFollowUpListCreateView(APIView):
     def get(self, request, lead_id):
         lead = get_object_or_404(Lead, id=lead_id, is_deleted=False)
@@ -140,3 +164,151 @@ class FollowUpQueueView(APIView):
             )
 
         return success_response(data=LeadFollowUpSerializer(queryset[:200], many=True).data)
+
+
+class ProjectClientListCreateView(APIView):
+    def get(self, request):
+        ProjectClientService.sync_won_project_leads(actor=request.user)
+        queryset = get_project_clients_queryset()
+        search = request.query_params.get("search")
+        if search:
+            queryset = queryset.filter(
+                Q(client_number__icontains=search)
+                | Q(company_name__icontains=search)
+                | Q(project_name__icontains=search)
+                | Q(source_lead__lead_number__icontains=search)
+            )
+        return success_response(data=ProjectClientSerializer(queryset[:200], many=True).data)
+
+    def post(self, request):
+        serializer = ProjectClientCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        client = ProjectClientService.create_client(
+            data=serializer.validated_data,
+            actor=request.user,
+            request=request,
+        )
+        return success_response(
+            data=ProjectClientSerializer(client).data,
+            message="Project client created successfully",
+            status_code=status.HTTP_201_CREATED,
+        )
+
+
+class ClientContactCreateView(APIView):
+    def post(self, request, client_id):
+        client = get_object_or_404(get_project_clients_queryset(), id=client_id)
+        serializer = ClientContactCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        contact = ProjectClientService.create_contact(
+            client=client,
+            data=serializer.validated_data,
+            actor=request.user,
+            request=request,
+        )
+        return success_response(
+            data=ClientContactSerializer(contact).data,
+            message="Client contact added successfully",
+            status_code=status.HTTP_201_CREATED,
+        )
+
+
+class ProjectHandoffListCreateView(APIView):
+    def get(self, request):
+        queryset = get_project_handoffs_queryset()
+        client_id = request.query_params.get("client_id")
+        if client_id:
+            queryset = queryset.filter(client_id=client_id)
+        return success_response(data=ProjectHandoffSerializer(queryset[:200], many=True).data)
+
+    def post(self, request):
+        serializer = ProjectHandoffCreateUpdateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        client = get_object_or_404(get_project_clients_queryset(), id=serializer.validated_data["client_id"])
+        project = ProjectClientService.create_or_update_project_handoff(
+            client=client,
+            data=serializer.validated_data,
+            actor=request.user,
+            request=request,
+        )
+        return success_response(
+            data=ProjectHandoffSerializer(project).data,
+            message="Project handoff created successfully",
+            status_code=status.HTTP_201_CREATED,
+        )
+
+
+class ProjectHandoffDetailView(APIView):
+    def put(self, request, project_id):
+        project = get_object_or_404(get_project_handoffs_queryset(), id=project_id)
+        serializer = ProjectHandoffCreateUpdateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        client = get_object_or_404(get_project_clients_queryset(), id=serializer.validated_data["client_id"])
+        updated_project = ProjectClientService.create_or_update_project_handoff(
+            project=project,
+            client=client,
+            data=serializer.validated_data,
+            actor=request.user,
+            request=request,
+        )
+        return success_response(data=ProjectHandoffSerializer(updated_project).data, message="Project handoff updated successfully")
+
+
+class ProjectAgreementListCreateView(APIView):
+    def get(self, request):
+        queryset = get_project_agreements_queryset()
+        client_id = request.query_params.get("client_id")
+        project_handoff_id = request.query_params.get("project_handoff_id")
+        search = request.query_params.get("search")
+        if client_id:
+            queryset = queryset.filter(client_id=client_id)
+        if project_handoff_id:
+            queryset = queryset.filter(project_handoff_id=project_handoff_id)
+        if search:
+            queryset = queryset.filter(
+                Q(agreement_number__icontains=search)
+                | Q(client__company_name__icontains=search)
+                | Q(project_handoff__project_code__icontains=search)
+                | Q(attachment_name__icontains=search)
+            )
+        return success_response(data=ProjectAgreementSerializer(queryset[:200], many=True).data)
+
+    def post(self, request):
+        serializer = ProjectAgreementCreateUpdateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        client = get_object_or_404(get_project_clients_queryset(), id=serializer.validated_data["client_id"])
+        project_handoff = None
+        if serializer.validated_data.get("project_handoff_id"):
+            project_handoff = get_object_or_404(get_project_handoffs_queryset(), id=serializer.validated_data["project_handoff_id"])
+        agreement = ProjectAgreementService.create_or_update_agreement(
+            client=client,
+            project_handoff=project_handoff,
+            data=serializer.validated_data,
+            actor=request.user,
+            request=request,
+        )
+        return success_response(
+            data=ProjectAgreementSerializer(agreement).data,
+            message="Project agreement created successfully",
+            status_code=status.HTTP_201_CREATED,
+        )
+
+
+class ProjectAgreementDetailView(APIView):
+    def put(self, request, agreement_id):
+        agreement = get_object_or_404(get_project_agreements_queryset(), id=agreement_id)
+        serializer = ProjectAgreementCreateUpdateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        client = get_object_or_404(get_project_clients_queryset(), id=serializer.validated_data["client_id"])
+        project_handoff = None
+        if serializer.validated_data.get("project_handoff_id"):
+            project_handoff = get_object_or_404(get_project_handoffs_queryset(), id=serializer.validated_data["project_handoff_id"])
+        updated_agreement = ProjectAgreementService.create_or_update_agreement(
+            agreement=agreement,
+            client=client,
+            project_handoff=project_handoff,
+            data=serializer.validated_data,
+            actor=request.user,
+            request=request,
+        )
+        return success_response(data=ProjectAgreementSerializer(updated_agreement).data, message="Project agreement updated successfully")

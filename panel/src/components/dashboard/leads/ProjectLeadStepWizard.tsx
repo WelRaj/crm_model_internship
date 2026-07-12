@@ -8,7 +8,7 @@ import Step3FollowUp from "./Step3FollowUp";
 import Step4Proposal from "./Step4Proposal";
 import Step5Approval from "./Step5Approval";
 import Step6LeadStatus from "./Step6LeadStatus";
-import { createLeadDraft, telecallers, type LeadDraft, type LeadDraftUpdater, type ProjectLead } from "./leadTypes";
+import { createLeadDraft, type LeadDraft, type LeadDraftUpdater, type ProjectLead } from "./leadTypes";
 
 const PROJECT_STEPS = [
   { id: 1, title: "Client Info", description: "Contact and source details", icon: Target },
@@ -55,7 +55,6 @@ export default function ProjectLeadStepWizard({ onBack, onSave }: { onBack: () =
 
   const handleComplete = (finalData: Partial<LeadDraft> = {}) => {
     const completedData = { ...formData, ...finalData, department: "Projects" as const };
-    const selectedTelecaller = telecallers.find((caller) => caller.name === completedData.assignedTo) || telecallers[0];
     const projectLead: ProjectLead = {
       id: completedData.leadId.replace("LEAD", "PRJ"),
       firstName: completedData.firstName || "Unnamed",
@@ -64,8 +63,8 @@ export default function ProjectLeadStepWizard({ onBack, onSave }: { onBack: () =
       email: completedData.personalEmail || completedData.officialEmail || "N/A",
       source: formatLeadSource(completedData.leadSource, completedData.sourceDetail),
       status: normalizeProjectStatus(completedData.status),
-      assignedTo: completedData.assignedTo || selectedTelecaller.name,
-      currentOwnerId: selectedTelecaller.id,
+      assignedTo: "Unassigned",
+      currentOwnerId: "",
       teamLeaderId: "TL-1",
       transferHistory: [],
       remarks: completedData.overallRemarks || completedData.remarks || completedData.projectDescription || "Project lead created from Lead Desk.",
