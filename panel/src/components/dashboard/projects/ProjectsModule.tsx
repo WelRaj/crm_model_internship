@@ -2,7 +2,7 @@
 
 import ProjectHub from "./ProjectHub";
 
-type ProjectView = "projects" | "team-tracking" | "tasks" | "milestones" | "deadlines";
+type ProjectView = "projects" | "team-tracking" | "tasks" | "milestones" | "deadlines" | "performance";
 
 export default function ProjectsModule({
   activeView = "projects",

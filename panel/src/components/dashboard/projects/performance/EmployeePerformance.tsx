@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useState, type ChangeEvent } from "react";
+import React, { useEffect, useMemo, useState, type ChangeEvent } from "react";
 import {
   AccountingPage,
   ActionButton,
@@ -32,6 +32,15 @@ import {
   X,
   Zap,
 } from "lucide-react";
+import { listUsers } from "@/services/accounts-api";
+import type { AuthUser } from "@/services/auth-api";
+import {
+  createEmployeePerformanceReview,
+  listEmployeePerformanceReviews,
+  updateEmployeePerformanceReview,
+  type EmployeePerformanceReviewPayload,
+  type EmployeePerformanceReviewRecord,
+} from "@/services/projects-api";
 
 type PerformanceStatus = "Top Performer" | "Exceeds Expectations" | "Meets Expectations" | "Needs Improvement" | "Promotion Eligible" | "Archived";
 type ReviewCycle = "Q1 2026" | "Q2 2026" | "Q3 2026" | "Q4 2026";
@@ -64,6 +73,8 @@ interface CareerStats {
 
 interface EmployeePerformanceRecord {
   id: string;
+  backendUserId?: number;
+  backendManagerId?: number | null;
   employeeId: string;
   name: string;
   dept: string;
@@ -418,6 +429,71 @@ function riskTone(risk: AttritionRisk): "green" | "blue" | "amber" | "red" | "pu
   return "green";
 }
 
+function backendUserName(user?: AuthUser | null) {
+  return user?.full_name || [user?.first_name, user?.last_name].filter(Boolean).join(" ") || user?.email || "Unassigned";
+}
+
+function stageToBackend(stage: ReviewStage): EmployeePerformanceReviewRecord["review_stage"] {
+  if (stage === "Manager Review") return "manager_review";
+  if (stage === "HR Review") return "hr_review";
+  if (stage === "Finalized") return "finalized";
+  return "draft";
+}
+
+function statusToBackend(status: PerformanceStatus): EmployeePerformanceReviewRecord["status"] {
+  if (status === "Top Performer") return "top_performer";
+  if (status === "Exceeds Expectations") return "exceeds_expectations";
+  if (status === "Needs Improvement") return "needs_improvement";
+  if (status === "Promotion Eligible") return "promotion_eligible";
+  if (status === "Archived") return "archived";
+  return "meets_expectations";
+}
+
+function riskToBackend(risk: AttritionRisk): EmployeePerformanceReviewRecord["attrition_risk"] {
+  if (risk === "High") return "high";
+  if (risk === "Medium") return "medium";
+  return "low";
+}
+
+function reviewFromBackend(record: EmployeePerformanceReviewRecord): EmployeePerformanceRecord {
+  return {
+    id: record.id,
+    backendUserId: record.employee,
+    backendManagerId: record.manager,
+    employeeId: record.employee_detail?.employee_id || String(record.employee),
+    name: backendUserName(record.employee_detail),
+    dept: record.department || record.employee_detail?.department || "Operations",
+    role: record.designation || record.employee_detail?.designation || "Employee",
+    manager: backendUserName(record.manager_detail),
+    reviewCycle: record.review_cycle,
+    reviewStage: record.review_stage_label as ReviewStage,
+    goalsAssigned: record.goals_assigned,
+    goalsCompleted: record.goals_completed,
+    kpiScore: record.kpi_score,
+    taskCompletion: record.task_completion,
+    qualityScore: Number(record.quality_score),
+    attendanceScore: record.attendance_score,
+    rating: Number(record.rating),
+    status: record.status_label as PerformanceStatus,
+    lastReviewDate: record.last_review_date,
+    nextReviewDate: record.next_review_date,
+    managerNotes: record.manager_notes,
+    improvementPlan: record.improvement_plan,
+    metrics: record.metrics || [],
+    okrs: record.okrs || [],
+    feedback: {
+      manager: record.feedback?.manager || record.manager_notes,
+      peer: record.feedback?.peer || "Peer feedback pending.",
+      self: record.feedback?.self || "Self assessment pending.",
+    },
+    career: {
+      promotionReadiness: record.promotion_readiness,
+      attritionRisk: record.attrition_risk_label as AttritionRisk,
+      recommendedTraining: record.recommended_training || [],
+    },
+  };
+}
+
 function toForm(record: EmployeePerformanceRecord): PerformanceFormState {
   return {
     employeeId: record.employeeId,
@@ -494,6 +570,36 @@ function buildRecord(form: PerformanceFormState, existing?: EmployeePerformanceR
       attritionRisk: form.attritionRisk,
       recommendedTraining: form.recommendedTraining.split(",").map((item) => item.trim()).filter(Boolean),
     },
+  };
+}
+
+function buildPayload(form: PerformanceFormState, employee: AuthUser, manager: AuthUser | null, existing?: EmployeePerformanceRecord): EmployeePerformanceReviewPayload {
+  const preview = buildRecord(form, existing);
+  return {
+    employee_id: employee.id,
+    manager_id: manager?.id ?? null,
+    department: form.dept,
+    designation: form.role,
+    review_cycle: form.reviewCycle,
+    review_stage: stageToBackend(form.reviewStage),
+    goals_assigned: form.goalsAssigned,
+    goals_completed: form.goalsCompleted,
+    kpi_score: form.kpiScore,
+    task_completion: form.taskCompletion,
+    quality_score: form.qualityScore.toFixed(1),
+    attendance_score: form.attendanceScore,
+    rating: form.rating.toFixed(1),
+    status: statusToBackend(form.status),
+    last_review_date: form.lastReviewDate,
+    next_review_date: form.nextReviewDate,
+    manager_notes: form.managerNotes,
+    improvement_plan: form.improvementPlan,
+    promotion_readiness: form.promotionReadiness,
+    attrition_risk: riskToBackend(form.attritionRisk),
+    recommended_training: preview.career.recommendedTraining,
+    metrics: preview.metrics,
+    okrs: preview.okrs,
+    feedback: preview.feedback,
   };
 }
 
@@ -663,7 +769,11 @@ function ProfileDrawer({
 }
 
 export default function EmployeePerformance() {
-  const [employees, setEmployees] = useState<EmployeePerformanceRecord[]>(initialEmployees);
+  void initialEmployees;
+  const [employees, setEmployees] = useState<EmployeePerformanceRecord[]>([]);
+  const [backendUsers, setBackendUsers] = useState<AuthUser[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [backendMessage, setBackendMessage] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [deptFilter, setDeptFilter] = useState("All");
   const [statusFilter, setStatusFilter] = useState<"All" | PerformanceStatus>("All");
@@ -673,6 +783,36 @@ export default function EmployeePerformance() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<PerformanceFormState>(blankPerformanceForm);
   const [formError, setFormError] = useState("");
+
+  const reloadReviews = async () => {
+    const reviews = await listEmployeePerformanceReviews();
+    setEmployees(reviews.map(reviewFromBackend));
+  };
+
+  useEffect(() => {
+    let isMounted = true;
+    const load = async () => {
+      setIsLoading(true);
+      setBackendMessage("");
+      try {
+        const [reviews, users] = await Promise.all([
+          listEmployeePerformanceReviews(),
+          listUsers({ status: "active", limit: 200 }),
+        ]);
+        if (!isMounted) return;
+        setEmployees(reviews.map(reviewFromBackend));
+        setBackendUsers(users.data);
+      } catch (error) {
+        if (isMounted) setBackendMessage(error instanceof Error ? error.message : "Unable to load performance reviews.");
+      } finally {
+        if (isMounted) setIsLoading(false);
+      }
+    };
+    load();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const filteredEmployees = useMemo(() => {
     const normalizedSearch = searchTerm.trim().toLowerCase();
@@ -721,6 +861,35 @@ export default function EmployeePerformance() {
     setForm((current) => ({ ...current, [field]: value }));
   };
 
+  const findBackendUser = (employeeIdOrName: string) => {
+    const query = employeeIdOrName.trim().toLowerCase();
+    return backendUsers.find((user) =>
+      String(user.id) === query ||
+      (user.employee_id || "").toLowerCase() === query ||
+      (user.full_name || "").toLowerCase() === query ||
+      [user.first_name, user.last_name].filter(Boolean).join(" ").toLowerCase() === query ||
+      (user.email || "").toLowerCase() === query
+    );
+  };
+
+  const handleEmployeeSelect = (employeeKey: string) => {
+    const user = findBackendUser(employeeKey);
+    if (!user) return;
+    setForm((current) => ({
+      ...current,
+      employeeId: user.employee_id || String(user.id),
+      name: backendUserName(user),
+      dept: user.department || current.dept,
+      role: user.designation || current.role,
+    }));
+  };
+
+  const handleManagerSelect = (managerKey: string) => {
+    const user = findBackendUser(managerKey);
+    if (!user) return;
+    setForm((current) => ({ ...current, manager: backendUserName(user) }));
+  };
+
   const validateForm = () => {
     if (!form.employeeId.trim() || !form.name.trim() || !form.dept.trim() || !form.role.trim() || !form.manager.trim() || !form.managerNotes.trim() || !form.improvementPlan.trim()) {
       setFormError("Employee ID, name, department, role, manager, manager notes and improvement plan are required.");
@@ -749,29 +918,49 @@ export default function EmployeePerformance() {
     return true;
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!validateForm()) return;
     const existing = employees.find((employee) => employee.id === editingId);
-    const record = buildRecord(form, existing);
-    setEmployees((current) => editingId ? current.map((employee) => employee.id === editingId ? record : employee) : [record, ...current]);
-    setSelectedEmployee((current) => current?.id === record.id ? record : current);
-    resetForm();
-    setShowForm(false);
+    const employee = existing?.backendUserId ? backendUsers.find((user) => user.id === existing.backendUserId) : findBackendUser(form.employeeId || form.name);
+    const manager = existing?.backendManagerId ? backendUsers.find((user) => user.id === existing.backendManagerId) || null : findBackendUser(form.manager) || null;
+    if (!employee) {
+      setFormError("Select a real backend employee before saving review.");
+      return;
+    }
+    try {
+      const payload = buildPayload(form, employee, manager, existing);
+      const saved = editingId
+        ? await updateEmployeePerformanceReview(editingId, payload)
+        : await createEmployeePerformanceReview(payload);
+      const record = reviewFromBackend(saved);
+      await reloadReviews();
+      setSelectedEmployee((current) => current?.id === record.id ? record : current);
+      setBackendMessage(editingId ? "Performance review updated in backend." : "Performance review saved to backend.");
+      resetForm();
+      setShowForm(false);
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : "Unable to save performance review.");
+    }
   };
 
-  const handleArchive = (employeeId: string) => {
-    setEmployees((current) =>
-      current.map((employee) =>
-        employee.id === employeeId
-          ? {
-              ...employee,
-              status: employee.status === "Archived" ? "Meets Expectations" : "Archived",
-              reviewStage: employee.status === "Archived" ? employee.reviewStage : "Finalized",
-              managerNotes: employee.status === "Archived" ? employee.managerNotes : `${employee.managerNotes} Archived from active performance directory.`,
-            }
-          : employee
-      )
-    );
+  const handleArchive = async (employeeId: string) => {
+    const employee = employees.find((item) => item.id === employeeId);
+    const backendEmployee = employee?.backendUserId ? backendUsers.find((user) => user.id === employee.backendUserId) : null;
+    if (!employee || !backendEmployee) return;
+    const restored = employee.status === "Archived";
+    const nextForm = toForm({
+      ...employee,
+      status: restored ? "Meets Expectations" : "Archived",
+      reviewStage: restored ? employee.reviewStage : "Finalized",
+      managerNotes: restored ? employee.managerNotes : `${employee.managerNotes} Archived from active performance directory.`,
+    });
+    try {
+      await updateEmployeePerformanceReview(employee.id, buildPayload(nextForm, backendEmployee, employee.backendManagerId ? backendUsers.find((user) => user.id === employee.backendManagerId) || null : null, employee));
+      await reloadReviews();
+      setBackendMessage(restored ? "Performance review restored in backend." : "Performance review archived in backend.");
+    } catch (error) {
+      setBackendMessage(error instanceof Error ? error.message : "Unable to archive performance review.");
+    }
   };
 
   const handleExport = () => {
@@ -825,6 +1014,17 @@ export default function EmployeePerformance() {
         </>
       }
     >
+      {isLoading ? (
+        <div className="rounded-2xl border border-blue-100 bg-blue-50 px-5 py-4 text-sm font-black text-blue-700">
+          Loading backend performance reviews...
+        </div>
+      ) : null}
+      {backendMessage ? (
+        <div className="rounded-2xl border border-slate-100 bg-slate-50 px-5 py-4 text-sm font-black text-slate-600">
+          {backendMessage}
+        </div>
+      ) : null}
+
       <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-5">
         <MetricCard label="Active Reviews" value={String(activeEmployees.length)} helper={`${filteredEmployees.length} visible after filters`} icon={Users} />
         <MetricCard label="Top Performers" value={String(topPerformers).padStart(2, "0")} helper="Current active cycle" icon={Trophy} />
@@ -870,11 +1070,11 @@ export default function EmployeePerformance() {
           </button>
           {formError ? <div className="mb-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-xs font-black text-red-700">{formError}</div> : null}
           <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
-            <Field label="Employee ID" value={form.employeeId} onChange={(event: ChangeEvent<HTMLInputElement>) => handleField("employeeId", event.target.value)} />
+            <Field label="Employee" options={backendUsers.map((user) => `${user.id} - ${user.employee_id || user.id} - ${backendUserName(user)}`)} value={form.employeeId ? `${form.employeeId} - ${form.name}` : ""} onChange={(event: ChangeEvent<HTMLSelectElement>) => handleEmployeeSelect(event.target.value.split(" - ")[0])} />
             <Field label="Employee Name" value={form.name} onChange={(event: ChangeEvent<HTMLInputElement>) => handleField("name", event.target.value)} />
             <Field label="Department" options={departments} value={form.dept} onChange={(event: ChangeEvent<HTMLSelectElement>) => handleField("dept", event.target.value)} />
             <Field label="Role" value={form.role} onChange={(event: ChangeEvent<HTMLInputElement>) => handleField("role", event.target.value)} />
-            <Field label="Manager" value={form.manager} onChange={(event: ChangeEvent<HTMLInputElement>) => handleField("manager", event.target.value)} />
+            <Field label="Manager" options={backendUsers.map((user) => `${user.id} - ${user.employee_id || user.id} - ${backendUserName(user)}`)} value={form.manager} onChange={(event: ChangeEvent<HTMLSelectElement>) => handleManagerSelect(event.target.value.split(" - ")[0])} />
             <Field label="Review Cycle" options={reviewCycles} value={form.reviewCycle} onChange={(event: ChangeEvent<HTMLSelectElement>) => handleField("reviewCycle", event.target.value as ReviewCycle)} />
             <Field label="Review Stage" options={reviewStages} value={form.reviewStage} onChange={(event: ChangeEvent<HTMLSelectElement>) => handleField("reviewStage", event.target.value as ReviewStage)} />
             <Field label="Status" options={performanceStatuses} value={form.status} onChange={(event: ChangeEvent<HTMLSelectElement>) => handleField("status", event.target.value as PerformanceStatus)} />

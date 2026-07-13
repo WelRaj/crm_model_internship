@@ -330,7 +330,16 @@ class LeadApiTests(APITestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(ProjectClient.objects.count(), 1)
-        self.assertEqual(ClientContact.objects.count(), 1)
+        self.assertEqual(ClientContact.objects.count(), 4)
+        self.assertEqual(
+            set(ClientContact.objects.values_list("role", flat=True)),
+            {
+                ClientContact.ContactRole.DECISION_MAKER,
+                ClientContact.ContactRole.TECHNICAL,
+                ClientContact.ContactRole.FINANCE,
+                ClientContact.ContactRole.DAILY_COORDINATOR,
+            },
+        )
         self.assertEqual(response.data["data"][0]["source_lead_detail"]["lead_number"], "LEAD-00061")
 
     def test_outcome_requires_completed_follow_up_and_is_idempotent(self):

@@ -24,6 +24,7 @@ urlpatterns = [
     path("api/v1/", include("apps.accounts.urls")),
     path("api/v1/", include("apps.audit.urls")),
     path("api/v1/", include("apps.crm.urls")),
+    path("api/v1/", include("apps.projects.urls")),
     path("api/v1/health/", health_check, name="health-check"),
     path("api/v1/health/db/", database_health_check, name="database-health-check"),
 ]

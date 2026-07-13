@@ -56,6 +56,54 @@ def _user_label(user):
     return user.get_full_name() or user.email or user.mobile or str(user.id)
 
 
+def _create_default_client_contacts(*, client, lead, actor):
+    contact_rows = [
+        {
+            "role": ClientContact.ContactRole.DECISION_MAKER,
+            "name": lead.contact_name,
+            "designation": "Project Sponsor",
+            "phone": lead.mobile,
+            "email": lead.email,
+            "responsibility": "Budget, scope approval, final sign-off",
+        },
+        {
+            "role": ClientContact.ContactRole.TECHNICAL,
+            "name": f"{lead.company_name or lead.contact_name} Technical Team",
+            "designation": "Technical Coordinator",
+            "phone": lead.mobile,
+            "email": lead.email,
+            "responsibility": "Technical requirement clarification and UAT coordination",
+        },
+        {
+            "role": ClientContact.ContactRole.FINANCE,
+            "name": f"{lead.company_name or lead.contact_name} Finance Team",
+            "designation": "Finance Coordinator",
+            "phone": lead.mobile,
+            "email": lead.email,
+            "responsibility": "Payment terms, invoice coordination, billing approval",
+        },
+        {
+            "role": ClientContact.ContactRole.DAILY_COORDINATOR,
+            "name": f"{lead.company_name or lead.contact_name} Daily Coordinator",
+            "designation": "Daily Coordinator",
+            "phone": lead.mobile,
+            "email": lead.email,
+            "responsibility": "Daily follow-up, meeting coordination, delivery communication",
+        },
+    ]
+    contacts = []
+    for row in contact_rows:
+        contacts.append(
+            ClientContact.objects.create(
+                client=client,
+                created_by=actor,
+                updated_by=actor,
+                **row,
+            )
+        )
+    return contacts
+
+
 def _active_lead_count(user):
     return Lead.objects.filter(
         assigned_to=user,
@@ -340,17 +388,7 @@ class ProjectClientService:
                 created_by=actor,
                 updated_by=actor,
             )
-            ClientContact.objects.create(
-                client=client,
-                role=ClientContact.ContactRole.DECISION_MAKER,
-                name=lead.contact_name,
-                designation="Project Sponsor",
-                phone=lead.mobile,
-                email=lead.email,
-                responsibility="Budget, scope approval, final sign-off",
-                created_by=actor,
-                updated_by=actor,
-            )
+            _create_default_client_contacts(client=client, lead=lead, actor=actor)
             clients.append(client)
         return clients
 

@@ -1,6 +1,3 @@
-export const projectHandoffStorageKey = "crm_created_projects";
-export const projectHandoffEventName = "crm-created-projects-updated";
-
 export type ProjectPriority = "Low" | "Medium" | "High" | "Critical";
 export type BillingModel = "Fixed Cost" | "Milestone Based" | "Monthly Retainer";
 export type DeliveryMethod = "Agile" | "Waterfall" | "Hybrid";

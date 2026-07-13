@@ -1,6 +1,6 @@
 # Backend Information
 
-Last updated: 2026-07-10
+Last updated: 2026-07-13
 
 ## 1. Purpose
 
@@ -66,7 +66,7 @@ Current status:
 - Local `.env` is configured.
 - MySQL database `crmproduct` is created.
 - Foundation migrations are applied to MySQL.
-- Database currently has 25 tables.
+- Database currently has 36 tables after CRM and Projects foundation migrations.
 - Login, refresh, logout, current user, profile, and login history API views are implemented.
 - Health and database health endpoints return 200 locally.
 - First local admin/user is created.
@@ -104,6 +104,17 @@ Current status:
 - Lead Outcomes now immediately syncs project leads into Project Clients when a completed-follow-up project lead is saved as `won`.
 - Client Operations full verification seed data includes 5 trading leads (`LEAD-00014`, `LEAD-00016`, `LEAD-00018`, `LEAD-00020`, `LEAD-00022`) and 5 project leads (`LEAD-00015`, `LEAD-00017`, `LEAD-00019`, `LEAD-00021`, `LEAD-00023`) created through backend services for end-to-end testing.
 - Legal Agreements verification data includes 5 project handoffs (`PRJ-COPS-VERIFY-002` to `PRJ-COPS-VERIFY-006`) and 5 active agreements (`AGR-00001` to `AGR-00005`) linked to `ACC-24002` to `ACC-24006`.
+- Projects / Delivery Operations backend foundation is started with a dedicated `projects` app, registered in Django settings and API URLs.
+- Projects foundation models and local migration are created/applied: `DeliveryProject`, `ProjectTeamAssignment`, `ProjectMilestone`, `ProjectTask`, and `ProjectDeadline`.
+- Projects app now supports signed handoff-to-delivery conversion: `POST /api/v1/projects/` creates a delivery project only from an active signed CRM project handoff, blocks duplicate handoff conversion, writes audit logs, and auto-adds the selected project manager as a team assignment.
+- Projects detail/update backend flow is started with `GET/PUT /api/v1/projects/{id}/`.
+- Projects delivery operations APIs are implemented for team assignment, milestones, tasks, task status updates, and deadlines. Project detail now returns child team/milestone/task/deadline records so frontend can keep the delivery workspace smooth without duplicate API calls.
+- Real DB delivery smoke data is attached to `PRJ-00001`: team assignment, milestone, task, task completion update, and deadline were created through backend APIs and verified through project detail.
+- Frontend Projects integration is started through centralized `panel/src/services/projects-api.ts`; `ProjectHub` now loads backend delivery projects, renders nested team/milestone/task/deadline records, and saves project updates, team assignments, milestones, task creates, and task updates through the backend wrapper instead of direct component fetch calls.
+- Delivery Projects frontend create flow now uses backend project handoff selection: the create modal lists CRM project handoffs, prefills client/project data, and calls `POST /api/v1/projects/`; backend remains responsible for active agreement validation and duplicate handoff blocking.
+- Delivery Projects manual deadline create now calls `POST /api/v1/projects/{id}/deadlines/` through centralized `projects-api.ts`; deadline update/delete remains intentionally unimplemented until matching backend endpoints exist.
+- Lead-to-delivery verification data includes 10 lead-sourced records (`LEAD-00024` to `LEAD-00033`) flowing through Project Clients (`ACC-24007` to `ACC-24016`), Project Handoffs (`PRJ-LEAD-VERIFY-001` to `PRJ-LEAD-VERIFY-010`), Agreements (`AGR-00006` to `AGR-00015`), and Delivery Projects (`PRJ-00002` to `PRJ-00011`).
+- Project Client auto-sync now creates all required contact roles for won project leads: Decision Maker, Technical, Finance, and Daily Coordinator. Existing 10 lead-to-delivery verification clients were backfilled so each role filter has 10 records.
 
 ## 4. Production Architecture Reference
 
@@ -285,7 +296,55 @@ Frontend component
 | `project_milestones` | Milestones | Phase/milestone tracking |
 | `project_deadlines` | Deadlines | Critical date tracking |
 | `project_client_contacts` | Projects, Client Operations | Client technical contact relation |
-| `employee_performance_reviews` | Performance | Employee performance records |
+| `employee_performance_reviews` | Team Performance | Employee performance records |
+
+Projects / Delivery Operations backend plan:
+
+| Phase | Scope | Backend Contract |
+| --- | --- | --- |
+| 1. Foundation | Convert signed CRM handoffs into delivery projects | `DeliveryProject` linked to `crm.ProjectHandoff` and `crm.ProjectClient`, with project number, manager, status, priority, health, dates, progress, billing/delivery metadata |
+| 2. Team | Assign delivery owners and members | `ProjectTeamAssignment` with user, role, allocation, start/end dates, unique project-user-role guard |
+| 3. Milestones | Track project phases and payment-ready phases | `ProjectMilestone` with ordered sequence, due date, status, completion timestamp, milestone value |
+| 4. Tasks | Track execution work | `ProjectTask` with task number, milestone link, assignee, status, priority, due date, estimated/actual hours |
+| 5. Deadlines | Track critical delivery dates | `ProjectDeadline` with severity, status, due date, optional milestone link |
+| 6. API/UI | Connect frontend Delivery Projects pages | Centralized frontend `src/services/projects-api.ts`; backend `/api/v1/projects/` endpoints only, no duplicate project APIs |
+
+Canonical Delivery Projects page names:
+
+| Page Name | Backend Domain |
+| --- | --- |
+| Project Portfolio | Delivery project master records, signed handoff conversion, status, health, progress, owner, and project schedule |
+| Team Assignment | Delivery team member assignment, allocation, roles, task ownership, and project manager ownership |
+| Tasks | Project task execution, assignee, priority, status, due date, and work-hour tracking |
+| Milestones | Project phase tracking, milestone status, due dates, milestone value, and billing readiness |
+| Deadlines | Critical project, milestone, task, and manual deadline tracking |
+| Team Performance | Delivery team performance review and productivity tracking |
+
+Project Portfolio page action audit:
+
+| UI Action | Expected Response | Verified Status |
+| --- | --- | --- |
+| Search/filter portfolio | `GET /api/v1/projects/?search=...` returns matching backend delivery projects | Verified with `Lead Delivery Verify`, returned 10 records |
+| New Project | Opens signed CRM handoff selector; create calls `POST /api/v1/projects/`; backend validates active agreement and blocks duplicate handoffs | Verified duplicate and missing handoff return 400 |
+| Edit | Opens project modal; save calls `PUT /api/v1/projects/{id}/` for name/status/health/progress/dates | Verified on `PRJ-00002` |
+| Archive | Calls `PUT /api/v1/projects/{id}/` with backend status `cancelled` | Verified on `PRJ-00002` |
+| Restore | Calls `PUT /api/v1/projects/{id}/` with backend status `planning` or active recovery state | Verified and restored `PRJ-00002` to `active/on_track/5` |
+| Export | Exports currently filtered frontend rows to CSV only; no backend mutation | Frontend-only, safe action |
+| Clear Filters | Clears frontend search/status/health filters only; no backend mutation | Frontend-only, safe action |
+
+Planned Projects APIs:
+
+| Method | Endpoint | Purpose |
+| --- | --- | --- |
+| `GET` | `/api/v1/projects/` | List delivery projects with search/status filters |
+| `POST` | `/api/v1/projects/` | Create delivery project from a signed CRM project handoff |
+| `GET` | `/api/v1/projects/{id}/` | Fetch project detail with team, milestones, tasks, and deadlines |
+| `PUT` | `/api/v1/projects/{id}/` | Update project metadata/status/progress |
+| `POST` | `/api/v1/projects/{id}/team/` | Assign or update project team member |
+| `POST` | `/api/v1/projects/{id}/milestones/` | Create project milestone |
+| `POST` | `/api/v1/projects/{id}/tasks/` | Create project task |
+| `PUT` | `/api/v1/projects/tasks/{id}/` | Update task status/assignee/dates/hours |
+| `POST` | `/api/v1/projects/{id}/deadlines/` | Create critical project deadline |
 
 ### Finance
 
@@ -532,6 +591,106 @@ Canonical Client Operations page names:
 | Project Clients | Won project client records, contacts, and project handoffs |
 | Legal Agreements | Project agreement drafting and signing workflow |
 
+Implemented Projects / Delivery Operations APIs:
+
+| Method | Endpoint | Purpose |
+| --- | --- | --- |
+| `GET` | `/api/v1/projects/` | List delivery projects with search and status filters |
+| `POST` | `/api/v1/projects/` | Create a delivery project from an active signed CRM project handoff |
+| `GET` | `/api/v1/projects/{id}/` | Fetch delivery project detail |
+| `PUT` | `/api/v1/projects/{id}/` | Update delivery project status, manager, dates, health, and progress |
+| `POST` | `/api/v1/projects/{id}/team/` | Assign or update a project team member |
+| `DELETE` | `/api/v1/projects/team/{id}/` | Soft-remove a project team assignment with audit log |
+| `POST` | `/api/v1/projects/{id}/milestones/` | Create a project milestone |
+| `PUT` | `/api/v1/projects/milestones/{id}/` | Update project milestone status, due date, amount, sequence, and completion timestamp |
+| `POST` | `/api/v1/projects/{id}/tasks/` | Create a project task |
+| `PUT` | `/api/v1/projects/tasks/{id}/` | Update project task status, assignee, due date, priority, and hours |
+| `DELETE` | `/api/v1/projects/tasks/{id}/` | Soft-remove a project task with audit log |
+| `POST` | `/api/v1/projects/{id}/deadlines/` | Create a critical project deadline |
+| `PUT` | `/api/v1/projects/deadlines/{id}/` | Update project deadline title, date, severity, status, and notes |
+| `GET` | `/api/v1/projects/performance-reviews/` | List employee performance reviews with search, department, status, and cycle filters |
+| `POST` | `/api/v1/projects/performance-reviews/` | Create an employee performance review linked to a backend active user |
+| `PUT` | `/api/v1/projects/performance-reviews/{id}/` | Update review stage, scores, status, manager notes, career signals, and archive/restore state |
+
+Canonical Delivery Projects page names:
+
+| Page Name | Backend Domain |
+| --- | --- |
+| Project Portfolio | Delivery project register and project lifecycle |
+| Team Assignment | Team lead, employee assignment, task ownership, and allocation tracking |
+| Tasks | Project task register and task execution |
+| Milestones | Delivery milestone and billing readiness tracking |
+| Deadlines | Delivery deadline, risk, and escalation tracking |
+| Team Performance | Delivery performance review and metrics |
+
+Team Assignment page action audit:
+
+| Action | Backend Status |
+| --- | --- |
+| Search/filter assignments | Frontend filters backend-loaded delivery projects, team assignments, and tasks |
+| Export | Exports currently filtered backend-loaded rows to CSV |
+| Clear Filters | Resets local filters only; no backend mutation needed |
+| Assign Member | Uses backend active users and calls centralized `assignProjectTeamMember` plus `createProjectTask` |
+| Edit assignment row | Upserts the same backend assignment; repeated saves update the same record instead of duplicating |
+| Done/task update | Calls centralized `updateProjectTask` and persists completion/status |
+| Remove assignment row | Calls `DELETE /api/v1/projects/team/{id}/` and soft-deletes with audit |
+| Remove task row | Calls `DELETE /api/v1/projects/tasks/{id}/` and soft-deletes with audit |
+| Set Team Leader | Updates delivery project manager and saves a `team_lead` assignment through backend APIs |
+
+Tasks page action audit:
+
+| Action | Backend Status |
+| --- | --- |
+| Search/filter tasks | Frontend filters backend-loaded task rows only; team assignment rows are excluded |
+| Export | Exports currently filtered backend task rows to CSV |
+| Clear Filters | Resets local filters only; no backend mutation needed |
+| New Task | Calls centralized `createProjectTask`; no team assignment side effect is created from the Tasks page |
+| Edit task | Calls centralized `updateProjectTask` and persists title, description, status, priority, assignee, and due date |
+| Done | Calls centralized `updateProjectTask` with `done`; backend writes `completed_at` |
+| Remove | Calls `DELETE /api/v1/projects/tasks/{id}/`; task is soft-deleted, audit logged, and removed from project detail output |
+| Metrics | Active, completed, critical, and overdue counts are calculated from backend task rows only |
+
+Milestones page action audit:
+
+| Action | Backend Status |
+| --- | --- |
+| Search/filter milestones | Frontend filters backend-loaded milestones by project, status, billing event, and search text |
+| Export | Exports currently filtered backend milestone rows to CSV |
+| Clear Filters | Resets local filters only; no backend mutation needed |
+| New Milestone | Calls centralized `createProjectMilestone` and persists milestone value, sequence, status, due date, and description |
+| Edit milestone | Calls centralized `updateProjectMilestone` and persists title, description, status, sequence, due date, and amount |
+| Complete | Calls centralized `updateProjectMilestone` with `completed`; backend writes `completed_at`; local billing-event draft is queued only for visible workflow handoff |
+| Archive/Restore | Calls centralized `updateProjectMilestone`; archive maps to backend `blocked`, restore maps to backend `planned` |
+| Metrics | Active, completed, ready billing, overdue, and queue counts are calculated from backend milestone rows and current date |
+
+Deadlines page action audit:
+
+| Action | Backend Status |
+| --- | --- |
+| Search/filter deadlines | Frontend filters backend-loaded project, milestone, task, and manual deadline rows |
+| Export | Exports currently filtered deadline rows to CSV |
+| Clear Filters | Resets local filters only; no backend mutation needed |
+| New Deadline | Calls centralized `createProjectDeadline` and persists manual deadline title, due date, severity, status, and notes |
+| Edit manual deadline | Calls centralized `updateProjectDeadline` and persists changed title, owner/notes, due date, priority/severity, and status |
+| Resolve | Calls centralized `updateProjectDeadline` with backend status `met` |
+| Archive/Restore | Calls centralized `updateProjectDeadline`; archive maps to `extended`, restore maps to `open` |
+| Linked project/milestone/task deadlines | Displayed as derived read-only rows; source changes happen through their owning project, milestone, or task page |
+| Metrics | Active, overdue, critical, and next-seven-days counts use backend-loaded rows and current date |
+
+Team Performance page action audit:
+
+| Action | Backend Status |
+| --- | --- |
+| Load performance directory | Calls centralized `listEmployeePerformanceReviews` and renders backend records only |
+| Search/filter reviews | Frontend filters backend-loaded reviews by employee, department, status, and review cycle |
+| Export | Exports currently filtered backend review rows to CSV |
+| Clear Filters | Resets local filters only; no backend mutation needed |
+| New Review | Uses backend active users and calls centralized `createEmployeePerformanceReview` |
+| Edit Review | Calls centralized `updateEmployeePerformanceReview` and persists scores, stage, notes, dates, feedback, OKRs, and career signals |
+| Archive/Restore | Calls centralized `updateEmployeePerformanceReview`; archive maps to backend `archived`, restore maps to `meets_expectations` |
+| View Drawer | Displays the selected backend-loaded review detail without mutation |
+| Metrics | Active reviews, top performers, average rating, coaching needs, and promotion-ready counts use backend-loaded records |
+
 ## 13. Session Resume Checklist
 
 When starting a new backend session:
@@ -601,3 +760,17 @@ Session continuity rule:
 | 2026-07-12 | Fixed Lead Outcomes to create Project Clients immediately when a project lead is saved as `won`; verified `LEAD-00013` synced to `ACC-24001` and added regression coverage. |
 | 2026-07-12 | Ran Client Operations end-to-end verification from starting flow with 5 trading and 5 project leads: created leads, assigned owners, saved done follow-ups, saved outcomes, and verified all 5 project leads synced into Project Clients (`ACC-24002` to `ACC-24006`). |
 | 2026-07-12 | Completed Legal Agreements verification for the same 5 project clients: created project handoffs, active signed agreements, verified `/api/v1/project-agreements/` returns all 5 records, and reran backend CRM tests plus frontend TypeScript/lint. |
+| 2026-07-13 | Read backend continuity and architecture docs, planned Projects / Delivery Operations backend, created and registered the `projects` app, added delivery project/team/milestone/task/deadline models, generated/applied `projects.0001_initial`, and verified system check plus projects model test. |
+| 2026-07-13 | Added signed handoff-to-delivery project backend flow with `POST /api/v1/projects/`, `GET/PUT /api/v1/projects/{id}/`, active agreement validation, duplicate handoff guard, project manager team auto-assignment, audit logs, and regression coverage. |
+| 2026-07-13 | Added Projects delivery operations APIs for team assignment, milestones, tasks, task updates, and deadlines with service-layer mutations, validation, audit logs, nested project detail output, regression tests, and real DB smoke verification on `PRJ-00001`. |
+| 2026-07-13 | Connected Delivery Projects frontend to backend through centralized `projects-api.ts`; ProjectHub now loads backend projects and routes project updates, team assignment, milestone creation, task creation, and task updates through backend APIs; frontend TypeScript/lint and backend projects/CRM tests passed. |
+| 2026-07-13 | Connected Delivery Projects create modal to backend signed handoff flow and wired manual deadline creation to backend deadline API; frontend TypeScript/lint and backend projects/CRM tests passed. |
+| 2026-07-13 | Verified 10 lead-sourced records end to end from Lead -> Won Outcome -> Project Client -> Handoff -> Active Agreement -> Delivery Project; `/api/v1/projects/?search=Lead Delivery Verify` returned all 10 records and frontend/backend checks passed. |
+| 2026-07-13 | Fixed Project Clients contact role filters by creating default Technical, Finance, and Daily Coordinator contacts during won lead sync; backfilled the 10 lead-to-delivery verification clients and verified role counts plus regression tests. |
+| 2026-07-13 | Standardized canonical Delivery Projects page names and completed Project Portfolio page action audit: search/filter, new project validation, edit, archive, restore, export, and clear filters were checked; backend/frontend regression passed. |
+| 2026-07-13 | Completed Team Assignment page audit: active backend user dropdowns, duplicate-safe assignment upsert, backend team leader save, assignment/task update, soft-remove APIs for team assignments and tasks, audit logs, live DB smoke verification, projects/CRM tests, TypeScript, lint, and Django check passed. |
+| 2026-07-13 | Completed Tasks page audit: task list now shows backend task records only, New Task creates a task without assignment side effects, owner dropdown uses backend active users, edit/done/remove are centralized backend API calls, overdue metrics use current date, live DB smoke passed, and frontend TypeScript/lint plus backend tests passed. |
+| 2026-07-13 | Completed Milestones page audit: added milestone update backend endpoint, connected edit/complete/archive/restore to centralized frontend API, completion now persists `completed_at`, archive/restore maps cleanly to backend status, overdue metrics use current date, live DB smoke passed, and frontend/backend regression passed. |
+| 2026-07-13 | Completed Deadlines page audit: added deadline update backend endpoint, mapped backend manual deadlines into the UI, connected edit/resolve/archive/restore through centralized frontend API, kept linked project/milestone/task deadlines read-only, fixed metrics to use current date, live DB smoke passed, and frontend/backend regression passed. |
+| 2026-07-13 | Completed Team Performance page audit: added employee performance review model/migration/API, connected frontend review list/create/edit/archive/restore through centralized project API wrappers, linked reviews to backend active users, applied local migration, live DB smoke passed, and frontend/backend regression passed. |
+| 2026-07-13 | Fixed Delivery Projects source consistency: removed old local handoff/localStorage merge from ProjectHub so Project Portfolio and Team Assignment both render the same backend delivery-project source of truth only. |

@@ -11,7 +11,29 @@ import {
 import { 
   ActionButton, DataTable, StatusBadge, Panel, MetricCard, ProgressBar, Field 
 } from "../accounting/AccountingComponents";
-import { projectHandoffEventName, projectHandoffStorageKey, type ClientContactSnapshot, type CreatedProjectRecord } from "./projectHandoff";
+import { type ClientContactSnapshot } from "./projectHandoff";
+import { listUsers } from "@/services/accounts-api";
+import type { AuthUser } from "@/services/auth-api";
+import { listProjectHandoffs, type ProjectHandoffRecord } from "@/services/leads-api";
+import {
+  assignProjectTeamMember,
+  createDeliveryProject,
+  createProjectDeadline,
+  createProjectMilestone,
+  createProjectTask,
+  deleteProjectTask,
+  listDeliveryProjects,
+  removeProjectTeamAssignment,
+  updateDeliveryProject,
+  updateProjectDeadline,
+  updateProjectMilestone,
+  updateProjectTask,
+  type DeliveryProjectRecord,
+  type ProjectDeadlineRecord,
+  type ProjectMilestoneRecord,
+  type ProjectTaskRecord,
+  type ProjectTeamAssignmentRecord,
+} from "@/services/projects-api";
 
 // --- Types ---
 interface TeamMember {
@@ -28,6 +50,9 @@ interface TeamMember {
   comment: string;
   attachment: string;
   history: string[];
+  recordType?: "assignment" | "task";
+  backendUserId?: number | null;
+  backendRole?: ProjectTeamAssignmentRecord["role"];
 }
 
 type MilestoneStatus = "Pending" | "In Progress" | "Completed" | "Archived";
@@ -56,6 +81,7 @@ interface Project {
   name: string;
   clientId: string;
   client: string;
+  sourceHandoffId?: string | null;
   sourceLeadId: string;
   teamLeader: string;
   teamLeaderId?: string;
@@ -69,12 +95,14 @@ interface Project {
   endDate: string;   
   team: TeamMember[];
   milestones: Milestone[];
+  deadlines: DeadlineRecord[];
   totalValue: number;
   nextAction: string;
   clientContacts?: ClientContactSnapshot[];
 }
 
 interface ProjectFormState {
+  projectHandoffId: string;
   name: string;
   clientId: string;
   client: string;
@@ -160,6 +188,24 @@ interface DeadlineFormState {
   nextAction: string;
 }
 
+const deliveryProjectPageLabels: Record<string, string> = {
+  projects: "Project Portfolio",
+  "team-tracking": "Team Assignment",
+  tasks: "Tasks",
+  milestones: "Milestones",
+  deadlines: "Deadlines",
+  performance: "Team Performance",
+};
+
+const deliveryProjectPageDescriptions: Record<string, string> = {
+  projects: "Delivery control for software projects and fintech client engagements.",
+  "team-tracking": "Assign team leaders, internal members, and client coordination links.",
+  tasks: "Track project tasks, owners, priority, status, and due dates.",
+  milestones: "Track delivery milestones, billing readiness, owners, and due dates.",
+  deadlines: "Track project, milestone, task, and manual delivery deadlines.",
+  performance: "Track delivery team performance and review outcomes.",
+};
+
 // --- Initial Mock Data ---
 const initialProjects: Project[] = [
   {
@@ -188,7 +234,8 @@ const initialProjects: Project[] = [
       { id: "MS1", title: "UI Final Sign-off", status: "Completed", progress: 100, amount: 300000, billed: true, dueDate: "2024-05-20", owner: "Aman Gupta", nextAction: "Confirm invoice payment receipt", billingEventStatus: "Billed", completedAt: "2024-05-20" },
       { id: "MS2", title: "API Backend Alpha", status: "In Progress", progress: 60, amount: 500000, billed: false, dueDate: "2024-06-25", owner: "Neha Sharma", nextAction: "Finish loan rules QA and backend demo", billingEventStatus: "Not Ready" },
       { id: "MS3", title: "Beta Launch", status: "Pending", progress: 0, amount: 700000, billed: false, dueDate: "2024-07-20", owner: "Priya Menon", nextAction: "Lock beta scope after API alpha", billingEventStatus: "Not Ready" },
-    ]
+    ],
+    deadlines: []
   },
   {
     id: "PRJ-002",
@@ -213,7 +260,8 @@ const initialProjects: Project[] = [
     milestones: [
       { id: "MS4", title: "Requirement Discovery", status: "Completed", progress: 100, amount: 200000, billed: true, dueDate: "2024-06-15", owner: "Sunita Sharma", nextAction: "Share signed discovery notes with billing", billingEventStatus: "Billed", completedAt: "2024-06-15" },
       { id: "MS5", title: "UX Wireframes", status: "In Progress", progress: 20, amount: 400000, billed: false, dueDate: "2024-07-15", owner: "Swati Joshi", nextAction: "Complete mobile and checkout wireframes", billingEventStatus: "Not Ready" },
-    ]
+    ],
+    deadlines: []
   }
 ];
 
@@ -231,16 +279,9 @@ const knownClients = [
   { id: "ACC-24004", name: "Orbit HR Tech" },
 ];
 const teamLeaders = ["Vikram Rathore", "Sunita Sharma", "Rajesh Kumar", "Anjali Singh", "Priya Menon"];
-const employeeDirectory = [
-  { id: "EMP-101", name: "Aman Gupta", role: "Frontend Dev" },
-  { id: "EMP-102", name: "Neha Sharma", role: "Backend Dev" },
-  { id: "EMP-103", name: "Rahul Verma", role: "Full Stack" },
-  { id: "EMP-104", name: "Swati Joshi", role: "UI/UX Designer" },
-  { id: "EMP-105", name: "Karan Malhotra", role: "QA Engineer" },
-  { id: "EMP-106", name: "Meera Iyer", role: "Project Coordinator" },
-];
 
 const blankProjectForm: ProjectFormState = {
+  projectHandoffId: "",
   name: "",
   clientId: "",
   client: "",
@@ -293,76 +334,161 @@ function makeProjectId(count: number) {
   return `PRJ-${String(count + 1).padStart(3, "0")}`;
 }
 
-function readCreatedProjectRecords(): CreatedProjectRecord[] {
-  if (typeof window === "undefined") return [];
-
-  try {
-    const parsed = JSON.parse(window.localStorage.getItem(projectHandoffStorageKey) || "[]");
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter((project): project is CreatedProjectRecord => Boolean(project?.projectId && project?.clientId && project?.sourceLeadId));
-  } catch {
-    return [];
-  }
+function backendStatusToProjectStatus(status: DeliveryProjectRecord["status"]): ProjectStatus {
+  if (status === "active") return "Development";
+  if (status === "on_hold") return "On Hold";
+  if (status === "completed") return "Completed";
+  if (status === "cancelled") return "Archived";
+  return "Planning";
 }
 
-function makeProjectFromHandoff(record: CreatedProjectRecord): Project {
+function projectStatusToBackend(status: ProjectStatus): DeliveryProjectRecord["status"] {
+  if (status === "Development" || status === "UAT") return "active";
+  if (status === "On Hold") return "on_hold";
+  if (status === "Completed") return "completed";
+  if (status === "Archived") return "cancelled";
+  return "planning";
+}
+
+function backendHealthToProjectHealth(health: DeliveryProjectRecord["health_status"]): ProjectHealth {
+  if (health === "at_risk") return "At Risk";
+  if (health === "delayed") return "Delayed";
+  return "On Track";
+}
+
+function projectHealthToBackend(health: ProjectHealth): DeliveryProjectRecord["health_status"] {
+  if (health === "At Risk") return "at_risk";
+  if (health === "Delayed") return "delayed";
+  return "on_track";
+}
+
+function backendPriorityToUi(priority: string): TeamMember["priority"] {
+  if (priority === "critical") return "Critical";
+  if (priority === "high") return "High";
+  if (priority === "low") return "Low";
+  return "Medium";
+}
+
+function uiPriorityToBackend(priority: TeamMember["priority"]): "low" | "medium" | "high" | "critical" {
+  if (priority === "Critical") return "critical";
+  if (priority === "High") return "high";
+  if (priority === "Low") return "low";
+  return "medium";
+}
+
+function teamRoleToBackend(role: string): ProjectTeamAssignmentRecord["role"] {
+  const normalized = role.toLowerCase();
+  if (normalized.includes("lead")) return "team_lead";
+  if (normalized.includes("qa") || normalized.includes("test")) return "qa";
+  if (normalized.includes("design") || normalized.includes("ui") || normalized.includes("ux")) return "designer";
+  if (normalized.includes("devops") || normalized.includes("infra")) return "devops";
+  if (normalized.includes("analyst") || normalized.includes("ba")) return "business_analyst";
+  if (normalized.includes("manager") || normalized.includes("pm")) return "project_manager";
+  return "developer";
+}
+
+function backendMilestoneStatusToUi(status: ProjectMilestoneRecord["status"]): MilestoneStatus {
+  if (status === "completed") return "Completed";
+  if (status === "in_progress") return "In Progress";
+  if (status === "blocked") return "Archived";
+  return "Pending";
+}
+
+function uiMilestoneStatusToBackend(status: MilestoneStatus): ProjectMilestoneRecord["status"] {
+  if (status === "Completed") return "completed";
+  if (status === "In Progress") return "in_progress";
+  if (status === "Archived") return "blocked";
+  return "planned";
+}
+
+function backendUserName(user?: AuthUser | null) {
+  return user?.full_name || [user?.first_name, user?.last_name].filter(Boolean).join(" ") || user?.email || "Unassigned";
+}
+
+function teamMemberFromBackend(assignment: ProjectTeamAssignmentRecord): TeamMember {
   return {
-    id: record.projectId,
-    name: record.projectName,
-    clientId: record.clientId,
-    client: record.company,
-    sourceLeadId: record.sourceLeadId,
-    teamLeader: record.teamLeaderName || record.projectManager,
-    teamLeaderId: record.teamLeaderId,
-    teamLeaderName: record.teamLeaderName || record.projectManager,
-    projectOwner: record.projectOwner,
-    status: "Planning",
-    health: "New",
-    billingStatus: record.billingModel === "Milestone Based" ? "Milestone Billing" : "Not Started",
+    id: assignment.id,
+    employeeId: assignment.user_detail?.employee_id || String(assignment.user),
+    name: backendUserName(assignment.user_detail),
+    role: assignment.role_label,
+    assignedWork: assignment.notes || "Project delivery assignment",
+    startDate: assignment.start_date || "",
+    endDate: assignment.end_date || "",
     progress: 0,
-    startDate: record.startDate,
-    endDate: record.targetEndDate,
-    team: (record.teamAssignments || []).map((assignment) => ({
-      id: assignment.id,
-      employeeId: assignment.employeeId,
-      name: assignment.name,
-      role: assignment.role,
-      assignedWork: assignment.assignedWork,
-      startDate: assignment.startDate,
-      endDate: assignment.endDate,
-      progress: 0,
-      status: "Active",
-      priority: assignment.priority,
-      comment: assignment.connectionNote || `Coordinate with ${assignment.clientContactName}`,
-      attachment: "",
-      history: [`Assigned from Client Operations handoff to coordinate with ${assignment.clientContactName}`],
-    })),
-    milestones: [
-      {
-        id: `${record.projectId}-KICKOFF`,
-        title: "Project kickoff",
-        status: "Pending",
-        progress: 0,
-        amount: record.value,
-        billed: false,
-        dueDate: record.startDate,
-        owner: record.projectManager,
-        nextAction: "Assign delivery team and confirm kickoff checklist",
-        billingEventStatus: "Not Ready",
-      },
-    ],
-    totalValue: record.value,
-    nextAction: `Assign developer team. ${record.kickoffNotes}`,
-    clientContacts: record.clientContacts || [],
+    status: assignment.end_date ? "Completed" : "Active",
+    priority: "Medium",
+    comment: assignment.notes,
+    attachment: "",
+    history: [`Assigned as ${assignment.role_label}`],
+    recordType: "assignment",
+    backendUserId: assignment.user,
+    backendRole: assignment.role,
   };
 }
 
-function mergeHandoffProjects(currentProjects: Project[], records: CreatedProjectRecord[]) {
-  const handoffProjects = records.map(makeProjectFromHandoff);
-  const handoffProjectIds = new Set(handoffProjects.map((project) => project.id));
-  const handoffSourceLeadIds = new Set(handoffProjects.map((project) => project.sourceLeadId));
-  const unchangedProjects = currentProjects.filter((project) => !handoffProjectIds.has(project.id) && !handoffSourceLeadIds.has(project.sourceLeadId));
-  return [...handoffProjects, ...unchangedProjects];
+function milestoneFromBackend(milestone: ProjectMilestoneRecord): Milestone {
+  return {
+    id: milestone.id,
+    title: milestone.title,
+    status: backendMilestoneStatusToUi(milestone.status),
+    progress: milestone.status === "completed" ? 100 : milestone.status === "in_progress" ? 50 : 0,
+    amount: Number(milestone.milestone_value || 0),
+    billed: false,
+    dueDate: milestone.due_date,
+    owner: "Delivery Team",
+    nextAction: milestone.description || "Review milestone progress",
+    billingEventStatus: milestone.status === "completed" ? "Ready" : "Not Ready",
+    completedAt: milestone.completed_at?.split("T")[0],
+  };
+}
+
+function taskAsTeamMember(task: ProjectTaskRecord): TeamMember {
+  return {
+    id: task.id,
+    employeeId: task.assigned_to_detail?.employee_id || String(task.assigned_to || ""),
+    name: backendUserName(task.assigned_to_detail),
+    role: task.priority_label,
+    assignedWork: task.title,
+    startDate: task.created_at.split("T")[0],
+    endDate: task.due_date || "",
+    progress: task.status === "done" ? 100 : task.status === "in_progress" ? 50 : task.status === "review" ? 80 : 0,
+    status: task.status === "done" ? "Completed" : "Active",
+    priority: backendPriorityToUi(task.priority),
+    comment: task.description,
+    attachment: "",
+    history: [`Task ${task.task_number} loaded from backend`],
+    recordType: "task",
+    backendUserId: task.assigned_to,
+  };
+}
+
+function projectFromBackend(project: DeliveryProjectRecord): Project {
+  const client = project.client_detail;
+  const sourceLead = client.source_lead_detail;
+  return {
+    id: project.id,
+    name: project.name,
+    clientId: client.client_number,
+    client: client.company_name,
+    sourceHandoffId: project.source_handoff,
+    sourceLeadId: sourceLead?.lead_number || project.source_handoff_detail?.project_code || "Manual",
+    teamLeader: backendUserName(project.project_manager_detail),
+    teamLeaderId: project.project_manager ? String(project.project_manager) : undefined,
+    teamLeaderName: backendUserName(project.project_manager_detail),
+    projectOwner: client.project_owner || backendUserName(project.project_manager_detail),
+    status: backendStatusToProjectStatus(project.status),
+    health: backendHealthToProjectHealth(project.health_status),
+    billingStatus: project.billing_model === "Milestone Based" ? "Milestone Billing" : "Not Started",
+    progress: project.progress_percent,
+    startDate: project.start_date,
+    endDate: project.target_end_date,
+    team: [...project.team_assignments.map(teamMemberFromBackend), ...project.tasks.map(taskAsTeamMember)],
+    milestones: project.milestones.map(milestoneFromBackend),
+    deadlines: project.deadlines.map((deadline) => deadlineFromBackend(project, deadline)),
+    totalValue: Number(client.value || 0),
+    nextAction: project.description || "Review delivery plan and next milestone",
+    clientContacts: client.contacts,
+  };
 }
 
 function projectStatusTone(status: ProjectStatus): "green" | "blue" | "amber" | "red" | "purple" | "slate" {
@@ -408,16 +534,69 @@ function deadlineStatusTone(status: DeadlineStatus): "green" | "blue" | "amber" 
   return "amber";
 }
 
+function deadlinePriorityToSeverity(priority: DeadlinePriority): "info" | "warning" | "critical" {
+  if (priority === "Critical") return "critical";
+  if (priority === "Low") return "info";
+  return "warning";
+}
+
+function backendSeverityToDeadlinePriority(severity: ProjectDeadlineRecord["severity"]): DeadlinePriority {
+  if (severity === "critical") return "Critical";
+  if (severity === "info") return "Low";
+  return "High";
+}
+
+function deadlineStatusToBackend(status: DeadlineStatus): "open" | "met" | "missed" | "extended" {
+  if (status === "Resolved") return "met";
+  if (status === "Archived") return "extended";
+  return "open";
+}
+
+function backendDeadlineStatusToUi(status: ProjectDeadlineRecord["status"]): DeadlineStatus {
+  if (status === "met") return "Resolved";
+  if (status === "extended") return "Archived";
+  if (status === "missed") return "In Progress";
+  return "Open";
+}
+
+function parseDeadlineNotes(notes: string) {
+  const [owner, ...rest] = notes.split(" - ");
+  return {
+    owner: owner?.trim() || "Delivery Team",
+    nextAction: rest.join(" - ").trim() || notes || "Review deadline",
+  };
+}
+
+function deadlineFromBackend(project: DeliveryProjectRecord, deadline: ProjectDeadlineRecord): DeadlineRecord {
+  const parsedNotes = parseDeadlineNotes(deadline.notes);
+  return {
+    id: deadline.id,
+    projectId: project.id,
+    projectName: project.name,
+    client: project.client_detail.company_name,
+    source: "Manual",
+    title: deadline.title,
+    owner: parsedNotes.owner,
+    dueDate: deadline.due_date,
+    priority: backendSeverityToDeadlinePriority(deadline.severity),
+    status: backendDeadlineStatusToUi(deadline.status),
+    nextAction: parsedNotes.nextAction,
+    linkedRecordId: deadline.id,
+  };
+}
+
 // --- Sub-View Components ---
 
 function TeamTrackingView({
   projects,
+  users,
   onAddMember,
   onUpdateMember,
   onRemoveMember,
   onSetTeamLeader,
 }: {
   projects: Project[];
+  users: AuthUser[];
   onAddMember: (prjId: string, member: NewMemberForm) => void;
   onUpdateMember: (prjId: string, memberId: string, member: NewMemberForm) => void;
   onRemoveMember: (prjId: string, memberId: string) => void;
@@ -466,12 +645,12 @@ function TeamTrackingView({
   };
 
   const handleEmployeeSelect = (employeeId: string) => {
-    const employee = employeeDirectory.find((item) => item.id === employeeId);
+    const employee = users.find((item) => String(item.id) === employeeId || item.employee_id === employeeId);
     setNewMem((current) => ({
       ...current,
       employeeId,
-      name: employee?.name || current.name,
-      role: employee?.role || current.role,
+      name: backendUserName(employee) || current.name,
+      role: employee?.designation || current.role,
     }));
   };
 
@@ -619,14 +798,14 @@ function TeamTrackingView({
               <p className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-400">Team Leader</p>
               <h4 className="mt-1 text-sm font-black text-primary">Assign the project lead</h4>
               <select
-                value={employeeDirectory.find((employee) => employee.name === project.teamLeader)?.id || project.teamLeaderId || ""}
+                value={project.teamLeaderId || ""}
                 onChange={(event) => onSetTeamLeader(project.id, event.target.value)}
                 className="mt-4 h-11 w-full rounded-xl border border-border bg-white px-3 text-sm font-semibold text-primary outline-none focus:ring-4 focus:ring-primary/10"
               >
                 <option value="">Select team leader...</option>
-                {employeeDirectory.map((employee) => (
+                {users.map((employee) => (
                   <option key={employee.id} value={employee.id}>
-                    {employee.id} - {employee.name}
+                    {employee.employee_id || employee.id} - {backendUserName(employee)}
                   </option>
                 ))}
               </select>
@@ -639,7 +818,7 @@ function TeamTrackingView({
           {activeAddForm === project.id && (
              <div className="p-8 bg-slate-50 rounded-[2rem] border border-slate-100 mb-8 grid grid-cols-1 md:grid-cols-4 gap-6 animate-in slide-in-from-top-4 shadow-sm">
                 {memberError ? <div className="md:col-span-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-xs font-black text-red-700">{memberError}</div> : null}
-                <Field label="Employee" options={employeeDirectory.map((employee) => `${employee.id} - ${employee.name}`)} value={newMem.employeeId ? `${newMem.employeeId} - ${newMem.name}` : ""} onChange={(e: ChangeEvent<HTMLSelectElement>) => handleEmployeeSelect(e.target.value.split(" - ")[0])} />
+                <Field label="Employee" options={users.map((employee) => `${employee.id} - ${employee.employee_id || employee.id} - ${backendUserName(employee)}`)} value={newMem.employeeId ? `${newMem.employeeId} - ${newMem.name}` : ""} onChange={(e: ChangeEvent<HTMLSelectElement>) => handleEmployeeSelect(e.target.value.split(" - ")[0])} />
                 <Field label="Role" value={newMem.role} onChange={(e: ChangeEvent<HTMLInputElement>) => setNewMem({...newMem, role: e.target.value})} />
                 <Field label="Task Detail" value={newMem.task} onChange={(e: ChangeEvent<HTMLInputElement>) => setNewMem({...newMem, task: e.target.value})} />
                 <div className="grid grid-cols-2 gap-2">
@@ -696,12 +875,14 @@ function TeamTrackingView({
 
 function GlobalTasksTracker({
   projects,
-  onAddMember,
+  users,
+  onCreateTask,
   onUpdateMember,
   onRemoveMember,
 }: {
   projects: Project[];
-  onAddMember: (prjId: string, member: NewMemberForm) => void;
+  users: AuthUser[];
+  onCreateTask: (prjId: string, member: NewMemberForm) => void;
   onUpdateMember: (prjId: string, memberId: string, member: NewMemberForm) => void;
   onRemoveMember: (prjId: string, memberId: string) => void;
 }) {
@@ -715,7 +896,10 @@ function GlobalTasksTracker({
   const [statusFilter, setStatusFilter] = useState<"All" | TeamMember["status"]>("All");
   const [priorityFilter, setPriorityFilter] = useState<"All" | TeamMember["priority"]>("All");
 
-  const allTasks = useMemo(() => projects.flatMap(p => p.team.map(m => ({ ...m, projectId: p.id, projectName: p.name, client: p.client }))), [projects]);
+  const allTasks = useMemo(
+    () => projects.flatMap((project) => project.team.filter((member) => member.recordType === "task").map((member) => ({ ...member, projectId: project.id, projectName: project.name, client: project.client }))),
+    [projects]
+  );
   const filteredTasks = useMemo(() => {
     const normalizedSearch = searchTerm.trim().toLowerCase();
     return allTasks.filter((task) => {
@@ -739,7 +923,8 @@ function GlobalTasksTracker({
   const activeTasks = allTasks.filter((task) => task.status === "Active");
   const completedTasks = allTasks.filter((task) => task.status === "Completed").length;
   const criticalTasks = allTasks.filter((task) => task.priority === "Critical" && task.status === "Active").length;
-  const overdueTasks = allTasks.filter((task) => task.status === "Active" && task.endDate < "2026-06-23" && task.progress < 100).length;
+  const today = new Date().toISOString().slice(0, 10);
+  const overdueTasks = allTasks.filter((task) => task.status === "Active" && task.endDate && task.endDate < today && task.progress < 100).length;
 
   const resetTaskForm = () => {
     setTaskForm(blankMemberForm);
@@ -749,8 +934,8 @@ function GlobalTasksTracker({
   };
 
   const handleEmployeeSelect = (employeeId: string) => {
-    const employee = employeeDirectory.find((item) => item.id === employeeId);
-    setTaskForm((current) => ({ ...current, employeeId, name: employee?.name || current.name, role: employee?.role || current.role }));
+    const employee = users.find((item) => String(item.id) === employeeId || item.employee_id === employeeId);
+    setTaskForm((current) => ({ ...current, employeeId, name: backendUserName(employee) || current.name, role: employee?.designation || current.role }));
   };
 
   const validateTask = () => {
@@ -774,7 +959,7 @@ function GlobalTasksTracker({
     if (editingTask) {
       onUpdateMember(editingTask.projectId, editingTask.taskId, taskForm);
     } else {
-      onAddMember(targetProjectId, taskForm);
+      onCreateTask(targetProjectId, taskForm);
     }
     resetTaskForm();
     setShowTaskForm(false);
@@ -850,7 +1035,7 @@ function GlobalTasksTracker({
           {taskError ? <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-xs font-black text-red-700">{taskError}</div> : null}
           <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
             <Field label="Project" options={projects.map((project) => `${project.id} - ${project.name}`)} value={targetProjectId ? `${targetProjectId} - ${projects.find((project) => project.id === targetProjectId)?.name || ""}` : ""} onChange={(e: ChangeEvent<HTMLSelectElement>) => setTargetProjectId(e.target.value.split(" - ")[0])} />
-            <Field label="Owner" options={employeeDirectory.map((employee) => `${employee.id} - ${employee.name}`)} value={taskForm.employeeId ? `${taskForm.employeeId} - ${taskForm.name}` : ""} onChange={(e: ChangeEvent<HTMLSelectElement>) => handleEmployeeSelect(e.target.value.split(" - ")[0])} />
+            <Field label="Owner" options={users.map((employee) => `${employee.id} - ${employee.employee_id || employee.id} - ${backendUserName(employee)}`)} value={taskForm.employeeId ? `${taskForm.employeeId} - ${taskForm.name}` : ""} onChange={(e: ChangeEvent<HTMLSelectElement>) => handleEmployeeSelect(e.target.value.split(" - ")[0])} />
             <Field label="Role" value={taskForm.role} onChange={(e: ChangeEvent<HTMLInputElement>) => setTaskForm({ ...taskForm, role: e.target.value })} />
             <Field label="Task" value={taskForm.task} onChange={(e: ChangeEvent<HTMLInputElement>) => setTaskForm({ ...taskForm, task: e.target.value })} />
             <Field label="Start Date" type="date" value={taskForm.start} onChange={(e: ChangeEvent<HTMLInputElement>) => setTaskForm({ ...taskForm, start: e.target.value })} />
@@ -1022,7 +1207,8 @@ function MilestonesView({
   const activeMilestones = milestones.filter((milestone) => milestone.status !== "Archived");
   const completedMilestones = activeMilestones.filter((milestone) => milestone.status === "Completed").length;
   const readyForBilling = activeMilestones.filter((milestone) => milestone.billingEventStatus === "Ready" || milestone.billingEventStatus === "Queued").length;
-  const overdueMilestones = activeMilestones.filter((milestone) => milestone.status !== "Completed" && milestone.dueDate < "2026-06-23").length;
+  const today = new Date().toISOString().slice(0, 10);
+  const overdueMilestones = activeMilestones.filter((milestone) => milestone.status !== "Completed" && milestone.dueDate < today).length;
 
   const resetMilestoneForm = () => {
     setMilestoneForm({ ...blankMilestoneForm, projectId: projects[0]?.id || "" });
@@ -1162,7 +1348,7 @@ function MilestonesView({
               <td className="px-4 py-6 font-black text-primary text-sm">{milestone.owner}<br/><StatusBadge tone={milestoneStatusTone(milestone.status)}>{milestone.status}</StatusBadge></td>
               <td className="px-4 py-6 min-w-48">
                 <div className="mb-2 flex justify-between text-[10px] font-black uppercase text-slate-500"><span>{milestone.dueDate}</span><span>{milestone.progress}%</span></div>
-                <ProgressBar value={milestone.progress} tone={milestone.status === "Completed" ? "green" : milestone.dueDate < "2026-06-23" ? "red" : "blue"} />
+                <ProgressBar value={milestone.progress} tone={milestone.status === "Completed" ? "green" : milestone.dueDate < today ? "red" : "blue"} />
               </td>
               <td className="px-4 py-6 font-black text-primary text-sm">{formatCurrency(milestone.amount || 0)}<br/><StatusBadge tone={billingEventTone(milestone.billingEventStatus)}>{milestone.billingEventStatus}</StatusBadge></td>
               <td className="px-4 py-6 max-w-xs text-sm font-semibold text-slate-600">{milestone.nextAction}</td>
@@ -1285,6 +1471,7 @@ function DeadlinesHub({ projects, onExport }: { projects: Project[]; onExport: (
 
   const systemDeadlines = useMemo<DeadlineRecord[]>(() => {
     const records: DeadlineRecord[] = [];
+    const today = new Date().toISOString().slice(0, 10);
     projects.forEach((project) => {
       records.push({
         id: `${project.id}-deadline`,
@@ -1311,14 +1498,14 @@ function DeadlinesHub({ projects, onExport }: { projects: Project[]; onExport: (
           title: milestone.title,
           owner: milestone.owner,
           dueDate: milestone.dueDate,
-          priority: milestone.dueDate < "2026-06-23" && milestone.status !== "Completed" ? "Critical" : milestone.status === "In Progress" ? "High" : "Medium",
+          priority: milestone.dueDate < today && milestone.status !== "Completed" ? "Critical" : milestone.status === "In Progress" ? "High" : "Medium",
           status: milestone.status === "Completed" ? "Resolved" : milestone.status === "Archived" ? "Archived" : milestone.status === "In Progress" ? "In Progress" : "Open",
           nextAction: milestone.nextAction,
           linkedRecordId: milestone.id,
         });
       });
 
-      project.team.forEach((member) => {
+      project.team.filter((member) => member.recordType === "task").forEach((member) => {
         records.push({
           id: `${project.id}-${member.id}`,
           projectId: project.id,
@@ -1338,7 +1525,11 @@ function DeadlinesHub({ projects, onExport }: { projects: Project[]; onExport: (
     return records;
   }, [projects]);
 
-  const allDeadlines = useMemo(() => [...manualDeadlines, ...systemDeadlines], [manualDeadlines, systemDeadlines]);
+  const backendManualDeadlines = useMemo(() => projects.flatMap((project) => project.deadlines), [projects]);
+  const allDeadlines = useMemo(() => {
+    const localIds = new Set(manualDeadlines.map((deadline) => deadline.id));
+    return [...manualDeadlines, ...backendManualDeadlines.filter((deadline) => !localIds.has(deadline.id)), ...systemDeadlines];
+  }, [backendManualDeadlines, manualDeadlines, systemDeadlines]);
   const filteredDeadlines = useMemo(() => {
     const normalizedSearch = searchTerm.trim().toLowerCase();
     return allDeadlines.filter((deadline) => {
@@ -1361,10 +1552,20 @@ function DeadlinesHub({ projects, onExport }: { projects: Project[]; onExport: (
     });
   }, [allDeadlines, priorityFilter, projectFilter, searchTerm, sourceFilter, statusFilter]);
 
+  const deadlineWindow = useMemo(() => {
+    const current = new Date();
+    const next = new Date(current);
+    next.setDate(current.getDate() + 7);
+    return {
+      today: current.toISOString().slice(0, 10),
+      nextWeek: next.toISOString().slice(0, 10),
+    };
+  }, []);
+  const { today, nextWeek } = deadlineWindow;
   const activeDeadlines = allDeadlines.filter((deadline) => deadline.status !== "Resolved" && deadline.status !== "Archived");
-  const overdueDeadlines = activeDeadlines.filter((deadline) => deadline.dueDate < "2026-06-23").length;
+  const overdueDeadlines = activeDeadlines.filter((deadline) => deadline.dueDate < today).length;
   const criticalDeadlines = activeDeadlines.filter((deadline) => deadline.priority === "Critical").length;
-  const nextSevenDays = activeDeadlines.filter((deadline) => deadline.dueDate >= "2026-06-23" && deadline.dueDate <= "2026-06-30").length;
+  const nextSevenDays = activeDeadlines.filter((deadline) => deadline.dueDate >= today && deadline.dueDate <= nextWeek).length;
 
   const resetDeadlineForm = () => {
     setDeadlineForm({ ...blankDeadlineForm, projectId: projects[0]?.id || "" });
@@ -1380,30 +1581,73 @@ function DeadlinesHub({ projects, onExport }: { projects: Project[]; onExport: (
     return true;
   };
 
-  const handleSaveDeadline = () => {
+  const handleSaveDeadline = async () => {
     if (!validateDeadline()) return;
     const project = projects.find((item) => item.id === deadlineForm.projectId);
     if (!project) {
       setDeadlineError("Selected project was not found.");
       return;
     }
-    const record: DeadlineRecord = {
-      id: editingDeadlineId || `DL-${Date.now()}`,
-      projectId: project.id,
-      projectName: project.name,
-      client: project.client,
-      source: "Manual",
-      title: deadlineForm.title,
-      owner: deadlineForm.owner,
-      dueDate: deadlineForm.dueDate,
-      priority: deadlineForm.priority,
-      status: deadlineForm.status,
-      nextAction: deadlineForm.nextAction,
-      linkedRecordId: editingDeadlineId || "manual",
-    };
-    setManualDeadlines((current) => editingDeadlineId ? current.map((deadline) => deadline.id === editingDeadlineId ? record : deadline) : [record, ...current]);
-    resetDeadlineForm();
-    setShowDeadlineForm(false);
+    if (!editingDeadlineId) {
+      try {
+        const savedDeadline = await createProjectDeadline(project.id, {
+          title: deadlineForm.title.trim(),
+          due_date: deadlineForm.dueDate,
+          severity: deadlinePriorityToSeverity(deadlineForm.priority),
+          status: deadlineStatusToBackend(deadlineForm.status),
+          notes: `${deadlineForm.owner.trim()} - ${deadlineForm.nextAction.trim()}`,
+        });
+        const record: DeadlineRecord = {
+          id: savedDeadline.id,
+          projectId: project.id,
+          projectName: project.name,
+          client: project.client,
+          source: "Manual",
+          title: savedDeadline.title,
+          owner: deadlineForm.owner,
+          dueDate: savedDeadline.due_date,
+          priority: deadlineForm.priority,
+          status: deadlineForm.status,
+          nextAction: deadlineForm.nextAction,
+          linkedRecordId: savedDeadline.id,
+        };
+        setManualDeadlines((current) => [record, ...current]);
+        resetDeadlineForm();
+        setShowDeadlineForm(false);
+        return;
+      } catch (error) {
+        setDeadlineError(error instanceof Error ? error.message : "Unable to save deadline.");
+        return;
+      }
+    }
+    try {
+      const savedDeadline = await updateProjectDeadline(editingDeadlineId, {
+        title: deadlineForm.title.trim(),
+        due_date: deadlineForm.dueDate,
+        severity: deadlinePriorityToSeverity(deadlineForm.priority),
+        status: deadlineStatusToBackend(deadlineForm.status),
+        notes: `${deadlineForm.owner.trim()} - ${deadlineForm.nextAction.trim()}`,
+      });
+      const record: DeadlineRecord = {
+        id: savedDeadline.id,
+        projectId: project.id,
+        projectName: project.name,
+        client: project.client,
+        source: "Manual",
+        title: savedDeadline.title,
+        owner: deadlineForm.owner,
+        dueDate: savedDeadline.due_date,
+        priority: deadlineForm.priority,
+        status: deadlineForm.status,
+        nextAction: deadlineForm.nextAction,
+        linkedRecordId: savedDeadline.id,
+      };
+      setManualDeadlines((current) => current.some((deadline) => deadline.id === editingDeadlineId) ? current.map((deadline) => deadline.id === editingDeadlineId ? record : deadline) : [record, ...current]);
+      resetDeadlineForm();
+      setShowDeadlineForm(false);
+    } catch (error) {
+      setDeadlineError(error instanceof Error ? error.message : "Unable to update deadline.");
+    }
   };
 
   const handleEditDeadline = (deadline: DeadlineRecord) => {
@@ -1422,14 +1666,31 @@ function DeadlinesHub({ projects, onExport }: { projects: Project[]; onExport: (
     setShowDeadlineForm(true);
   };
 
-  const handleManualStatus = (deadlineId: string, status: DeadlineStatus) => {
-    setManualDeadlines((current) =>
-      current.map((deadline) =>
-        deadline.id === deadlineId
-          ? { ...deadline, status, nextAction: status === "Resolved" ? "Resolved by project team" : status === "Archived" ? "Archived from active deadline board" : deadline.nextAction }
-          : deadline
-      )
-    );
+  const handleManualStatus = async (deadlineId: string, status: DeadlineStatus) => {
+    const deadline = allDeadlines.find((item) => item.id === deadlineId);
+    if (!deadline || deadline.source !== "Manual") return;
+    const nextAction = status === "Resolved" ? "Resolved by project team" : status === "Archived" ? "Archived from active deadline board" : deadline.nextAction;
+    try {
+      const savedDeadline = await updateProjectDeadline(deadlineId, {
+        title: deadline.title,
+        due_date: deadline.dueDate,
+        severity: deadlinePriorityToSeverity(deadline.priority),
+        status: deadlineStatusToBackend(status),
+        notes: `${deadline.owner} - ${nextAction}`,
+      });
+      const record: DeadlineRecord = {
+        ...deadline,
+        title: savedDeadline.title,
+        dueDate: savedDeadline.due_date,
+        priority: deadline.priority,
+        status,
+        nextAction,
+        linkedRecordId: savedDeadline.id,
+      };
+      setManualDeadlines((current) => current.some((item) => item.id === deadlineId) ? current.map((item) => item.id === deadlineId ? record : item) : [record, ...current]);
+    } catch (error) {
+      setDeadlineError(error instanceof Error ? error.message : "Unable to update deadline status.");
+    }
   };
 
   const handleExport = () => {
@@ -1464,7 +1725,7 @@ function DeadlinesHub({ projects, onExport }: { projects: Project[]; onExport: (
         <MetricCard label="Active Deadlines" value={String(activeDeadlines.length)} helper={`${filteredDeadlines.length} visible after filters`} icon={Flag} />
         <MetricCard label="Overdue" value={String(overdueDeadlines).padStart(2, "0")} helper="Past due and unresolved" icon={AlertTriangle} />
         <MetricCard label="Critical" value={String(criticalDeadlines).padStart(2, "0")} helper="Marked critical priority" icon={ClipboardList} />
-        <MetricCard label="Next 7 Days" value={String(nextSevenDays).padStart(2, "0")} helper="Due by 30 Jun 2026" icon={CheckCircle2} />
+        <MetricCard label="Next 7 Days" value={String(nextSevenDays).padStart(2, "0")} helper={`Due by ${nextWeek}`} icon={CheckCircle2} />
       </div>
 
       {showDeadlineForm ? (
@@ -1521,7 +1782,7 @@ function DeadlinesHub({ projects, onExport }: { projects: Project[]; onExport: (
               <td className="px-4 py-6 font-black text-primary">{deadline.title}<br/><span className="text-[10px] text-slate-400 uppercase">{deadline.source} - {deadline.linkedRecordId}</span></td>
               <td className="px-4 py-6 font-bold text-slate-500 text-sm">{deadline.projectName}<br/><span className="text-[10px] text-slate-400 uppercase">{deadline.projectId} - {deadline.client}</span></td>
               <td className="px-4 py-6 font-black text-primary text-sm">{deadline.owner}</td>
-              <td className={`px-4 py-6 font-black ${deadline.dueDate < "2026-06-23" && deadline.status !== "Resolved" ? "text-red-600" : "text-primary"}`}>{deadline.dueDate}</td>
+              <td className={`px-4 py-6 font-black ${deadline.dueDate < today && deadline.status !== "Resolved" ? "text-red-600" : "text-primary"}`}>{deadline.dueDate}</td>
               <td className="px-4 py-6"><StatusBadge tone={deadlinePriorityTone(deadline.priority)}>{deadline.priority}</StatusBadge></td>
               <td className="px-4 py-6"><StatusBadge tone={deadlineStatusTone(deadline.status)}>{deadline.status}</StatusBadge></td>
               <td className="px-4 py-6 max-w-xs text-sm font-semibold text-slate-600">{deadline.nextAction}</td>
@@ -1558,7 +1819,13 @@ function DeadlinesHub({ projects, onExport }: { projects: Project[]; onExport: (
 // --- Main Hub Component ---
 
 export default function ProjectHub({ activeView = "projects" }: { activeView?: string }) {
-  const [projects, setProjects] = useState<Project[]>(initialProjects);
+  void initialProjects;
+  void makeProjectId;
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [backendUsers, setBackendUsers] = useState<AuthUser[]>([]);
+  const [projectHandoffs, setProjectHandoffs] = useState<ProjectHandoffRecord[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [backendMessage, setBackendMessage] = useState("");
   const [showAddPrj, setShowAddPrj] = useState(false);
   const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
   const [projectForm, setProjectForm] = useState<ProjectFormState>(blankProjectForm);
@@ -1569,18 +1836,29 @@ export default function ProjectHub({ activeView = "projects" }: { activeView?: s
   const [billingEvents, setBillingEvents] = useState<BillingEventDraft[]>([]);
 
   useEffect(() => {
-    const syncCreatedProjects = () => {
-      const records = readCreatedProjectRecords();
-      setProjects((current) => mergeHandoffProjects(current, records));
+    let isMounted = true;
+    const loadProjects = async () => {
+      setIsLoading(true);
+      setBackendMessage("");
+      try {
+        const [projectResponse, userResponse] = await Promise.all([
+          listDeliveryProjects(),
+          listUsers({ status: "active", limit: 200 }),
+        ]);
+        const handoffResponse = await listProjectHandoffs();
+        if (!isMounted) return;
+        setProjects(projectResponse.map(projectFromBackend));
+        setBackendUsers(userResponse.data);
+        setProjectHandoffs(handoffResponse);
+      } catch (error) {
+        if (isMounted) setBackendMessage(error instanceof Error ? error.message : "Unable to load delivery projects.");
+      } finally {
+        if (isMounted) setIsLoading(false);
+      }
     };
-
-    syncCreatedProjects();
-    window.addEventListener("storage", syncCreatedProjects);
-    window.addEventListener(projectHandoffEventName, syncCreatedProjects);
-
+    loadProjects();
     return () => {
-      window.removeEventListener("storage", syncCreatedProjects);
-      window.removeEventListener(projectHandoffEventName, syncCreatedProjects);
+      isMounted = false;
     };
   }, []);
 
@@ -1595,58 +1873,86 @@ export default function ProjectHub({ activeView = "projects" }: { activeView?: s
     URL.revokeObjectURL(url);
   };
 
-  const handleSaveMilestone = (projectId: string, milestoneId: string | null, milestone: MilestoneFormState) => {
-    const normalizedMilestone: Omit<Milestone, "id"> = {
-      title: milestone.title,
-      owner: milestone.owner,
-      status: milestone.status,
-      progress: milestone.status === "Completed" ? 100 : milestone.progress,
-      amount: milestone.amount,
-      dueDate: milestone.dueDate,
-      nextAction: milestone.nextAction,
-      billingEventStatus: milestone.status === "Completed" && milestone.billingEventStatus === "Not Ready" ? "Ready" : milestone.billingEventStatus,
-      billed: milestone.billingEventStatus === "Billed",
-      completedAt: milestone.status === "Completed" ? new Date().toISOString().split("T")[0] : undefined,
-    };
-
-    setProjects((current) =>
-      current.map((project) =>
-        project.id === projectId
-          ? {
-              ...project,
-              milestones: milestoneId
-                ? project.milestones.map((item) => item.id === milestoneId ? { ...item, ...normalizedMilestone, completedAt: normalizedMilestone.completedAt || item.completedAt } : item)
-                : [{ id: `MS${Date.now()}`, ...normalizedMilestone }, ...project.milestones],
-            }
-          : project
-      )
+  const findBackendUser = (employeeIdOrName: string) => {
+    const query = employeeIdOrName.trim().toLowerCase();
+    return backendUsers.find((user) =>
+      String(user.id) === query ||
+      (user.employee_id || "").toLowerCase() === query ||
+      (user.full_name || "").toLowerCase() === query ||
+      [user.first_name, user.last_name].filter(Boolean).join(" ").toLowerCase() === query ||
+      (user.email || "").toLowerCase() === query
     );
   };
 
-  const handleArchiveMilestone = (projectId: string, milestoneId: string) => {
-    setProjects((current) =>
-      current.map((project) =>
-        project.id === projectId
-          ? {
-              ...project,
-              milestones: project.milestones.map((milestone) =>
-                milestone.id === milestoneId
-                  ? {
-                      ...milestone,
-                      status: milestone.status === "Archived" ? "Pending" : "Archived",
-                      progress: milestone.status === "Archived" ? Math.min(milestone.progress, 99) : milestone.progress,
-                      billingEventStatus: milestone.status === "Archived" ? milestone.billingEventStatus : "Not Ready",
-                      nextAction: milestone.status === "Archived" ? "Review restored milestone and confirm owner" : "Archived from active milestone board",
-                    }
-                  : milestone
-              ),
-            }
-          : project
-      )
-    );
+  const reloadProjects = async () => {
+    const projectResponse = await listDeliveryProjects();
+    setProjects(projectResponse.map(projectFromBackend));
   };
 
-  const handleCompleteMilestone = (projectId: string, milestoneId: string) => {
+  const handleSaveMilestone = async (projectId: string, milestoneId: string | null, milestone: MilestoneFormState) => {
+    if (!milestone.title.trim() || !milestone.dueDate) {
+      setBackendMessage("Milestone title and due date are required.");
+      return;
+    }
+    if (!milestoneId) {
+      try {
+        const currentProject = projects.find((project) => project.id === projectId);
+        await createProjectMilestone(projectId, {
+          title: milestone.title.trim(),
+          description: milestone.nextAction.trim(),
+          status: uiMilestoneStatusToBackend(milestone.status),
+          sequence: (currentProject?.milestones.length || 0) + 1,
+          due_date: milestone.dueDate,
+          milestone_value: String(milestone.amount || 0),
+        });
+        await reloadProjects();
+        setBackendMessage("Milestone saved to backend.");
+        return;
+      } catch (error) {
+        setBackendMessage(error instanceof Error ? error.message : "Unable to save milestone.");
+        return;
+      }
+    }
+    try {
+      const currentProject = projects.find((project) => project.id === projectId);
+      const currentMilestone = currentProject?.milestones.find((item) => item.id === milestoneId);
+      await updateProjectMilestone(milestoneId, {
+        title: milestone.title.trim(),
+        description: milestone.nextAction.trim(),
+        status: uiMilestoneStatusToBackend(milestone.status),
+        sequence: currentMilestone ? currentProject!.milestones.findIndex((item) => item.id === milestoneId) + 1 : undefined,
+        due_date: milestone.dueDate,
+        milestone_value: String(milestone.amount || 0),
+      });
+      await reloadProjects();
+      setBackendMessage("Milestone updated in backend.");
+    } catch (error) {
+      setBackendMessage(error instanceof Error ? error.message : "Unable to update milestone.");
+    }
+  };
+
+  const handleArchiveMilestone = async (projectId: string, milestoneId: string) => {
+    const project = projects.find((item) => item.id === projectId);
+    const milestone = project?.milestones.find((item) => item.id === milestoneId);
+    if (!project || !milestone) return;
+    const restored = milestone.status === "Archived";
+    try {
+      await updateProjectMilestone(milestoneId, {
+        title: milestone.title,
+        description: restored ? "Review restored milestone and confirm owner" : "Archived from active milestone board",
+        status: restored ? "planned" : "blocked",
+        sequence: project.milestones.findIndex((item) => item.id === milestoneId) + 1,
+        due_date: milestone.dueDate,
+        milestone_value: String(milestone.amount || 0),
+      });
+      await reloadProjects();
+      setBackendMessage(restored ? "Milestone restored in backend." : "Milestone archived in backend.");
+    } catch (error) {
+      setBackendMessage(error instanceof Error ? error.message : "Unable to update milestone status.");
+    }
+  };
+
+  const handleCompleteMilestone = async (projectId: string, milestoneId: string) => {
     const project = projects.find((item) => item.id === projectId);
     const milestone = project?.milestones.find((item) => item.id === milestoneId);
     if (!project || !milestone) return;
@@ -1654,30 +1960,21 @@ export default function ProjectHub({ activeView = "projects" }: { activeView?: s
     const completedAt = new Date().toISOString().split("T")[0];
     const dueDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
     const shouldQueueBilling = Boolean(milestone.amount && milestone.amount > 0 && milestone.billingEventStatus !== "Billed");
-    const billingStatus: BillingEventStatus = shouldQueueBilling ? "Queued" : milestone.billingEventStatus;
-
-    setProjects((current) =>
-      current.map((item) =>
-        item.id === projectId
-          ? {
-              ...item,
-              milestones: item.milestones.map((existing) =>
-                existing.id === milestoneId
-                  ? {
-                      ...existing,
-                      status: "Completed",
-                      progress: 100,
-                      completedAt,
-                      billingEventStatus: billingStatus,
-                      billed: existing.billingEventStatus === "Billed",
-                      nextAction: shouldQueueBilling ? "Review queued billing event and raise invoice from accounting workflow" : "Completion verified; no billing amount configured",
-                    }
-                  : existing
-              ),
-            }
-          : item
-      )
-    );
+    try {
+      await updateProjectMilestone(milestoneId, {
+        title: milestone.title,
+        description: shouldQueueBilling ? "Review queued billing event and raise invoice from accounting workflow" : "Completion verified; no billing amount configured",
+        status: "completed",
+        sequence: project.milestones.findIndex((item) => item.id === milestoneId) + 1,
+        due_date: milestone.dueDate,
+        milestone_value: String(milestone.amount || 0),
+      });
+      await reloadProjects();
+      setBackendMessage("Milestone completed in backend.");
+    } catch (error) {
+      setBackendMessage(error instanceof Error ? error.message : "Unable to complete milestone.");
+      return;
+    }
 
     if (shouldQueueBilling) {
       const existingEventId = `${projectId}-${milestoneId}`;
@@ -1750,8 +2047,29 @@ export default function ProjectHub({ activeView = "projects" }: { activeView?: s
     setProjectForm((current) => ({ ...current, clientId, client: selectedClient?.name || current.client }));
   };
 
+  const handleProjectHandoffSelect = (handoffId: string) => {
+    const handoff = projectHandoffs.find((item) => item.id === handoffId);
+    const client = handoff?.client_detail;
+    setProjectForm((current) => ({
+      ...current,
+      projectHandoffId: handoffId,
+      name: client?.project_name || current.name,
+      clientId: client?.client_number || current.clientId,
+      client: client?.company_name || current.client,
+      sourceLeadId: client?.source_lead_detail?.lead_number || handoff?.project_code || current.sourceLeadId,
+      teamLeader: handoff?.project_manager || current.teamLeader,
+      projectOwner: client?.project_owner || handoff?.project_manager || current.projectOwner,
+      startDate: handoff?.start_date || current.startDate,
+      endDate: handoff?.target_end_date || current.endDate,
+      totalValue: Number(client?.value || current.totalValue || 0),
+      nextAction: handoff?.kickoff_notes || current.nextAction,
+      billingStatus: handoff?.billing_model === "Milestone Based" ? "Milestone Billing" : current.billingStatus,
+    }));
+  };
+
   const handleEditProject = (project: Project) => {
     setProjectForm({
+      projectHandoffId: "",
       name: project.name,
       clientId: project.clientId,
       client: project.client,
@@ -1772,8 +2090,12 @@ export default function ProjectHub({ activeView = "projects" }: { activeView?: s
     setShowAddPrj(true);
   };
 
-  const handleSaveProject = () => {
+  const handleSaveProject = async () => {
     const requiredFields = [projectForm.name, projectForm.client, projectForm.clientId, projectForm.sourceLeadId, projectForm.teamLeader, projectForm.projectOwner, projectForm.nextAction];
+    if (!editingProjectId && !projectForm.projectHandoffId) {
+      setProjectError("Select a signed CRM project handoff before creating a delivery project.");
+      return;
+    }
     if (requiredFields.some((field) => !field.trim())) {
       setProjectError("Project name, client link, source lead, team leader, owner and next action are required.");
       return;
@@ -1792,34 +2114,61 @@ export default function ProjectHub({ activeView = "projects" }: { activeView?: s
     }
 
     if (editingProjectId) {
-      setProjects((current) =>
-        current.map((project) =>
-          project.id === editingProjectId
-            ? { ...project, ...projectForm }
-            : project
-        )
-      );
+      try {
+        await updateDeliveryProject(editingProjectId, {
+          name: projectForm.name.trim(),
+          description: projectForm.nextAction.trim(),
+          status: projectStatusToBackend(projectForm.status),
+          health_status: projectHealthToBackend(projectForm.health),
+          progress_percent: projectForm.progress,
+          start_date: projectForm.startDate,
+          target_end_date: projectForm.endDate,
+        });
+        await reloadProjects();
+        setBackendMessage("Project updated in backend.");
+      } catch (error) {
+        setProjectError(error instanceof Error ? error.message : "Unable to update project.");
+        return;
+      }
     } else {
-      const prj: Project = {
-        ...projectForm,
-        id: makeProjectId(projects.length),
-        team: [],
-        milestones: [],
-      };
-      setProjects((current) => [prj, ...current]);
+      try {
+        const manager = findBackendUser(projectForm.teamLeader);
+        await createDeliveryProject({
+          project_handoff_id: projectForm.projectHandoffId,
+          name: projectForm.name.trim(),
+          description: projectForm.nextAction.trim(),
+          status: projectStatusToBackend(projectForm.status),
+          health_status: projectHealthToBackend(projectForm.health),
+          project_manager_id: manager?.id ?? null,
+          start_date: projectForm.startDate,
+          target_end_date: projectForm.endDate,
+          progress_percent: projectForm.progress,
+          billing_model: projectForm.billingStatus === "Milestone Billing" ? "Milestone Based" : "Fixed Cost",
+        });
+        await reloadProjects();
+        setBackendMessage("Delivery project created from signed handoff.");
+      } catch (error) {
+        setProjectError(error instanceof Error ? error.message : "Unable to create delivery project.");
+        return;
+      }
     }
     resetProjectForm();
     setShowAddPrj(false);
   };
 
-  const handleArchiveProject = (projectId: string) => {
-    setProjects((current) =>
-      current.map((project) =>
-        project.id === projectId
-          ? { ...project, status: project.status === "Archived" ? "Discovery" : "Archived", nextAction: project.status === "Archived" ? "Review restored project and confirm delivery owner" : "Archived from active project portfolio" }
-          : project
-      )
-    );
+  const handleArchiveProject = async (projectId: string) => {
+    const project = projects.find((item) => item.id === projectId);
+    if (!project) return;
+    try {
+      await updateDeliveryProject(projectId, {
+        status: project.status === "Archived" ? "planning" : "cancelled",
+        progress_percent: project.progress,
+      });
+      await reloadProjects();
+      setBackendMessage(project.status === "Archived" ? "Project restored." : "Project archived.");
+    } catch (error) {
+      setBackendMessage(error instanceof Error ? error.message : "Unable to update project status.");
+    }
   };
 
   const handleExportProjects = () => {
@@ -1855,95 +2204,152 @@ export default function ProjectHub({ activeView = "projects" }: { activeView?: s
     URL.revokeObjectURL(url);
   };
 
-  const handleAddMemberToProject = (prjId: string, member: NewMemberForm) => {
+  const handleAddMemberToProject = async (prjId: string, member: NewMemberForm) => {
     if (!member.name.trim() || !member.role.trim() || !member.task.trim() || !member.start || !member.end) return;
-    const mem: TeamMember = {
-      id: `M${Date.now()}`,
-      employeeId: member.employeeId,
-      name: member.name,
-      role: member.role,
-      assignedWork: member.task,
-      startDate: member.start,
-      endDate: member.end,
-      progress: member.progress,
-      status: member.status,
-      priority: member.priority,
-      comment: member.comment,
-      attachment: member.attachment,
-      history: [`Assigned to ${member.name}`],
-    };
-    setProjects(projects.map(p => p.id === prjId ? { ...p, team: [...p.team, mem] } : p));
+    const user = findBackendUser(member.employeeId || member.name);
+    if (!user) {
+      setBackendMessage("Backend user not found for this employee. Select/create a real backend employee first.");
+      return;
+    }
+    try {
+      await assignProjectTeamMember(prjId, {
+        user_id: user.id,
+        role: teamRoleToBackend(member.role),
+        allocation_percent: Math.max(1, Math.min(100, member.progress || 100)),
+        start_date: member.start,
+        end_date: member.status === "Completed" ? member.end : null,
+        notes: member.task || member.comment,
+      });
+      await createProjectTask(prjId, {
+        title: member.task,
+        description: member.comment,
+        status: member.status === "Completed" ? "done" : "todo",
+        priority: uiPriorityToBackend(member.priority),
+        assigned_to_id: user.id,
+        due_date: member.end,
+      });
+      await reloadProjects();
+      setBackendMessage("Team member and task saved to backend.");
+    } catch (error) {
+      setBackendMessage(error instanceof Error ? error.message : "Unable to save team assignment.");
+    }
   };
 
-  const handleSetTeamLeader = (projectId: string, employeeId: string) => {
-    const employee = employeeDirectory.find((item) => item.id === employeeId);
+  const handleCreateProjectTask = async (prjId: string, member: NewMemberForm) => {
+    if (!member.name.trim() || !member.task.trim() || !member.end) return;
+    const user = findBackendUser(member.employeeId || member.name);
+    if (!user) {
+      setBackendMessage("Backend user not found for this task owner. Select/create a real backend employee first.");
+      return;
+    }
+    try {
+      await createProjectTask(prjId, {
+        title: member.task.trim(),
+        description: member.comment.trim(),
+        status: member.status === "Completed" ? "done" : member.progress > 0 ? "in_progress" : "todo",
+        priority: uiPriorityToBackend(member.priority),
+        assigned_to_id: user.id,
+        due_date: member.end,
+      });
+      await reloadProjects();
+      setBackendMessage("Task saved to backend.");
+    } catch (error) {
+      setBackendMessage(error instanceof Error ? error.message : "Unable to save task.");
+    }
+  };
+
+  const handleSetTeamLeader = async (projectId: string, employeeId: string) => {
+    const employee = findBackendUser(employeeId);
     if (!employee) return;
-
-    setProjects((current) =>
-      current.map((project) =>
-        project.id === projectId
-          ? {
-              ...project,
-              teamLeaderId: employee.id,
-              teamLeaderName: employee.name,
-              teamLeader: employee.name,
-              nextAction: `Team leader assigned: ${employee.name}. Connect the team with client technical contacts before starting delivery.`,
-            }
-          : project,
-      ),
-    );
+    try {
+      const project = projects.find((item) => item.id === projectId);
+      await updateDeliveryProject(projectId, { project_manager_id: employee.id });
+      await assignProjectTeamMember(projectId, {
+        user_id: employee.id,
+        role: "team_lead",
+        allocation_percent: 100,
+        start_date: project?.startDate || undefined,
+        end_date: null,
+        notes: "Assigned as delivery team leader.",
+      });
+      await reloadProjects();
+      setBackendMessage("Team leader updated in backend.");
+    } catch (error) {
+      setBackendMessage(error instanceof Error ? error.message : "Unable to update team leader.");
+    }
   };
 
-  const handleUpdateMember = (prjId: string, memberId: string, member: NewMemberForm) => {
-    setProjects((current) =>
-      current.map((project) =>
-        project.id === prjId
-          ? {
-              ...project,
-              team: project.team.map((item) =>
-                item.id === memberId
-                  ? {
-                      ...item,
-                      employeeId: member.employeeId,
-                      name: member.name,
-                      role: member.role,
-                      assignedWork: member.task,
-                      startDate: member.start,
-                      endDate: member.end,
-                      progress: member.progress,
-                      status: member.status,
-                      priority: member.priority,
-                      comment: member.comment,
-                      attachment: member.attachment,
-                      history: [...item.history, `Updated ${new Date().toLocaleDateString("en-IN")}`],
-                    }
-                  : item
-              ),
-            }
-          : project
-      )
-    );
+  const handleUpdateMember = async (prjId: string, memberId: string, member: NewMemberForm) => {
+    const project = projects.find((item) => item.id === prjId);
+    const existingMember = project?.team.find((item) => item.id === memberId);
+    const user = existingMember?.backendUserId ? backendUsers.find((item) => item.id === existingMember.backendUserId) : findBackendUser(member.employeeId || member.name);
+    if (!user) {
+      setBackendMessage("Backend user not found for this team record.");
+      return;
+    }
+    try {
+      if (existingMember?.recordType === "assignment") {
+        await assignProjectTeamMember(prjId, {
+          user_id: user.id,
+          role: existingMember.backendRole || teamRoleToBackend(member.role),
+          allocation_percent: Math.max(1, Math.min(100, member.progress || 100)),
+          start_date: member.start,
+          end_date: member.status === "Completed" ? member.end : null,
+          notes: member.task || member.comment,
+        });
+      } else {
+        await updateProjectTask(memberId, {
+          title: member.task,
+          description: member.comment,
+          status: member.status === "Completed" ? "done" : member.progress > 0 ? "in_progress" : "todo",
+          priority: uiPriorityToBackend(member.priority),
+          assigned_to_id: user.id,
+          due_date: member.end,
+          actual_hours: member.status === "Completed" ? "1.00" : "0.00",
+        });
+      }
+      await reloadProjects();
+      setBackendMessage(existingMember?.recordType === "assignment" ? "Team assignment updated in backend." : "Task updated in backend.");
+    } catch (error) {
+      setBackendMessage(error instanceof Error ? error.message : "Unable to update team record.");
+    }
   };
 
-  const handleRemoveMember = (prjId: string, memberId: string) => {
-    setProjects((current) =>
-      current.map((project) =>
-        project.id === prjId
-          ? { ...project, team: project.team.filter((member) => member.id !== memberId) }
-          : project
-      )
-    );
+  const handleRemoveMember = async (prjId: string, memberId: string) => {
+    const project = projects.find((item) => item.id === prjId);
+    const member = project?.team.find((item) => item.id === memberId);
+    if (!member) return;
+    try {
+      if (member.recordType === "assignment") {
+        await removeProjectTeamAssignment(memberId);
+      } else {
+        await deleteProjectTask(memberId);
+      }
+      await reloadProjects();
+      setBackendMessage(member.recordType === "assignment" ? "Team assignment removed from backend." : "Task removed from backend.");
+    } catch (error) {
+      setBackendMessage(error instanceof Error ? error.message : "Unable to remove team record.");
+    }
   };
+
+  const usedHandoffIds = useMemo(
+    () => new Set(projects.map((project) => project.sourceHandoffId).filter(Boolean)),
+    [projects]
+  );
+  const availableProjectHandoffs = useMemo(
+    () => projectHandoffs.filter((handoff) => !usedHandoffIds.has(handoff.id)),
+    [projectHandoffs, usedHandoffIds]
+  );
 
   return (
     <div className="space-y-8 animate-in fade-in duration-700">
       <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
         <div>
-          <h2 className="text-4xl font-black text-primary tracking-tight capitalize">
-            {activeView === "team-tracking" ? "Team Assignment" : activeView === "projects" ? "Project Portfolio" : activeView.replace("-", " ")}
+          <h2 className="text-4xl font-black text-primary tracking-tight">
+            {deliveryProjectPageLabels[activeView] || "Project Portfolio"}
           </h2>
           <p className="text-slate-500 font-medium mt-1 text-lg">
-            {activeView === "team-tracking" ? "Assign team leaders, internal members, and client coordination links." : "Delivery control for software projects and fintech client engagements."}
+            {deliveryProjectPageDescriptions[activeView] || deliveryProjectPageDescriptions.projects}
           </p>
         </div>
         {activeView === "projects" && (
@@ -1954,6 +2360,17 @@ export default function ProjectHub({ activeView = "projects" }: { activeView?: s
           </div>
         )}
       </div>
+
+      {isLoading ? (
+        <div className="rounded-2xl border border-blue-100 bg-blue-50 px-5 py-4 text-sm font-black text-blue-700">
+          Loading backend delivery projects...
+        </div>
+      ) : null}
+      {backendMessage ? (
+        <div className="rounded-2xl border border-slate-100 bg-slate-50 px-5 py-4 text-sm font-black text-slate-600">
+          {backendMessage}
+        </div>
+      ) : null}
 
       {activeView === "projects" ? (
         <div className="space-y-6">
@@ -2024,13 +2441,20 @@ export default function ProjectHub({ activeView = "projects" }: { activeView?: s
       ) : activeView === "team-tracking" ? (
         <TeamTrackingView
           projects={projects}
+          users={backendUsers}
           onAddMember={handleAddMemberToProject}
           onUpdateMember={handleUpdateMember}
           onRemoveMember={handleRemoveMember}
           onSetTeamLeader={handleSetTeamLeader}
         />
       ) : activeView === "tasks" ? (
-        <GlobalTasksTracker projects={projects} onAddMember={handleAddMemberToProject} onUpdateMember={handleUpdateMember} onRemoveMember={handleRemoveMember} />
+        <GlobalTasksTracker
+          projects={projects}
+          users={backendUsers}
+          onCreateTask={handleCreateProjectTask}
+          onUpdateMember={handleUpdateMember}
+          onRemoveMember={handleRemoveMember}
+        />
       ) : activeView === "milestones" ? (
         <MilestonesView
           projects={projects}
@@ -2059,6 +2483,16 @@ export default function ProjectHub({ activeView = "projects" }: { activeView?: s
             </button>
             {projectError ? <div className="mt-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-xs font-black text-red-700">{projectError}</div> : null}
             <div className="grid grid-cols-1 gap-4 mt-6 md:grid-cols-3">
+               {!editingProjectId ? (
+                <select value={projectForm.projectHandoffId} onChange={(event) => handleProjectHandoffSelect(event.target.value)} disabled={availableProjectHandoffs.length === 0} className="md:col-span-3 h-11 rounded-xl border border-border bg-white px-3 text-sm font-semibold text-primary outline-none focus:ring-4 focus:ring-primary/10 disabled:bg-slate-100 disabled:text-slate-400">
+                  <option value="">{availableProjectHandoffs.length ? "Select available signed CRM project handoff..." : "No available signed CRM project handoff"}</option>
+                  {availableProjectHandoffs.map((handoff) => (
+                    <option key={handoff.id} value={handoff.id}>
+                      {handoff.project_code} - {handoff.client_detail.company_name} - {handoff.client_detail.project_name}
+                    </option>
+                  ))}
+                </select>
+               ) : null}
                <input value={projectForm.name} onChange={(event) => handleProjectField("name", event.target.value)} placeholder="Project name" className="h-11 rounded-xl border border-border px-3 text-sm font-semibold text-primary outline-none focus:ring-4 focus:ring-primary/10" />
                <select value={projectForm.clientId} onChange={(event) => handleClientSelect(event.target.value)} className="h-11 rounded-xl border border-border bg-white px-3 text-sm font-semibold text-primary outline-none focus:ring-4 focus:ring-primary/10">
                   <option value="">Select client account...</option>
