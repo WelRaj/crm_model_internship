@@ -691,6 +691,113 @@ Team Performance page action audit:
 | View Drawer | Displays the selected backend-loaded review detail without mutation |
 | Metrics | Active reviews, top performers, average rating, coaching needs, and promotion-ready counts use backend-loaded records |
 
+## 12.2 HRMS / People Operations Backend Status
+
+Canonical HRMS page names:
+
+- Employee Directory
+- Attendance
+- Leave Management
+- Payroll
+- Exit Process
+
+Implemented backend app:
+
+- `apps.hrms`
+
+Frontend integration rule:
+
+- All HRMS frontend calls must go through `panel/src/services/hrms-api.ts`.
+- `HRMSHub.tsx` must not call fetch or backend endpoints directly.
+- Backend is the source of truth; mock/local seed state is not the persistence layer.
+
+HRMS API endpoints:
+
+| Page | Endpoint |
+| --- | --- |
+| Employee Directory | `/api/v1/hrms/employees/` |
+| Employee Detail/Edit/Archive | `/api/v1/hrms/employees/{employee_id}/` |
+| Attendance | `/api/v1/hrms/attendance/` |
+| Attendance Update | `/api/v1/hrms/attendance/{attendance_id}/` |
+| Attendance Approve/Reject | `/api/v1/hrms/attendance/{attendance_id}/action/` |
+| Leave Management | `/api/v1/hrms/leaves/` |
+| Leave Approve/Reject/Cancel | `/api/v1/hrms/leaves/{leave_id}/action/` |
+| Payroll | `/api/v1/hrms/payroll-records/` |
+| Payroll Hold/Recheck/Release/Advance | `/api/v1/hrms/payroll-records/{payroll_id}/action/` |
+| Exit Process | `/api/v1/hrms/exits/` |
+| Exit Checklist/Handover Update | `/api/v1/hrms/exits/{exit_id}/` |
+| Exit Cancel/Complete | `/api/v1/hrms/exits/{exit_id}/action/` |
+
+HRMS backend rules:
+
+- Employee Directory reuses `accounts.User` and `accounts.UserProfile` for identity/profile data; HRMS-specific fields are stored in `employees`.
+- Employee ID, email, and mobile duplicates are blocked.
+- Attendance duplicate employee/date records are blocked at service and database level.
+- Payroll duplicate employee/month records are blocked at service and database level.
+- Leave overlap is blocked unless existing request is rejected/cancelled.
+- Leave approval moves Manager Review -> HR Review -> Approved.
+- HR-approved leave syncs attendance rows automatically.
+- Payroll is HR readiness only: attendance/leave blockers, LOP days, hold/recheck/release/staged approval.
+- Finance payout remains outside HRMS and should be handled by Accounting payroll.
+- Exit Process blocks duplicate active exits, locks completed/cancelled exits, and updates employee status to On Notice, Active, or Exited.
+
+HRMS verification completed:
+
+| Check | Result |
+| --- | --- |
+| Django system check | Passed |
+| `apps.hrms` regression tests | Passed, 5 tests |
+| Frontend TypeScript | Passed |
+| Frontend lint/build | Passed |
+| MySQL unsupported conditional unique warning | Fixed by normal unique constraints |
+
+HRMS button/API verification:
+
+| Page | Buttons/Controls Verified |
+| --- | --- |
+| Employee Directory | Add Employee, Edit, View, Offboard, Archive, Export, Clear Filters |
+| Attendance | Regularize, Update Regularization, Approve, Reject, Export, Clear Filters |
+| Leave Management | Apply Leave, Manager Approve, HR Approve, Reject, Cancel, Export, Clear Filters |
+| Payroll | New Payroll, HR Approve, Finance Approve, Mark Paid, Hold, Recheck, Release, Export, Clear Filters |
+| Exit Process | Start Exit, asset recovery toggles, access revoke toggle, department clearance toggles, handover slider, Cancel Exit, Complete Exit, Export, Clear Filters |
+
+HRMS page-by-page verification progress:
+
+| Page | Status | Notes |
+| --- | --- | --- |
+| Employee Directory | Verified | Add, Save, Update, View, Edit, Offboard, Archive, Export, Clear Filters, search/status filter, close/cancel checked; targeted API test includes create/edit/archive/offboard/list and passes. |
+| Attendance | Verified | Regularize, Update Regularization, Approve, Reject, Export, Clear Filters, search/status filter, close/cancel checked; readable employee code fixed for search/export; approved/auto-approved rows cannot be rejected from UI/API; targeted API test passes. |
+| Leave Management | Verified | Apply Leave, Save, Manager Approve, HR Approve, Reject, Cancel, Export, Clear Filters, search/status filter, close/cancel checked; readable employee code fixed for search/export; targeted API test covers approve/reject/cancel and passes. |
+| Payroll | Verified | New Payroll, Save, HR Approve, Finance Approve, Mark Paid, Hold, Recheck, Release, Export, Clear Filters, search/status filter, close/cancel checked; readable employee code fixed for search/export; backend blocks repeated hold/paid hold; targeted API test passes. |
+| Exit Process | Verified | Start Exit, Save, asset/access toggles, manager/HR/finance/IT clearance toggles, handover slider, Cancel Exit, Complete Exit, Export, Clear Filters, search/status filter, close/cancel checked; readable employee code fixed for search/export; targeted API test passes. |
+
+HRMS local DB process verification:
+
+| Item | Count / Result |
+| --- | --- |
+| Old HRMS table data before fresh run | 0 employees, 0 attendance, 0 leaves, 0 payroll, 0 exits |
+| Fresh verification employees | 20 (`HRMS-VERIFY-001` to `HRMS-VERIFY-020`) |
+| Attendance records | 28 total: 20 direct attendance + 8 approved-leave synced attendance rows |
+| Attendance status mix | 20 approved, 4 rejected, 4 pending |
+| Leave records | 20 total: 8 approved, 4 rejected, 4 cancelled, 4 manager review |
+| Payroll records | 20 total: 4 paid, 4 approved, 4 finance review, 8 hold |
+| Exit records | 5 total: 2 completed, 1 cancelled, 2 clearance |
+| Employee lifecycle result | 2 exited, 2 on notice, 16 active |
+| Verification commands | Django check passed; `apps.hrms` tests passed |
+
+HRMS manual browser verification:
+
+| Item | Result |
+| --- | --- |
+| Browser surface used | Headless Chrome remote-debug session against `http://localhost:3000/dashboard` |
+| Auth | Admin JWT injected into dashboard localStorage for verification only |
+| Employee Directory | Passed: 20 employees visible, View modal, Edit form, Export, Clear Filters checked |
+| Attendance | Passed: records visible, Regularize form, Approve/Reject buttons, Export checked |
+| Leave Management | Passed: records visible, Apply Leave form, approval/reject/cancel buttons, Export checked |
+| Payroll | Passed: records visible, New Payroll form, payroll action buttons, Export checked |
+| Exit Process | Passed: records visible, Start Exit form, asset/access controls, clearance controls, handover, cancel/complete controls, Export checked |
+| Screenshot artifact | `D:\crmproduct\hrms-browser-verification-final.png` |
+
 ## 13. Session Resume Checklist
 
 When starting a new backend session:
@@ -774,3 +881,8 @@ Session continuity rule:
 | 2026-07-13 | Completed Deadlines page audit: added deadline update backend endpoint, mapped backend manual deadlines into the UI, connected edit/resolve/archive/restore through centralized frontend API, kept linked project/milestone/task deadlines read-only, fixed metrics to use current date, live DB smoke passed, and frontend/backend regression passed. |
 | 2026-07-13 | Completed Team Performance page audit: added employee performance review model/migration/API, connected frontend review list/create/edit/archive/restore through centralized project API wrappers, linked reviews to backend active users, applied local migration, live DB smoke passed, and frontend/backend regression passed. |
 | 2026-07-13 | Fixed Delivery Projects source consistency: removed old local handoff/localStorage merge from ProjectHub so Project Portfolio and Team Assignment both render the same backend delivery-project source of truth only. |
+| 2026-07-13 | Implemented HRMS / People Operations backend app with Employee Directory, Attendance, Leave Management, HR payroll readiness, and Exit Process APIs; connected `HRMSHub.tsx` through centralized `hrms-api.ts`; added service-layer workflow rules, migration, admin registration, and 5 regression tests; applied local HRMS migration; verified Django check, HRMS tests, frontend TypeScript, lint, and production build. |
+| 2026-07-14 | Completed HRMS button-by-button backend verification: added Employee Directory Archive action, removed insecure default HRMS employee password, added API flow tests for Employee, Attendance, Leave, Payroll, and Exit visible actions; HRMS tests now cover 10 cases and pass along with Django check, frontend TypeScript, lint, and production build. |
+| 2026-07-14 | Completed HRMS page-by-page verification for Employee Directory, Attendance, Leave Management, Payroll, and Exit Process; fixed readable employee code search/export across Attendance, Leave, Payroll, and Exit; tightened Attendance/Payroll invalid action guards; full HRMS tests, frontend TypeScript, lint, and production build passed. |
+| 2026-07-14 | Cleaned local HRMS verification tables, created 20 fresh HRMS verification employees, ran them through attendance, leave, payroll, and exit flows, and confirmed expected counts/statuses in the local database; Django check and full HRMS tests passed after the data run. |
+| 2026-07-14 | Completed manual browser verification of HRMS pages with the 20 fresh employees using headless Chrome: Employee Directory, Attendance, Leave Management, Payroll, and Exit Process all rendered backend data and visible controls/forms correctly; saved screenshot artifact `hrms-browser-verification-final.png`. |

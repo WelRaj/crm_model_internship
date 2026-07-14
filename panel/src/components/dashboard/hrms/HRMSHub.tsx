@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type ComponentType, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ComponentType, type ReactNode } from "react";
 import {
   AlertTriangle,
   BadgeIndianRupee,
@@ -24,6 +24,31 @@ import {
   Wallet,
   X,
 } from "lucide-react";
+import {
+  archiveHrmsEmployee,
+  createHrmsAttendance,
+  createHrmsEmployee,
+  createHrmsExit,
+  createHrmsLeave,
+  createHrmsPayroll,
+  listHrmsAttendance,
+  listHrmsEmployees,
+  listHrmsExits,
+  listHrmsLeaves,
+  listHrmsPayroll,
+  runHrmsAttendanceAction,
+  runHrmsExitAction,
+  runHrmsLeaveAction,
+  runHrmsPayrollAction,
+  updateHrmsAttendance,
+  updateHrmsEmployee,
+  updateHrmsExit,
+  type HrmsAttendance,
+  type HrmsEmployee,
+  type HrmsExit,
+  type HrmsLeave,
+  type HrmsPayroll,
+} from "@/services/hrms-api";
 
 type HRMSView = "employees" | "attendance" | "leave" | "payroll" | "exit";
 type Tone = "blue" | "green" | "amber" | "red" | "purple" | "slate" | "cyan";
@@ -43,6 +68,7 @@ type ExitType = "Resignation" | "Termination" | "Contract End" | "Retirement";
 
 interface EmployeeRecord {
   id: string;
+  code: string;
   name: string;
   role: string;
   team: string;
@@ -61,6 +87,7 @@ interface EmployeeRecord {
 interface AttendanceRecord {
   id: string;
   employeeId: string;
+  employeeCode?: string;
   name: string;
   date: string;
   shift: string;
@@ -78,6 +105,7 @@ interface AttendanceRecord {
 interface LeaveRecord {
   id: string;
   employeeId: string;
+  employeeCode?: string;
   name: string;
   type: "Earned Leave" | "Sick Leave" | "Casual Leave" | "Work From Home" | "Comp Off";
   startDate: string;
@@ -95,6 +123,7 @@ interface LeaveRecord {
 interface PayrollRecord {
   id: string;
   employeeId: string;
+  employeeCode?: string;
   name: string;
   month: string;
   basic: number;
@@ -119,6 +148,7 @@ interface PayrollRecord {
 interface ExitRecord {
   id: string;
   employeeId: string;
+  employeeCode?: string;
   name: string;
   role: string;
   manager: string;
@@ -172,37 +202,178 @@ const payrollStatuses: PayrollStatus[] = ["Draft", "HR Review", "Finance Review"
 const exitRisks: ExitRisk[] = ["Low", "Medium", "High"];
 const teams = ["Product Engineering", "Delivery QA", "CloudOps", "Design Studio", "Support", "HR", "Finance"];
 
-const initialEmployees: EmployeeRecord[] = [
-  { id: "EMP-1024", name: "Aarav Mehta", role: "Senior React Developer", team: "Product Engineering", manager: "Vikram", location: "Navi Mumbai", type: "Full-time", status: "Active", score: 92, email: "aarav@dematadealgo.local", mobile: "+91 98765 43210", joined: "2022-01-12", kycStatus: "Complete", assetTag: "LAP-882" },
-  { id: "EMP-1041", name: "Priya Nair", role: "QA Automation Engineer", team: "Delivery QA", manager: "Sunita", location: "Remote", type: "Full-time", status: "Active", score: 88, email: "priya@dematadealgo.local", mobile: "+91 98765 43211", joined: "2022-03-05", kycStatus: "Complete", assetTag: "LAP-914" },
-  { id: "EMP-1088", name: "Rohan Saini", role: "DevOps Engineer", team: "CloudOps", manager: "Rajesh", location: "Navi Mumbai", type: "Consultant", status: "Probation", score: 76, email: "rohan@dematadealgo.local", mobile: "+91 98765 43212", joined: "2023-11-20", kycStatus: "Pending", assetTag: "LAP-971" },
-  { id: "EMP-1112", name: "Meera Singh", role: "UI/UX Designer", team: "Design Studio", manager: "Anjali", location: "Remote", type: "Intern", status: "Training", score: 69, email: "meera@dematadealgo.local", mobile: "+91 98765 43213", joined: "2024-05-15", kycStatus: "Pending", assetTag: "PENDING" },
-];
+const employeeStatusToApi: Record<EmployeeStatus, HrmsEmployee["status"]> = {
+  Active: "active",
+  Probation: "probation",
+  Training: "training",
+  "On Notice": "on_notice",
+  Exited: "exited",
+  Archived: "archived",
+};
 
-const initialAttendance: AttendanceRecord[] = [
-  { id: "ATT-001", employeeId: "EMP-1024", name: "Aarav Mehta", date: "2026-06-23", shift: "10:00 - 19:00", checkIn: "09:54", checkOut: "18:58", mode: "Office", status: "Present", billableHours: 7.6, overtimeHours: 0, approvalStatus: "Auto Approved", payrollImpact: "Payable", note: "On time" },
-  { id: "ATT-002", employeeId: "EMP-1041", name: "Priya Nair", date: "2026-06-23", shift: "10:00 - 19:00", checkIn: "10:08", checkOut: "18:41", mode: "Remote", status: "Late", billableHours: 7.2, overtimeHours: 0, approvalStatus: "Pending Approval", payrollImpact: "Review", note: "Late by 8 minutes" },
-  { id: "ATT-003", employeeId: "EMP-1088", name: "Rohan Saini", date: "2026-06-23", shift: "14:00 - 23:00", checkIn: "13:58", checkOut: "22:45", mode: "Hybrid", status: "Present", billableHours: 8.1, overtimeHours: 0.1, approvalStatus: "Approved", payrollImpact: "Payable", note: "Night deployment support" },
-  { id: "ATT-004", employeeId: "EMP-1112", name: "Meera Singh", date: "2026-06-23", shift: "10:00 - 17:00", checkIn: "", checkOut: "", mode: "Office", status: "Leave", billableHours: 0, overtimeHours: 0, approvalStatus: "Approved", payrollImpact: "Non Payable", note: "Approved leave" },
-  { id: "ATT-005", employeeId: "EMP-1088", name: "Rohan Saini", date: "2026-06-22", shift: "14:00 - 23:00", checkIn: "14:02", checkOut: "", mode: "Hybrid", status: "Missing Punch", billableHours: 0, overtimeHours: 0, approvalStatus: "Pending Approval", payrollImpact: "Review", note: "Missing checkout regularization pending" },
-];
+const employeeStatusFromApi: Record<HrmsEmployee["status"], EmployeeStatus> = {
+  active: "Active",
+  probation: "Probation",
+  training: "Training",
+  on_notice: "On Notice",
+  exited: "Exited",
+  archived: "Archived",
+};
 
-const initialLeaves: LeaveRecord[] = [
-  { id: "LV-001", employeeId: "EMP-1024", name: "Aarav Mehta", type: "Earned Leave", startDate: "2026-06-18", endDate: "2026-06-21", days: 4, duration: "Full Day", reason: "Family travel", status: "Manager Review", approver: "Vikram", payrollImpact: "Paid", appliedAt: "2026-06-10T09:30:00.000Z", decisionNote: "" },
-  { id: "LV-002", employeeId: "EMP-1041", name: "Priya Nair", type: "Sick Leave", startDate: "2026-06-12", endDate: "2026-06-12", days: 1, duration: "Full Day", reason: "Medical appointment", status: "Approved", approver: "HR Team", payrollImpact: "Paid", appliedAt: "2026-06-12T07:15:00.000Z", decisionNote: "Approved after manager review" },
-  { id: "LV-003", employeeId: "EMP-1088", name: "Rohan Saini", type: "Work From Home", startDate: "2026-06-13", endDate: "2026-06-14", days: 2, duration: "Full Day", reason: "Night deployment support", status: "HR Review", approver: "HR Team", payrollImpact: "No Impact", appliedAt: "2026-06-11T10:00:00.000Z", decisionNote: "Manager approved" },
-];
+const kycToApi: Record<EmployeeRecord["kycStatus"], HrmsEmployee["kyc_status"]> = {
+  Complete: "complete",
+  Pending: "pending",
+};
 
-const initialPayroll: PayrollRecord[] = [
-  { id: "SAL-2026-001", employeeId: "EMP-1024", name: "Aarav Mehta", month: "2026-06", basic: 90000, hra: 36000, allowance: 10000, conveyance: 5000, bonus: 7000, pf: 10800, pt: 200, tds: 9000, advance: 0, workingDays: 26, payableDays: 26, lopDays: 0, lopDeduction: 0, readiness: "Ready", holdReason: "", processedAt: "2026-06-23T10:00:00.000Z", status: "Approved" },
-  { id: "SAL-2026-002", employeeId: "EMP-1041", name: "Priya Nair", month: "2026-06", basic: 65000, hra: 26000, allowance: 5500, conveyance: 2000, bonus: 0, pf: 7800, pt: 200, tds: 5000, advance: 0, workingDays: 26, payableDays: 26, lopDays: 0, lopDeduction: 0, readiness: "Attendance Review", holdReason: "One attendance approval pending", processedAt: "2026-06-23T10:10:00.000Z", status: "Finance Review" },
-  { id: "SAL-2026-003", employeeId: "EMP-1088", name: "Rohan Saini", month: "2026-06", basic: 80000, hra: 32000, allowance: 8000, conveyance: 3000, bonus: 0, pf: 9600, pt: 200, tds: 6500, advance: 2000, workingDays: 26, payableDays: 26, lopDays: 0, lopDeduction: 0, readiness: "Attendance Review", holdReason: "Missing punch and WFH approval pending", processedAt: "2026-06-23T10:20:00.000Z", status: "Hold" },
-];
+const kycFromApi: Record<HrmsEmployee["kyc_status"], EmployeeRecord["kycStatus"]> = {
+  complete: "Complete",
+  pending: "Pending",
+};
 
-const initialExits: ExitRecord[] = [
-  { id: "EX-001", employeeId: "EMP-1201", name: "Karan Patel", role: "Backend Developer", manager: "Vikram", exitType: "Resignation", resignationDate: "2026-05-29", lastDay: "2026-06-28", reason: "Higher studies", notice: "Serving", handover: 65, handoverOwner: "Aarav Mehta", risk: "Medium", assets: { laptop: true, idCard: false, email: false }, clearances: { manager: true, hr: false, finance: false, it: false }, ffStatus: "In Progress", lifecycleStatus: "Clearance", createdAt: "2026-05-29T09:00:00.000Z", completedAt: "" },
-  { id: "EX-002", employeeId: "EMP-1198", name: "Divya Rao", role: "HR Executive", manager: "Anjali", exitType: "Resignation", resignationDate: "2026-05-15", lastDay: "2026-06-15", reason: "Relocation", notice: "Completed", handover: 100, handoverOwner: "Meera Singh", risk: "Low", assets: { laptop: true, idCard: true, email: true }, clearances: { manager: true, hr: true, finance: true, it: true }, ffStatus: "Cleared", lifecycleStatus: "Completed", createdAt: "2026-05-15T08:30:00.000Z", completedAt: "2026-06-16T11:00:00.000Z" },
-];
+const modeToApi: Record<AttendanceRecord["mode"], HrmsAttendance["mode"]> = {
+  Office: "office",
+  Remote: "remote",
+  Hybrid: "hybrid",
+};
+
+const leaveTypeToApi: Record<LeaveRecord["type"], HrmsLeave["leave_type"]> = {
+  "Earned Leave": "earned_leave",
+  "Sick Leave": "sick_leave",
+  "Casual Leave": "casual_leave",
+  "Work From Home": "work_from_home",
+  "Comp Off": "comp_off",
+};
+
+const durationToApi: Record<LeaveDuration, HrmsLeave["duration"]> = {
+  "Full Day": "full_day",
+  "First Half": "first_half",
+  "Second Half": "second_half",
+};
+
+const exitTypeToApi: Record<ExitType, HrmsExit["exit_type"]> = {
+  Resignation: "resignation",
+  Termination: "termination",
+  "Contract End": "contract_end",
+  Retirement: "retirement",
+};
+
+const exitRiskToApi: Record<ExitRisk, HrmsExit["risk"]> = {
+  Low: "low",
+  Medium: "medium",
+  High: "high",
+};
+
+function mapEmployee(row: HrmsEmployee): EmployeeRecord {
+  return {
+    id: row.id,
+    code: row.employee_id,
+    name: row.name,
+    role: row.role,
+    team: row.team,
+    manager: row.manager_name,
+    location: row.location,
+    type: row.employment_type,
+    status: employeeStatusFromApi[row.status],
+    score: row.health_score,
+    email: row.email,
+    mobile: row.mobile,
+    joined: row.joined || "",
+    kycStatus: kycFromApi[row.kyc_status],
+    assetTag: row.asset_tag,
+  };
+}
+
+function mapAttendance(row: HrmsAttendance): AttendanceRecord {
+  return {
+    id: row.id,
+    employeeId: row.employee,
+    employeeCode: row.employee_detail.employee_id,
+    name: row.employee_detail.name,
+    date: row.date,
+    shift: row.shift,
+    checkIn: (row.check_in || "").slice(0, 5),
+    checkOut: (row.check_out || "").slice(0, 5),
+    mode: row.mode_label as AttendanceRecord["mode"],
+    status: row.status_label as AttendanceStatus,
+    billableHours: Number(row.billable_hours),
+    overtimeHours: Number(row.overtime_hours),
+    approvalStatus: row.approval_status_label as AttendanceApprovalStatus,
+    payrollImpact: row.payroll_impact_label as AttendancePayrollImpact,
+    note: row.note,
+  };
+}
+
+function mapLeave(row: HrmsLeave): LeaveRecord {
+  return {
+    id: row.id,
+    employeeId: row.employee,
+    employeeCode: row.employee_detail.employee_id,
+    name: row.employee_detail.name,
+    type: row.leave_type_label as LeaveRecord["type"],
+    startDate: row.start_date,
+    endDate: row.end_date,
+    days: Number(row.days),
+    duration: row.duration_label as LeaveDuration,
+    reason: row.reason,
+    status: row.status_label as LeaveStatus,
+    approver: row.approver,
+    payrollImpact: row.payroll_impact_label as LeavePayrollImpact,
+    appliedAt: row.applied_at,
+    decisionNote: row.decision_note,
+  };
+}
+
+function mapPayroll(row: HrmsPayroll): PayrollRecord {
+  return {
+    id: row.id,
+    employeeId: row.employee,
+    employeeCode: row.employee_detail.employee_id,
+    name: row.employee_detail.name,
+    month: row.month,
+    basic: Number(row.basic),
+    hra: Number(row.hra),
+    allowance: Number(row.allowance),
+    conveyance: Number(row.conveyance),
+    bonus: Number(row.bonus),
+    pf: Number(row.pf),
+    pt: Number(row.pt),
+    tds: Number(row.tds),
+    advance: Number(row.advance),
+    workingDays: row.working_days,
+    payableDays: Number(row.payable_days),
+    lopDays: Number(row.lop_days),
+    lopDeduction: Number(row.lop_deduction),
+    readiness: row.readiness_label as PayrollReadiness,
+    holdReason: row.hold_reason,
+    processedAt: row.processed_at || row.updated_at,
+    status: row.status_label as PayrollStatus,
+  };
+}
+
+function mapExit(row: HrmsExit): ExitRecord {
+  return {
+    id: row.id,
+    employeeId: row.employee,
+    employeeCode: row.employee_detail.employee_id,
+    name: row.employee_detail.name,
+    role: row.employee_detail.role,
+    manager: row.employee_detail.manager_name,
+    exitType: row.exit_type_label as ExitType,
+    resignationDate: row.resignation_date,
+    lastDay: row.last_day,
+    reason: row.reason,
+    notice: row.notice_label as ExitRecord["notice"],
+    handover: row.handover,
+    handoverOwner: row.handover_owner,
+    risk: row.risk_label as ExitRisk,
+    assets: { laptop: row.laptop_recovered, idCard: row.id_card_recovered, email: row.access_revoked },
+    clearances: { manager: row.manager_clearance, hr: row.hr_clearance, finance: row.finance_clearance, it: row.it_clearance },
+    ffStatus: row.ff_status_label as ExitSettlementStatus,
+    lifecycleStatus: row.lifecycle_status_label as ExitLifecycleStatus,
+    createdAt: row.created_at,
+    completedAt: row.completed_at || "",
+  };
+}
 
 const blankEmployeeForm: EmployeeFormState = {
   id: "",
@@ -248,40 +419,12 @@ function daysBetween(start: string, end: string) {
   return diff > 0 ? diff : 0;
 }
 
-function datesBetween(start: string, end: string) {
-  const dates: string[] = [];
-  const current = new Date(`${start}T00:00:00`);
-  const endDate = new Date(`${end}T00:00:00`);
-  while (current <= endDate) {
-    dates.push(current.toISOString().slice(0, 10));
-    current.setDate(current.getDate() + 1);
-  }
-  return dates;
-}
-
 const leaveLimits: Record<Exclude<LeaveRecord["type"], "Work From Home">, number> = {
   "Earned Leave": 18,
   "Sick Leave": 10,
   "Casual Leave": 7,
   "Comp Off": 5,
 };
-
-function hoursBetween(checkIn: string, checkOut: string) {
-  if (!checkIn || !checkOut) return 0;
-  const [inHour, inMinute] = checkIn.split(":").map(Number);
-  const [outHour, outMinute] = checkOut.split(":").map(Number);
-  const start = inHour * 60 + inMinute;
-  const end = outHour * 60 + outMinute;
-  const minutes = end - start;
-  return minutes > 0 ? Math.round((minutes / 60) * 10) / 10 : 0;
-}
-
-function isLate(checkIn: string, shift: string) {
-  if (!checkIn) return false;
-  const [shiftHour, shiftMinute] = shift.split(" - ")[0].split(":").map(Number);
-  const [checkInHour, checkInMinute] = checkIn.split(":").map(Number);
-  return checkInHour * 60 + checkInMinute > shiftHour * 60 + shiftMinute + 15;
-}
 
 function payrollTotals(row: PayrollRecord) {
   const gross = row.basic + row.hra + row.allowance + row.conveyance + row.bonus;
@@ -368,7 +511,7 @@ function EmployeeProfile({ employee, onClose, onEdit }: { employee: EmployeeReco
             <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary text-lg font-black text-white">{employee.name.split(" ").map((part) => part[0]).join("")}</div>
             <div>
               <h3 className="text-2xl font-black text-primary">{employee.name}</h3>
-              <p className="mt-1 text-sm font-bold text-slate-500">{employee.id} - {employee.role}</p>
+              <p className="mt-1 text-sm font-bold text-slate-500">{employee.code || employee.id} - {employee.role}</p>
               <div className="mt-3 flex flex-wrap gap-2"><Badge tone={statusTone(employee.status)}>{employee.status}</Badge><Badge tone={employee.kycStatus === "Complete" ? "green" : "amber"}>KYC {employee.kycStatus}</Badge></div>
             </div>
           </div>
@@ -453,11 +596,13 @@ function EmployeeForm({
 }
 
 export default function HRMSHub({ activeView, onAddEmployee }: { activeView: HRMSView; onAddEmployee?: () => void }) {
-  const [employees, setEmployees] = useState<EmployeeRecord[]>(initialEmployees);
-  const [attendance, setAttendance] = useState<AttendanceRecord[]>(initialAttendance);
-  const [leaves, setLeaves] = useState<LeaveRecord[]>(initialLeaves);
-  const [payroll, setPayroll] = useState<PayrollRecord[]>(initialPayroll);
-  const [exits, setExits] = useState<ExitRecord[]>(initialExits);
+  const [employees, setEmployees] = useState<EmployeeRecord[]>([]);
+  const [attendance, setAttendance] = useState<AttendanceRecord[]>([]);
+  const [leaves, setLeaves] = useState<LeaveRecord[]>([]);
+  const [payroll, setPayroll] = useState<PayrollRecord[]>([]);
+  const [exits, setExits] = useState<ExitRecord[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
   const [showEmployeeForm, setShowEmployeeForm] = useState(false);
@@ -479,6 +624,35 @@ export default function HRMSHub({ activeView, onAddEmployee }: { activeView: HRM
   const [exitError, setExitError] = useState("");
   const [exitForm, setExitForm] = useState({ employeeId: "", exitType: "Resignation" as ExitType, resignationDate: "2026-06-24", lastDay: "", handoverOwner: "", reason: "", risk: "Low" as ExitRisk });
 
+  const loadHrmsData = async () => {
+    try {
+      setLoadError("");
+      const [employeeRows, attendanceRows, leaveRows, payrollRows, exitRows] = await Promise.all([
+        listHrmsEmployees(),
+        listHrmsAttendance(),
+        listHrmsLeaves(),
+        listHrmsPayroll(),
+        listHrmsExits(),
+      ]);
+      setEmployees(employeeRows.map(mapEmployee));
+      setAttendance(attendanceRows.map(mapAttendance));
+      setLeaves(leaveRows.map(mapLeave));
+      setPayroll(payrollRows.map(mapPayroll));
+      setExits(exitRows.map(mapExit));
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : "Something went wrong");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void loadHrmsData();
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, []);
+
   const title = activeView === "employees" ? "Employee Directory" : activeView === "attendance" ? "Attendance" : activeView === "leave" ? "Leave Management" : activeView === "payroll" ? "Payroll" : "Exit Process";
   const description = activeView === "employees"
     ? "Employee master, org mapping, manager ownership, assets, compliance and people health for software and fintech teams."
@@ -493,7 +667,7 @@ export default function HRMSHub({ activeView, onAddEmployee }: { activeView: HRM
   const filteredEmployees = useMemo(() => {
     const search = searchTerm.trim().toLowerCase();
     return employees.filter((employee) => {
-      const matchesSearch = !search || [employee.id, employee.name, employee.role, employee.team, employee.manager, employee.email, employee.mobile].join(" ").toLowerCase().includes(search);
+      const matchesSearch = !search || [employee.code, employee.id, employee.name, employee.role, employee.team, employee.manager, employee.email, employee.mobile].join(" ").toLowerCase().includes(search);
       const matchesStatus = statusFilter === "All" || employee.status === statusFilter;
       return matchesSearch && matchesStatus;
     });
@@ -501,42 +675,42 @@ export default function HRMSHub({ activeView, onAddEmployee }: { activeView: HRM
 
   const filteredAttendance = useMemo(() => attendance.filter((row) => {
     const search = searchTerm.trim().toLowerCase();
-    const matchesSearch = !search || [row.employeeId, row.name, row.date, row.mode, row.status, row.approvalStatus, row.payrollImpact, row.note].join(" ").toLowerCase().includes(search);
+    const matchesSearch = !search || [row.employeeCode, row.employeeId, row.name, row.date, row.mode, row.status, row.approvalStatus, row.payrollImpact, row.note].join(" ").toLowerCase().includes(search);
     const matchesStatus = statusFilter === "All" || row.status === statusFilter || row.approvalStatus === statusFilter || row.payrollImpact === statusFilter;
     return matchesSearch && matchesStatus;
   }), [attendance, searchTerm, statusFilter]);
 
   const filteredLeaves = useMemo(() => leaves.filter((row) => {
     const search = searchTerm.trim().toLowerCase();
-    const matchesSearch = !search || [row.employeeId, row.name, row.type, row.duration, row.reason, row.approver, row.status, row.payrollImpact].join(" ").toLowerCase().includes(search);
+    const matchesSearch = !search || [row.employeeCode, row.employeeId, row.name, row.type, row.duration, row.reason, row.approver, row.status, row.payrollImpact].join(" ").toLowerCase().includes(search);
     const matchesStatus = statusFilter === "All" || row.status === statusFilter || row.payrollImpact === statusFilter;
     return matchesSearch && matchesStatus;
   }), [leaves, searchTerm, statusFilter]);
 
   const filteredPayroll = useMemo(() => payroll.filter((row) => {
     const search = searchTerm.trim().toLowerCase();
-    const matchesSearch = !search || [row.employeeId, row.name, payrollMonthLabel(row.month), row.status, row.readiness, row.holdReason].join(" ").toLowerCase().includes(search);
+    const matchesSearch = !search || [row.employeeCode, row.employeeId, row.name, payrollMonthLabel(row.month), row.status, row.readiness, row.holdReason].join(" ").toLowerCase().includes(search);
     const matchesStatus = statusFilter === "All" || row.status === statusFilter || row.readiness === statusFilter;
     return matchesSearch && matchesStatus;
   }), [payroll, searchTerm, statusFilter]);
 
   const filteredExits = useMemo(() => exits.filter((row) => {
     const search = searchTerm.trim().toLowerCase();
-    const matchesSearch = !search || [row.employeeId, row.name, row.role, row.manager, row.exitType, row.handoverOwner, row.reason, row.risk, row.ffStatus, row.lifecycleStatus].join(" ").toLowerCase().includes(search);
+    const matchesSearch = !search || [row.employeeCode, row.employeeId, row.name, row.role, row.manager, row.exitType, row.handoverOwner, row.reason, row.risk, row.ffStatus, row.lifecycleStatus].join(" ").toLowerCase().includes(search);
     const matchesStatus = statusFilter === "All" || row.ffStatus === statusFilter || row.risk === statusFilter || row.lifecycleStatus === statusFilter;
     return matchesSearch && matchesStatus;
   }), [exits, searchTerm, statusFilter]);
 
   const exportRows = () => {
     const rows: Array<Array<string | number>> = activeView === "employees"
-      ? [["ID", "Name", "Role", "Team", "Manager", "Location", "Type", "Status", "Score", "Email", "Mobile", "Joined"], ...filteredEmployees.map((employee) => [employee.id, employee.name, employee.role, employee.team, employee.manager, employee.location, employee.type, employee.status, employee.score, employee.email, employee.mobile, employee.joined])]
+      ? [["ID", "Name", "Role", "Team", "Manager", "Location", "Type", "Status", "Score", "Email", "Mobile", "Joined"], ...filteredEmployees.map((employee) => [employee.code || employee.id, employee.name, employee.role, employee.team, employee.manager, employee.location, employee.type, employee.status, employee.score, employee.email, employee.mobile, employee.joined])]
       : activeView === "attendance"
-        ? [["ID", "Employee ID", "Name", "Date", "Shift", "Check In", "Check Out", "Mode", "Status", "Approval", "Payroll Impact", "Billable Hours", "Overtime Hours", "Note"], ...filteredAttendance.map((row) => [row.id, row.employeeId, row.name, row.date, row.shift, row.checkIn, row.checkOut, row.mode, row.status, row.approvalStatus, row.payrollImpact, row.billableHours, row.overtimeHours, row.note])]
+        ? [["ID", "Employee ID", "Name", "Date", "Shift", "Check In", "Check Out", "Mode", "Status", "Approval", "Payroll Impact", "Billable Hours", "Overtime Hours", "Note"], ...filteredAttendance.map((row) => [row.id, row.employeeCode || row.employeeId, row.name, row.date, row.shift, row.checkIn, row.checkOut, row.mode, row.status, row.approvalStatus, row.payrollImpact, row.billableHours, row.overtimeHours, row.note])]
         : activeView === "leave"
-          ? [["ID", "Employee ID", "Name", "Type", "Duration", "Start", "End", "Days", "Reason", "Status", "Approver", "Payroll Impact", "Applied At", "Decision Note"], ...filteredLeaves.map((row) => [row.id, row.employeeId, row.name, row.type, row.duration, row.startDate, row.endDate, row.days, row.reason, row.status, row.approver, row.payrollImpact, row.appliedAt, row.decisionNote])]
+          ? [["ID", "Employee ID", "Name", "Type", "Duration", "Start", "End", "Days", "Reason", "Status", "Approver", "Payroll Impact", "Applied At", "Decision Note"], ...filteredLeaves.map((row) => [row.id, row.employeeCode || row.employeeId, row.name, row.type, row.duration, row.startDate, row.endDate, row.days, row.reason, row.status, row.approver, row.payrollImpact, row.appliedAt, row.decisionNote])]
           : activeView === "payroll"
-            ? [["ID", "Employee ID", "Name", "Month", "Working Days", "Payable Days", "LOP Days", "LOP Deduction", "Gross", "Deductions", "Net", "Readiness", "Hold Reason", "Status", "Processed At"], ...filteredPayroll.map((row) => { const totals = payrollTotals(row); return [row.id, row.employeeId, row.name, payrollMonthLabel(row.month), row.workingDays, row.payableDays, row.lopDays, row.lopDeduction, totals.gross, totals.deductions, totals.net, row.readiness, row.holdReason, row.status, row.processedAt]; })]
-            : [["ID", "Employee ID", "Name", "Role", "Manager", "Exit Type", "Resignation Date", "Last Day", "Reason", "Notice", "Handover", "Handover Owner", "Risk", "Manager Clearance", "HR Clearance", "Finance Clearance", "IT Clearance", "Laptop", "ID Card", "Access Revoked", "F&F", "Lifecycle", "Created At", "Completed At"], ...filteredExits.map((row) => [row.id, row.employeeId, row.name, row.role, row.manager, row.exitType, row.resignationDate, row.lastDay, row.reason, row.notice, row.handover, row.handoverOwner, row.risk, row.clearances.manager ? "Cleared" : "Pending", row.clearances.hr ? "Cleared" : "Pending", row.clearances.finance ? "Cleared" : "Pending", row.clearances.it ? "Cleared" : "Pending", row.assets.laptop ? "Recovered" : "Pending", row.assets.idCard ? "Recovered" : "Pending", row.assets.email ? "Revoked" : "Pending", row.ffStatus, row.lifecycleStatus, row.createdAt, row.completedAt])];
+            ? [["ID", "Employee ID", "Name", "Month", "Working Days", "Payable Days", "LOP Days", "LOP Deduction", "Gross", "Deductions", "Net", "Readiness", "Hold Reason", "Status", "Processed At"], ...filteredPayroll.map((row) => { const totals = payrollTotals(row); return [row.id, row.employeeCode || row.employeeId, row.name, payrollMonthLabel(row.month), row.workingDays, row.payableDays, row.lopDays, row.lopDeduction, totals.gross, totals.deductions, totals.net, row.readiness, row.holdReason, row.status, row.processedAt]; })]
+            : [["ID", "Employee ID", "Name", "Role", "Manager", "Exit Type", "Resignation Date", "Last Day", "Reason", "Notice", "Handover", "Handover Owner", "Risk", "Manager Clearance", "HR Clearance", "Finance Clearance", "IT Clearance", "Laptop", "ID Card", "Access Revoked", "F&F", "Lifecycle", "Created At", "Completed At"], ...filteredExits.map((row) => [row.id, row.employeeCode || row.employeeId, row.name, row.role, row.manager, row.exitType, row.resignationDate, row.lastDay, row.reason, row.notice, row.handover, row.handoverOwner, row.risk, row.clearances.manager ? "Cleared" : "Pending", row.clearances.hr ? "Cleared" : "Pending", row.clearances.finance ? "Cleared" : "Pending", row.clearances.it ? "Cleared" : "Pending", row.assets.laptop ? "Recovered" : "Pending", row.assets.idCard ? "Recovered" : "Pending", row.assets.email ? "Revoked" : "Pending", row.ffStatus, row.lifecycleStatus, row.createdAt, row.completedAt])];
     const csv = rows.map((row) => row.map(csvEscape).join(",")).join("\n");
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
@@ -554,7 +728,7 @@ export default function HRMSHub({ activeView, onAddEmployee }: { activeView: HRM
 
   const openEmployeeForm = (employee?: EmployeeRecord) => {
     if (employee) {
-      setEmployeeForm(employee);
+      setEmployeeForm({ ...employee, id: employee.code || employee.id });
       setEditingEmployeeId(employee.id);
     } else {
       setEmployeeForm(blankEmployeeForm);
@@ -570,7 +744,7 @@ export default function HRMSHub({ activeView, onAddEmployee }: { activeView: HRM
       setEmployeeError("Employee ID, name, role, team, manager, email and mobile are required.");
       return false;
     }
-    if (employees.some((employee) => employee.id === employeeForm.id && employee.id !== editingEmployeeId)) {
+    if (employees.some((employee) => employee.code === employeeForm.id && employee.id !== editingEmployeeId)) {
       setEmployeeError("Employee ID already exists.");
       return false;
     }
@@ -581,38 +755,63 @@ export default function HRMSHub({ activeView, onAddEmployee }: { activeView: HRM
     return true;
   };
 
-  const saveEmployee = () => {
+  const saveEmployee = async () => {
     if (!validateEmployee()) return;
-    const record: EmployeeRecord = { ...employeeForm };
-    setEmployees((current) => editingEmployeeId ? current.map((employee) => employee.id === editingEmployeeId ? record : employee) : [record, ...current]);
-    setShowEmployeeForm(false);
-    setEditingEmployeeId(null);
+    try {
+      const payload = {
+        employee_id: employeeForm.id.trim(),
+        name: employeeForm.name.trim(),
+        role: employeeForm.role.trim(),
+        team: employeeForm.team.trim(),
+        manager_name: employeeForm.manager.trim(),
+        location: employeeForm.location.trim(),
+        employment_type: employeeForm.type,
+        status: employeeStatusToApi[employeeForm.status],
+        health_score: employeeForm.score,
+        email: employeeForm.email.trim(),
+        mobile: employeeForm.mobile.trim(),
+        joined: employeeForm.joined || null,
+        kyc_status: kycToApi[employeeForm.kycStatus],
+        asset_tag: employeeForm.assetTag.trim(),
+      };
+      if (editingEmployeeId) {
+        await updateHrmsEmployee(editingEmployeeId, payload);
+      } else {
+        await createHrmsEmployee(payload);
+      }
+      await loadHrmsData();
+      setShowEmployeeForm(false);
+      setEditingEmployeeId(null);
+    } catch (error) {
+      setEmployeeError(error instanceof Error ? error.message : "Something went wrong");
+    }
   };
 
-  const offboardEmployee = (employee: EmployeeRecord) => {
-    setEmployees((current) => current.map((item) => item.id === employee.id ? { ...item, status: "On Notice" } : item));
-    if (!exits.some((exit) => exit.employeeId === employee.id && !["Completed", "Cancelled"].includes(exit.lifecycleStatus))) {
-      setExits((current) => [{
-        id: `EX-${Date.now()}`,
-        employeeId: employee.id,
-        name: employee.name,
-        role: employee.role,
-        manager: employee.manager,
-        exitType: "Resignation",
-        resignationDate: "2026-06-24",
-        lastDay: "2026-07-23",
-        reason: "Started from employee directory",
-        notice: "Serving",
-        handover: 0,
-        handoverOwner: employee.manager,
-        risk: "Medium",
-        assets: { laptop: false, idCard: false, email: false },
-        clearances: { manager: false, hr: false, finance: false, it: false },
-        ffStatus: "Pending",
-        lifecycleStatus: "Initiated",
-        createdAt: new Date().toISOString(),
-        completedAt: "",
-      }, ...current]);
+  const offboardEmployee = async (employee: EmployeeRecord) => {
+    try {
+      if (!exits.some((exit) => exit.employeeId === employee.id && !["Completed", "Cancelled"].includes(exit.lifecycleStatus))) {
+        await createHrmsExit({
+          employee_id: employee.id,
+          exit_type: "resignation",
+          resignation_date: new Date().toISOString().slice(0, 10),
+          last_day: new Date(Date.now() + 29 * 86400000).toISOString().slice(0, 10),
+          handover_owner: employee.manager || "HR Team",
+          reason: "Started from employee directory",
+          risk: "medium",
+        });
+      }
+      await loadHrmsData();
+    } catch (error) {
+      setEmployeeError(error instanceof Error ? error.message : "Something went wrong");
+    }
+  };
+
+  const archiveEmployee = async (employee: EmployeeRecord) => {
+    try {
+      await archiveHrmsEmployee(employee.id);
+      await loadHrmsData();
+    } catch (error) {
+      setEmployeeError(error instanceof Error ? error.message : "Something went wrong");
     }
   };
 
@@ -637,7 +836,7 @@ export default function HRMSHub({ activeView, onAddEmployee }: { activeView: HRM
     setShowAttendanceForm(true);
   };
 
-  const submitAttendance = () => {
+  const submitAttendance = async () => {
     const employee = employees.find((item) => item.id === attendanceForm.employeeId);
     if (!employee || !attendanceForm.date || !attendanceForm.checkIn || !attendanceForm.checkOut || !attendanceForm.note.trim()) {
       setAttendanceError("Employee, date, check-in, check-out and reason are required.");
@@ -651,36 +850,30 @@ export default function HRMSHub({ activeView, onAddEmployee }: { activeView: HRM
       setAttendanceError("Attendance already exists for this employee and date. Regularize the existing row instead of creating a duplicate.");
       return;
     }
-    const billableHours = hoursBetween(attendanceForm.checkIn, attendanceForm.checkOut);
-    const existingRecord = attendance.find((row) => row.id === editingAttendanceId);
-    const shift = existingRecord?.shift ?? "10:00 - 19:00";
-    const late = isLate(attendanceForm.checkIn, shift);
-    const overtimeHours = Math.max(0, Math.round((billableHours - 8) * 10) / 10);
-    const record: AttendanceRecord = {
-      id: editingAttendanceId ?? `ATT-${Date.now()}`,
-      employeeId: employee.id,
-      name: employee.name,
-      date: attendanceForm.date,
-      shift,
-      checkIn: attendanceForm.checkIn,
-      checkOut: attendanceForm.checkOut,
-      mode: attendanceForm.mode,
-      status: late ? "Late" : "Regularized",
-      billableHours,
-      overtimeHours,
-      approvalStatus: "Pending Approval",
-      payrollImpact: late || overtimeHours > 0 ? "Review" : "Payable",
-      note: attendanceForm.note,
-    };
-    setAttendance((current) => editingAttendanceId
-      ? current.map((row) => row.id === editingAttendanceId ? record : row)
-      : [record, ...current]);
-    setShowAttendanceForm(false);
-    setAttendanceError("");
-    setEditingAttendanceId(null);
+    try {
+      const payload = {
+        employee_id: employee.id,
+        date: attendanceForm.date,
+        check_in: attendanceForm.checkIn,
+        check_out: attendanceForm.checkOut,
+        mode: modeToApi[attendanceForm.mode],
+        note: attendanceForm.note.trim(),
+      };
+      if (editingAttendanceId) {
+        await updateHrmsAttendance(editingAttendanceId, payload);
+      } else {
+        await createHrmsAttendance(payload);
+      }
+      await loadHrmsData();
+      setShowAttendanceForm(false);
+      setAttendanceError("");
+      setEditingAttendanceId(null);
+    } catch (error) {
+      setAttendanceError(error instanceof Error ? error.message : "Something went wrong");
+    }
   };
 
-  const submitLeave = () => {
+  const submitLeave = async () => {
     const employee = employees.find((item) => item.id === leaveForm.employeeId);
     const days = leaveForm.duration === "Full Day" ? daysBetween(leaveForm.startDate, leaveForm.endDate) : 0.5;
     if (!employee || !leaveForm.startDate || !leaveForm.endDate || !leaveForm.reason.trim()) {
@@ -713,75 +906,34 @@ export default function HRMSHub({ activeView, onAddEmployee }: { activeView: HRM
         return;
       }
     }
-    setLeaves((current) => [{
-      id: `LV-${Date.now()}`,
-      employeeId: employee.id,
-      name: employee.name,
-      type: leaveForm.type,
-      startDate: leaveForm.startDate,
-      endDate: leaveForm.endDate,
-      days,
-      duration: leaveForm.duration,
-      reason: leaveForm.reason.trim(),
-      status: "Manager Review",
-      approver: employee.manager,
-      payrollImpact: leaveForm.type === "Work From Home" ? "No Impact" : "Paid",
-      appliedAt: new Date().toISOString(),
-      decisionNote: "",
-    }, ...current]);
-    setShowLeaveForm(false);
-    setLeaveError("");
-    setLeaveForm({ employeeId: "", type: "Earned Leave", startDate: "", endDate: "", duration: "Full Day", reason: "" });
+    try {
+      await createHrmsLeave({
+        employee_id: employee.id,
+        leave_type: leaveTypeToApi[leaveForm.type],
+        start_date: leaveForm.startDate,
+        end_date: leaveForm.endDate,
+        duration: durationToApi[leaveForm.duration],
+        reason: leaveForm.reason.trim(),
+      });
+      await loadHrmsData();
+      setShowLeaveForm(false);
+      setLeaveError("");
+      setLeaveForm({ employeeId: "", type: "Earned Leave", startDate: "", endDate: "", duration: "Full Day", reason: "" });
+    } catch (error) {
+      setLeaveError(error instanceof Error ? error.message : "Something went wrong");
+    }
   };
 
-  const updateLeaveStatus = (id: string, action: "advance" | "reject" | "cancel") => {
-    const leave = leaves.find((item) => item.id === id);
-    if (!leave) return;
-    if (action === "cancel") {
-      setLeaves((current) => current.map((item) => item.id === id ? { ...item, status: "Cancelled", approver: "Employee/HR", decisionNote: "Request cancelled" } : item));
-      return;
+  const updateLeaveStatus = async (id: string, action: "advance" | "reject" | "cancel") => {
+    try {
+      await runHrmsLeaveAction(id, action);
+      await loadHrmsData();
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : "Something went wrong");
     }
-    if (action === "reject") {
-      setLeaves((current) => current.map((item) => item.id === id ? { ...item, status: "Rejected", approver: "HR Team", decisionNote: "Rejected during approval review" } : item));
-      return;
-    }
-    if (leave.status === "Manager Review" || leave.status === "Pending") {
-      setLeaves((current) => current.map((item) => item.id === id ? { ...item, status: "HR Review", approver: "HR Team", decisionNote: "Manager approved" } : item));
-      return;
-    }
-    if (leave.status !== "HR Review") return;
-    const used = leave.type === "Work From Home" ? 0 : leaves
-      .filter((item) => item.employeeId === leave.employeeId && item.type === leave.type && item.status === "Approved" && item.id !== leave.id)
-      .reduce((sum, item) => sum + item.days, 0);
-    const payrollImpact: LeavePayrollImpact = leave.type === "Work From Home"
-      ? "No Impact"
-      : used + leave.days <= leaveLimits[leave.type]
-        ? "Paid"
-        : "Unpaid";
-    setLeaves((current) => current.map((item) => item.id === id ? { ...item, status: "Approved", approver: "HR Team", payrollImpact, decisionNote: "HR approved and synced to attendance" } : item));
-    setAttendance((current) => datesBetween(leave.startDate, leave.endDate).reduce((rows, date) => {
-      const existing = rows.find((row) => row.employeeId === leave.employeeId && row.date === date);
-      const attendanceRow: AttendanceRecord = {
-        id: existing?.id ?? `ATT-${leave.id}-${date}`,
-        employeeId: leave.employeeId,
-        name: leave.name,
-        date,
-        shift: existing?.shift ?? "10:00 - 19:00",
-        checkIn: "",
-        checkOut: "",
-        mode: leave.type === "Work From Home" ? "Remote" : existing?.mode ?? "Office",
-        status: leave.type === "Work From Home" ? "Present" : "Leave",
-        billableHours: leave.type === "Work From Home" ? (leave.duration === "Full Day" ? 8 : 4) : 0,
-        overtimeHours: 0,
-        approvalStatus: "Approved",
-        payrollImpact: payrollImpact === "Unpaid" ? "Non Payable" : "Payable",
-        note: `${leave.type} approved (${leave.duration})`,
-      };
-      return existing ? rows.map((row) => row.id === existing.id ? attendanceRow : row) : [attendanceRow, ...rows];
-    }, current));
   };
 
-  const submitPayroll = () => {
+  const submitPayroll = async () => {
     const employee = employees.find((item) => item.id === payrollForm.employeeId);
     if (!employee || !payrollForm.month.trim()) {
       setPayrollError("Employee and month are required.");
@@ -805,93 +957,40 @@ export default function HRMSHub({ activeView, onAddEmployee }: { activeView: HRM
       setPayrollError("Deductions cannot exceed gross salary.");
       return;
     }
-    const monthPrefix = `${payrollForm.month}-`;
-    const attendanceBlockers = attendance.filter((row) => row.employeeId === employee.id
-      && row.date.startsWith(monthPrefix)
-      && (row.approvalStatus === "Pending Approval" || row.payrollImpact === "Review" || row.status === "Missing Punch"));
-    const monthEnd = `${payrollForm.month}-${new Date(Number(payrollForm.month.slice(0, 4)), Number(payrollForm.month.slice(5, 7)), 0).getDate()}`;
-    const leaveBlockers = leaves.filter((leave) => leave.employeeId === employee.id
-      && leave.startDate <= monthEnd
-      && leave.endDate >= `${payrollForm.month}-01`
-      && ["Pending", "Manager Review", "HR Review"].includes(leave.status));
-    const lopDays = leaves
-      .filter((leave) => leave.employeeId === employee.id && leave.startDate <= monthEnd && leave.endDate >= `${payrollForm.month}-01` && leave.status === "Approved" && leave.payrollImpact === "Unpaid")
-      .reduce((sum, leave) => sum + leave.days, 0);
-    const payableDays = Math.max(0, payrollForm.workingDays - lopDays);
-    const lopDeduction = Math.round((payrollForm.basic / payrollForm.workingDays) * lopDays);
-    if (deductions + lopDeduction > gross) {
-      setPayrollError("Total deductions including loss of pay cannot exceed gross salary.");
-      return;
+    try {
+      await createHrmsPayroll({
+        employee_id: employee.id,
+        month: payrollForm.month,
+        basic: String(payrollForm.basic),
+        hra: String(payrollForm.hra),
+        allowance: String(payrollForm.allowance),
+        conveyance: String(payrollForm.conveyance),
+        bonus: String(payrollForm.bonus),
+        pf: String(payrollForm.pf),
+        pt: String(payrollForm.pt),
+        tds: String(payrollForm.tds),
+        advance: String(payrollForm.advance),
+        working_days: payrollForm.workingDays,
+      });
+      await loadHrmsData();
+      setShowPayrollForm(false);
+      setPayrollError("");
+      setPayrollForm({ employeeId: "", month: "2026-06", basic: 0, hra: 0, allowance: 0, conveyance: 0, bonus: 0, pf: 0, pt: 200, tds: 0, advance: 0, workingDays: 26 });
+    } catch (error) {
+      setPayrollError(error instanceof Error ? error.message : "Something went wrong");
     }
-    const readiness: PayrollReadiness = attendanceBlockers.length ? "Attendance Review" : leaveBlockers.length ? "Leave Review" : "Ready";
-    const holdReason = attendanceBlockers.length
-      ? `${attendanceBlockers.length} attendance issue(s) pending`
-      : leaveBlockers.length
-        ? `${leaveBlockers.length} leave request(s) pending`
-        : "";
-    setPayroll((current) => [{
-      id: `SAL-${Date.now()}`,
-      employeeId: employee.id,
-      name: employee.name,
-      month: payrollForm.month,
-      basic: payrollForm.basic,
-      hra: payrollForm.hra,
-      allowance: payrollForm.allowance,
-      conveyance: payrollForm.conveyance,
-      bonus: payrollForm.bonus,
-      pf: payrollForm.pf,
-      pt: payrollForm.pt,
-      tds: payrollForm.tds,
-      advance: payrollForm.advance,
-      workingDays: payrollForm.workingDays,
-      payableDays,
-      lopDays,
-      lopDeduction,
-      readiness,
-      holdReason,
-      processedAt: new Date().toISOString(),
-      status: readiness === "Ready" ? "HR Review" : "Hold",
-    }, ...current]);
-    setShowPayrollForm(false);
-    setPayrollError("");
-    setPayrollForm({ employeeId: "", month: "2026-06", basic: 0, hra: 0, allowance: 0, conveyance: 0, bonus: 0, pf: 0, pt: 200, tds: 0, advance: 0, workingDays: 26 });
   };
 
-  const updatePayrollStatus = (id: string, action: "advance" | "hold" | "release" | "recheck") => {
-    setPayroll((current) => current.map((row) => {
-      if (row.id !== id) return row;
-      if (action === "recheck") {
-        const monthPrefix = `${row.month}-`;
-        const monthEnd = `${row.month}-${new Date(Number(row.month.slice(0, 4)), Number(row.month.slice(5, 7)), 0).getDate()}`;
-        const attendanceBlockers = attendance.filter((item) => item.employeeId === row.employeeId
-          && item.date.startsWith(monthPrefix)
-          && (item.approvalStatus === "Pending Approval" || item.payrollImpact === "Review" || item.status === "Missing Punch"));
-        const leaveBlockers = leaves.filter((item) => item.employeeId === row.employeeId
-          && item.startDate <= monthEnd
-          && item.endDate >= `${row.month}-01`
-          && ["Pending", "Manager Review", "HR Review"].includes(item.status));
-        const readiness: PayrollReadiness = attendanceBlockers.length ? "Attendance Review" : leaveBlockers.length ? "Leave Review" : "Ready";
-        const holdReason = attendanceBlockers.length
-          ? `${attendanceBlockers.length} attendance issue(s) pending`
-          : leaveBlockers.length
-            ? `${leaveBlockers.length} leave request(s) pending`
-            : "";
-        return { ...row, readiness, holdReason };
-      }
-      if (action === "hold") return { ...row, status: "Hold", holdReason: row.holdReason || "Manually held for finance review" };
-      if (action === "release") {
-        if (row.readiness !== "Ready") return row;
-        return { ...row, status: "HR Review", holdReason: "" };
-      }
-      if (row.readiness !== "Ready") return { ...row, status: "Hold", holdReason: row.holdReason || "Attendance or leave reconciliation pending" };
-      if (row.status === "Draft" || row.status === "HR Review") return { ...row, status: "Finance Review" };
-      if (row.status === "Finance Review") return { ...row, status: "Approved" };
-      if (row.status === "Approved") return { ...row, status: "Paid", processedAt: new Date().toISOString() };
-      return row;
-    }));
+  const updatePayrollStatus = async (id: string, action: "advance" | "hold" | "release" | "recheck") => {
+    try {
+      await runHrmsPayrollAction(id, action);
+      await loadHrmsData();
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : "Something went wrong");
+    }
   };
 
-  const submitExit = () => {
+  const submitExit = async () => {
     const employee = employees.find((item) => item.id === exitForm.employeeId);
     if (!employee || !exitForm.resignationDate || !exitForm.lastDay || !exitForm.handoverOwner.trim() || !exitForm.reason.trim()) {
       setExitError("Employee, exit type, dates, handover owner and reason are required.");
@@ -905,49 +1004,50 @@ export default function HRMSHub({ activeView, onAddEmployee }: { activeView: HRM
       setExitError("An active exit process already exists for this employee.");
       return;
     }
-    setEmployees((current) => current.map((item) => item.id === employee.id ? { ...item, status: "On Notice" } : item));
-    setExits((current) => [{
-      id: `EX-${Date.now()}`,
-      employeeId: employee.id,
-      name: employee.name,
-      role: employee.role,
-      manager: employee.manager,
-      exitType: exitForm.exitType,
-      resignationDate: exitForm.resignationDate,
-      lastDay: exitForm.lastDay,
-      reason: exitForm.reason.trim(),
-      notice: "Serving",
-      handover: 0,
-      handoverOwner: exitForm.handoverOwner.trim(),
-      risk: exitForm.risk,
-      assets: { laptop: false, idCard: false, email: false },
-      clearances: { manager: false, hr: false, finance: false, it: false },
-      ffStatus: "Pending",
-      lifecycleStatus: "Initiated",
-      createdAt: new Date().toISOString(),
-      completedAt: "",
-    }, ...current]);
-    setShowExitForm(false);
-    setExitError("");
-    setExitForm({ employeeId: "", exitType: "Resignation", resignationDate: "2026-06-24", lastDay: "", handoverOwner: "", reason: "", risk: "Low" });
+    try {
+      await createHrmsExit({
+        employee_id: employee.id,
+        exit_type: exitTypeToApi[exitForm.exitType],
+        resignation_date: exitForm.resignationDate,
+        last_day: exitForm.lastDay,
+        handover_owner: exitForm.handoverOwner.trim(),
+        reason: exitForm.reason.trim(),
+        risk: exitRiskToApi[exitForm.risk],
+      });
+      await loadHrmsData();
+      setShowExitForm(false);
+      setExitError("");
+      setExitForm({ employeeId: "", exitType: "Resignation", resignationDate: "2026-06-24", lastDay: "", handoverOwner: "", reason: "", risk: "Low" });
+    } catch (error) {
+      setExitError(error instanceof Error ? error.message : "Something went wrong");
+    }
   };
 
-  const completeExit = (id: string) => {
-    const exit = exits.find((item) => item.id === id);
-    if (!exit) return;
-    const ready = exit.handover === 100
-      && Object.values(exit.assets).every(Boolean)
-      && Object.values(exit.clearances).every(Boolean);
-    if (!ready) return;
-    setExits((current) => current.map((item) => item.id === id ? { ...item, notice: "Completed", ffStatus: "Cleared", lifecycleStatus: "Completed", completedAt: new Date().toISOString() } : item));
-    setEmployees((current) => current.map((employee) => employee.id === exit.employeeId ? { ...employee, status: "Exited" } : employee));
+  const completeExit = async (id: string) => {
+    try {
+      await runHrmsExitAction(id, "complete");
+      await loadHrmsData();
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : "Something went wrong");
+    }
   };
 
-  const cancelExit = (id: string) => {
-    const exit = exits.find((item) => item.id === id);
-    if (!exit || exit.lifecycleStatus === "Completed") return;
-    setExits((current) => current.map((item) => item.id === id ? { ...item, lifecycleStatus: "Cancelled", ffStatus: "Pending" } : item));
-    setEmployees((current) => current.map((employee) => employee.id === exit.employeeId ? { ...employee, status: "Active" } : employee));
+  const cancelExit = async (id: string) => {
+    try {
+      await runHrmsExitAction(id, "cancel");
+      await loadHrmsData();
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : "Something went wrong");
+    }
+  };
+
+  const updateExitControl = async (id: string, payload: Parameters<typeof updateHrmsExit>[1]) => {
+    try {
+      await updateHrmsExit(id, payload);
+      await loadHrmsData();
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : "Something went wrong");
+    }
   };
 
   const statusOptions = activeView === "employees" ? employeeStatuses : activeView === "attendance" ? [...attendanceStatuses, "Auto Approved", "Pending Approval", "Approved", "Rejected", "Payable", "Non Payable", "Review"] : activeView === "leave" ? [...leaveStatuses, "Paid", "Unpaid", "No Impact"] : activeView === "payroll" ? [...payrollStatuses, "Ready", "Attendance Review", "Leave Review"] : ["Pending", "In Progress", "Cleared", "Initiated", "Clearance", "Ready for F&F", "Completed", "Cancelled", ...exitRisks];
@@ -999,6 +1099,9 @@ export default function HRMSHub({ activeView, onAddEmployee }: { activeView: HRM
         </div>
       </section>
 
+      {loadError ? <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-black text-red-700">{loadError}</div> : null}
+      {isLoading ? <div className="rounded-2xl border border-border bg-white p-6 text-sm font-black text-slate-500 shadow-sm">Loading HRMS records...</div> : null}
+
       {activeView === "employees" ? (
         <div className="space-y-6">
           <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-4">
@@ -1012,7 +1115,7 @@ export default function HRMSHub({ activeView, onAddEmployee }: { activeView: HRM
             <DataTable columns={["Employee", "Role / Team", "Manager", "Location", "Type", "KYC", "HR Health", "Status", "Actions"]}>
               {filteredEmployees.map((employee) => (
                 <tr key={employee.id} className="hover:bg-slate-50">
-                  <td className="px-4 py-5 font-black text-primary">{employee.name}<br/><span className="text-[10px] text-slate-400">{employee.id}</span></td>
+                  <td className="px-4 py-5 font-black text-primary">{employee.name}<br/><span className="text-[10px] text-slate-400">{employee.code || employee.id}</span></td>
                   <td className="px-4 py-5">{employee.role}<br/><span className="text-[10px] font-black uppercase text-slate-400">{employee.team}</span></td>
                   <td className="px-4 py-5">{employee.manager}</td>
                   <td className="px-4 py-5">{employee.location}</td>
@@ -1020,7 +1123,7 @@ export default function HRMSHub({ activeView, onAddEmployee }: { activeView: HRM
                   <td className="px-4 py-5"><Badge tone={employee.kycStatus === "Complete" ? "green" : "amber"}>{employee.kycStatus}</Badge></td>
                   <td className="px-4 py-5 min-w-32"><ProgressBar value={employee.score} tone={employee.score >= 85 ? "green" : employee.score >= 75 ? "blue" : "amber"} /></td>
                   <td className="px-4 py-5"><Badge tone={statusTone(employee.status)}>{employee.status}</Badge></td>
-                  <td className="px-4 py-5"><div className="flex flex-wrap gap-2"><ActionButton icon={Eye} label="View" onClick={() => setSelectedEmployee(employee)} /><ActionButton icon={Edit3} label="Edit" onClick={() => openEmployeeForm(employee)} /><ActionButton icon={UserMinus} label="Offboard" onClick={() => offboardEmployee(employee)} disabled={employee.status === "Exited" || employee.status === "Archived"} /></div></td>
+                  <td className="px-4 py-5"><div className="flex flex-wrap gap-2"><ActionButton icon={Eye} label="View" onClick={() => setSelectedEmployee(employee)} /><ActionButton icon={Edit3} label="Edit" onClick={() => openEmployeeForm(employee)} /><ActionButton icon={UserMinus} label="Offboard" onClick={() => offboardEmployee(employee)} disabled={employee.status === "Exited" || employee.status === "Archived"} /><ActionButton label="Archive" onClick={() => archiveEmployee(employee)} disabled={employee.status === "Archived"} /></div></td>
                 </tr>
               ))}
             </DataTable>
@@ -1038,7 +1141,7 @@ export default function HRMSHub({ activeView, onAddEmployee }: { activeView: HRM
           </div>
           {showAttendanceForm ? (
             <FormPanel title={editingAttendanceId ? "Update Attendance Regularization" : "Regularize Attendance"} error={attendanceError} onCancel={() => { setShowAttendanceForm(false); setEditingAttendanceId(null); }} onSave={submitAttendance}>
-              <FieldGroup label="Employee"><select value={attendanceForm.employeeId} disabled={Boolean(editingAttendanceId)} onChange={(event) => setAttendanceForm((current) => ({ ...current, employeeId: event.target.value }))} className={inputClass}><option value="">Select Employee...</option>{employees.map((employee) => <option key={employee.id} value={employee.id}>{employee.id} - {employee.name}</option>)}</select></FieldGroup>
+              <FieldGroup label="Employee"><select value={attendanceForm.employeeId} disabled={Boolean(editingAttendanceId)} onChange={(event) => setAttendanceForm((current) => ({ ...current, employeeId: event.target.value }))} className={inputClass}><option value="">Select Employee...</option>{employees.map((employee) => <option key={employee.id} value={employee.id}>{employee.code || employee.id} - {employee.name}</option>)}</select></FieldGroup>
               <FieldGroup label="Date"><input type="date" value={attendanceForm.date} onChange={(event) => setAttendanceForm((current) => ({ ...current, date: event.target.value }))} className={inputClass} /></FieldGroup>
               <FieldGroup label="Check In"><input type="time" value={attendanceForm.checkIn} onChange={(event) => setAttendanceForm((current) => ({ ...current, checkIn: event.target.value }))} className={inputClass} /></FieldGroup>
               <FieldGroup label="Check Out"><input type="time" value={attendanceForm.checkOut} onChange={(event) => setAttendanceForm((current) => ({ ...current, checkOut: event.target.value }))} className={inputClass} /></FieldGroup>
@@ -1050,7 +1153,7 @@ export default function HRMSHub({ activeView, onAddEmployee }: { activeView: HRM
             <DataTable columns={["Employee", "Date", "Punch", "Mode", "Status", "Approval", "Payroll", "Hours", "Note", "Actions"]}>
               {filteredAttendance.map((row) => (
                 <tr key={row.id} className="hover:bg-slate-50">
-                  <td className="px-4 py-5 font-black text-primary">{row.name}<br/><span className="text-[10px] text-slate-400">{row.employeeId}</span></td>
+                  <td className="px-4 py-5 font-black text-primary">{row.name}<br/><span className="text-[10px] text-slate-400">{row.employeeCode || row.employeeId}</span></td>
                   <td className="px-4 py-5">{row.date}<br/><span className="text-[10px] font-black uppercase text-slate-400">{row.shift}</span></td>
                   <td className="px-4 py-5">{row.checkIn || "-"} to {row.checkOut || "-"}</td>
                   <td className="px-4 py-5">{row.mode}</td>
@@ -1069,13 +1172,19 @@ export default function HRMSHub({ activeView, onAddEmployee }: { activeView: HRM
                       />
                       <ActionButton
                         label="Approve"
-                        onClick={() => setAttendance((current) => current.map((item) => item.id === row.id ? { ...item, approvalStatus: "Approved", payrollImpact: item.status === "Leave" ? "Non Payable" : "Payable", note: `${item.note} | Approved for payroll` } : item))}
+                        onClick={async () => {
+                          await runHrmsAttendanceAction(row.id, "approve");
+                          await loadHrmsData();
+                        }}
                         disabled={row.approvalStatus === "Approved" || row.approvalStatus === "Auto Approved"}
                       />
                       <ActionButton
                         label="Reject"
-                        onClick={() => setAttendance((current) => current.map((item) => item.id === row.id ? { ...item, approvalStatus: "Rejected", payrollImpact: "Non Payable", note: `${item.note} | Rejected by HR` } : item))}
-                        disabled={row.approvalStatus === "Rejected"}
+                        onClick={async () => {
+                          await runHrmsAttendanceAction(row.id, "reject");
+                          await loadHrmsData();
+                        }}
+                        disabled={["Rejected", "Approved", "Auto Approved"].includes(row.approvalStatus)}
                       />
                     </div>
                   </td>
@@ -1095,7 +1204,7 @@ export default function HRMSHub({ activeView, onAddEmployee }: { activeView: HRM
       ) : null}
 
       {activeView === "exit" ? (
-        <ExitSection exits={filteredExits} allExits={exits} employees={employees} showForm={showExitForm} exitForm={exitForm} error={exitError} setExitForm={setExitForm} setShowForm={setShowExitForm} submitExit={submitExit} setExits={setExits} completeExit={completeExit} cancelExit={cancelExit} />
+        <ExitSection exits={filteredExits} allExits={exits} employees={employees} showForm={showExitForm} exitForm={exitForm} error={exitError} setExitForm={setExitForm} setShowForm={setShowExitForm} submitExit={submitExit} updateExitControl={updateExitControl} completeExit={completeExit} cancelExit={cancelExit} />
       ) : null}
 
       {selectedEmployee ? <EmployeeProfile employee={selectedEmployee} onClose={() => setSelectedEmployee(null)} onEdit={(employee) => { setSelectedEmployee(null); openEmployeeForm(employee); }} /> : null}
@@ -1137,7 +1246,7 @@ function LeaveSection({ leaves, allLeaves, employees, showForm, leaveForm, error
         <MetricCard label="Unpaid / Rejected" value={String(allLeaves.filter((leave) => leave.payrollImpact === "Unpaid" || leave.status === "Rejected").length)} helper="Payroll review" icon={AlertTriangle} tone="red" />
       </div>
       {showForm ? <FormPanel title="Apply Leave" error={error} onCancel={() => setShowForm(false)} onSave={submitLeave}>
-        <FieldGroup label="Employee"><select value={leaveForm.employeeId} onChange={(event) => setLeaveForm((current) => ({ ...current, employeeId: event.target.value }))} className={inputClass}><option value="">Select Employee...</option>{employees.map((employee) => <option key={employee.id} value={employee.id}>{employee.id} - {employee.name}</option>)}</select></FieldGroup>
+        <FieldGroup label="Employee"><select value={leaveForm.employeeId} onChange={(event) => setLeaveForm((current) => ({ ...current, employeeId: event.target.value }))} className={inputClass}><option value="">Select Employee...</option>{employees.map((employee) => <option key={employee.id} value={employee.id}>{employee.code || employee.id} - {employee.name}</option>)}</select></FieldGroup>
         <FieldGroup label="Type"><select value={leaveForm.type} onChange={(event) => setLeaveForm((current) => ({ ...current, type: event.target.value as LeaveRecord["type"] }))} className={inputClass}><option>Earned Leave</option><option>Sick Leave</option><option>Casual Leave</option><option>Work From Home</option><option>Comp Off</option></select></FieldGroup>
         <FieldGroup label="Duration"><select value={leaveForm.duration} onChange={(event) => setLeaveForm((current) => ({ ...current, duration: event.target.value as LeaveDuration }))} className={inputClass}><option>Full Day</option><option>First Half</option><option>Second Half</option></select></FieldGroup>
         <FieldGroup label="Start"><input type="date" value={leaveForm.startDate} onChange={(event) => setLeaveForm((current) => ({ ...current, startDate: event.target.value }))} className={inputClass} /></FieldGroup>
@@ -1148,7 +1257,7 @@ function LeaveSection({ leaves, allLeaves, employees, showForm, leaveForm, error
         <DataTable columns={["Employee", "Leave", "Dates", "Days", "Reason / Decision", "Current Owner", "Payroll", "Status", "Actions"]}>
           {leaves.map((leave) => (
             <tr key={leave.id} className="hover:bg-slate-50">
-              <td className="px-4 py-5 font-black text-primary">{leave.name}<br/><span className="text-[10px] text-slate-400">{leave.employeeId}</span></td>
+              <td className="px-4 py-5 font-black text-primary">{leave.name}<br/><span className="text-[10px] text-slate-400">{leave.employeeCode || leave.employeeId}</span></td>
               <td className="px-4 py-5">{leave.type}<br/><span className="text-[10px] font-black uppercase text-slate-400">{leave.duration}</span></td>
               <td className="px-4 py-5">{leave.startDate} to {leave.endDate}<br/><span className="text-[10px] text-slate-400">Applied {new Date(leave.appliedAt).toLocaleDateString("en-IN")}</span></td>
               <td className="px-4 py-5 font-black text-primary">{leave.days}</td>
@@ -1185,7 +1294,7 @@ function PayrollSection({ payroll, allPayroll, employees, showForm, payrollForm,
         <MetricCard label="Payroll Ready" value={String(allPayroll.filter((row) => row.readiness === "Ready").length)} helper={`${allPayroll.filter((row) => row.status === "Paid").length} paid`} icon={CheckCircle2} tone="green" />
       </div>
       {showForm ? <FormPanel title="Create Payroll Draft" error={error} onCancel={() => setShowForm(false)} onSave={submitPayroll}>
-        <FieldGroup label="Employee"><select value={payrollForm.employeeId} onChange={(event) => setPayrollForm((current) => ({ ...current, employeeId: event.target.value }))} className={inputClass}><option value="">Select Employee...</option>{employees.map((employee) => <option key={employee.id} value={employee.id}>{employee.id} - {employee.name}</option>)}</select></FieldGroup>
+        <FieldGroup label="Employee"><select value={payrollForm.employeeId} onChange={(event) => setPayrollForm((current) => ({ ...current, employeeId: event.target.value }))} className={inputClass}><option value="">Select Employee...</option>{employees.map((employee) => <option key={employee.id} value={employee.id}>{employee.code || employee.id} - {employee.name}</option>)}</select></FieldGroup>
         <FieldGroup label="Month"><input type="month" value={payrollForm.month} onChange={(event) => setPayrollForm((current) => ({ ...current, month: event.target.value }))} className={inputClass} /></FieldGroup>
         <FieldGroup label="Working Days"><input type="number" min={1} max={31} value={payrollForm.workingDays} onChange={(event) => setPayrollForm((current) => ({ ...current, workingDays: Number(event.target.value) || 0 }))} className={inputClass} /></FieldGroup>
         {(["basic", "hra", "allowance", "conveyance", "bonus", "pf", "pt", "tds", "advance"] as const).map((field) => <FieldGroup key={field} label={field.toUpperCase()}><input type="number" min={0} value={payrollForm[field]} onChange={(event) => setPayrollForm((current) => ({ ...current, [field]: Math.max(0, Number(event.target.value) || 0) }))} className={inputClass} /></FieldGroup>)}
@@ -1197,7 +1306,7 @@ function PayrollSection({ payroll, allPayroll, employees, showForm, payrollForm,
             const nextLabel = row.status === "Approved" ? "Mark Paid" : row.status === "Finance Review" ? "Finance Approve" : "HR Approve";
             return (
               <tr key={row.id} className="hover:bg-slate-50">
-                <td className="px-4 py-5 font-black text-primary">{row.name}<br/><span className="text-[10px] text-slate-400">{row.employeeId}</span></td>
+                <td className="px-4 py-5 font-black text-primary">{row.name}<br/><span className="text-[10px] text-slate-400">{row.employeeCode || row.employeeId}</span></td>
                 <td className="px-4 py-5">{payrollMonthLabel(row.month)}<br/><span className="text-[10px] text-slate-400">{new Date(row.processedAt).toLocaleDateString("en-IN")}</span></td>
                 <td className="px-4 py-5 font-black text-primary">{row.payableDays}/{row.workingDays}<br/><span className="text-[10px] text-red-500">LOP {row.lopDays}d / {formatCurrency(row.lopDeduction)}</span></td>
                 <td className="px-4 py-5">{formatCurrency(total.gross)}</td>
@@ -1225,15 +1334,26 @@ function PayrollSection({ payroll, allPayroll, employees, showForm, payrollForm,
   );
 }
 
-function ExitSection({ exits, allExits, employees, showForm, exitForm, error, setExitForm, setShowForm, submitExit, setExits, completeExit, cancelExit }: { exits: ExitRecord[]; allExits: ExitRecord[]; employees: EmployeeRecord[]; showForm: boolean; exitForm: { employeeId: string; exitType: ExitType; resignationDate: string; lastDay: string; handoverOwner: string; reason: string; risk: ExitRisk }; error: string; setExitForm: React.Dispatch<React.SetStateAction<{ employeeId: string; exitType: ExitType; resignationDate: string; lastDay: string; handoverOwner: string; reason: string; risk: ExitRisk }>>; setShowForm: (value: boolean) => void; submitExit: () => void; setExits: React.Dispatch<React.SetStateAction<ExitRecord[]>>; completeExit: (id: string) => void; cancelExit: (id: string) => void }) {
-  const withReadiness = (exit: ExitRecord): ExitRecord => {
-    if (exit.lifecycleStatus === "Completed" || exit.lifecycleStatus === "Cancelled") return exit;
-    const ready = exit.handover === 100 && Object.values(exit.assets).every(Boolean) && Object.values(exit.clearances).every(Boolean);
-    return { ...exit, lifecycleStatus: ready ? "Ready for F&F" : "Clearance", ffStatus: ready ? "In Progress" : exit.ffStatus };
+function ExitSection({ exits, allExits, employees, showForm, exitForm, error, setExitForm, setShowForm, submitExit, updateExitControl, completeExit, cancelExit }: { exits: ExitRecord[]; allExits: ExitRecord[]; employees: EmployeeRecord[]; showForm: boolean; exitForm: { employeeId: string; exitType: ExitType; resignationDate: string; lastDay: string; handoverOwner: string; reason: string; risk: ExitRisk }; error: string; setExitForm: React.Dispatch<React.SetStateAction<{ employeeId: string; exitType: ExitType; resignationDate: string; lastDay: string; handoverOwner: string; reason: string; risk: ExitRisk }>>; setShowForm: (value: boolean) => void; submitExit: () => void; updateExitControl: (id: string, payload: Parameters<typeof updateHrmsExit>[1]) => void; completeExit: (id: string) => void; cancelExit: (id: string) => void }) {
+  const toggleAsset = (exit: ExitRecord, asset: keyof ExitRecord["assets"]) => {
+    const payload = asset === "laptop"
+      ? { laptop_recovered: !exit.assets.laptop }
+      : asset === "idCard"
+        ? { id_card_recovered: !exit.assets.idCard }
+        : { access_revoked: !exit.assets.email };
+    updateExitControl(exit.id, payload);
   };
-  const toggleAsset = (id: string, asset: keyof ExitRecord["assets"]) => setExits((current) => current.map((exit) => exit.id === id ? withReadiness({ ...exit, assets: { ...exit.assets, [asset]: !exit.assets[asset] } }) : exit));
-  const toggleClearance = (id: string, clearance: keyof ExitRecord["clearances"]) => setExits((current) => current.map((exit) => exit.id === id ? withReadiness({ ...exit, clearances: { ...exit.clearances, [clearance]: !exit.clearances[clearance] } }) : exit));
-  const updateHandover = (id: string, handover: number) => setExits((current) => current.map((exit) => exit.id === id ? withReadiness({ ...exit, handover }) : exit));
+  const toggleClearance = (exit: ExitRecord, clearance: keyof ExitRecord["clearances"]) => {
+    const payload = clearance === "manager"
+      ? { manager_clearance: !exit.clearances.manager }
+      : clearance === "hr"
+        ? { hr_clearance: !exit.clearances.hr }
+        : clearance === "finance"
+          ? { finance_clearance: !exit.clearances.finance }
+          : { it_clearance: !exit.clearances.it };
+    updateExitControl(exit.id, payload);
+  };
+  const updateHandover = (id: string, handover: number) => updateExitControl(id, { handover });
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-4">
@@ -1243,7 +1363,7 @@ function ExitSection({ exits, allExits, employees, showForm, exitForm, error, se
         <MetricCard label="High Risk" value={String(allExits.filter((exit) => exit.risk === "High").length)} helper="Needs escalation" icon={AlertTriangle} tone="red" />
       </div>
       {showForm ? <FormPanel title="Start Exit Process" error={error} onCancel={() => setShowForm(false)} onSave={submitExit}>
-        <FieldGroup label="Employee"><select value={exitForm.employeeId} onChange={(event) => setExitForm((current) => ({ ...current, employeeId: event.target.value }))} className={inputClass}><option value="">Select Employee...</option>{employees.filter((employee) => !["Exited", "Archived"].includes(employee.status) && !allExits.some((exit) => exit.employeeId === employee.id && !["Completed", "Cancelled"].includes(exit.lifecycleStatus))).map((employee) => <option key={employee.id} value={employee.id}>{employee.id} - {employee.name}</option>)}</select></FieldGroup>
+        <FieldGroup label="Employee"><select value={exitForm.employeeId} onChange={(event) => setExitForm((current) => ({ ...current, employeeId: event.target.value }))} className={inputClass}><option value="">Select Employee...</option>{employees.filter((employee) => !["Exited", "Archived"].includes(employee.status) && !allExits.some((exit) => exit.employeeId === employee.id && !["Completed", "Cancelled"].includes(exit.lifecycleStatus))).map((employee) => <option key={employee.id} value={employee.id}>{employee.code || employee.id} - {employee.name}</option>)}</select></FieldGroup>
         <FieldGroup label="Exit Type"><select value={exitForm.exitType} onChange={(event) => setExitForm((current) => ({ ...current, exitType: event.target.value as ExitType }))} className={inputClass}><option>Resignation</option><option>Termination</option><option>Contract End</option><option>Retirement</option></select></FieldGroup>
         <FieldGroup label="Initiation Date"><input type="date" value={exitForm.resignationDate} onChange={(event) => setExitForm((current) => ({ ...current, resignationDate: event.target.value }))} className={inputClass} /></FieldGroup>
         <FieldGroup label="Last Day"><input type="date" value={exitForm.lastDay} onChange={(event) => setExitForm((current) => ({ ...current, lastDay: event.target.value }))} className={inputClass} /></FieldGroup>
@@ -1261,23 +1381,23 @@ function ExitSection({ exits, allExits, employees, showForm, exitForm, error, se
                 <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                   <div>
                     <h4 className="text-lg font-black text-primary">{exit.name}</h4>
-                    <p className="text-xs font-bold text-slate-500">{exit.employeeId} - {exit.role} - {exit.exitType} - LWD {exit.lastDay}</p>
+                    <p className="text-xs font-bold text-slate-500">{exit.employeeCode || exit.employeeId} - {exit.role} - {exit.exitType} - LWD {exit.lastDay}</p>
                     <p className="mt-1 text-[10px] font-bold uppercase text-slate-400">Manager {exit.manager} - Handover to {exit.handoverOwner}</p>
                     <div className="mt-3 flex flex-wrap gap-2"><Badge tone={statusTone(exit.risk)}>{exit.risk} Risk</Badge><Badge tone={statusTone(exit.lifecycleStatus)}>{exit.lifecycleStatus}</Badge><Badge tone={statusTone(exit.ffStatus)}>F&F {exit.ffStatus}</Badge></div>
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    <ActionButton label="Cancel Exit" onClick={() => cancelExit(exit.id)} disabled={locked || exit.lifecycleStatus === "Cancelled"} />
+                    <ActionButton label="Cancel Exit" onClick={() => cancelExit(exit.id)} disabled={locked} />
                     <ActionButton label={exit.lifecycleStatus === "Completed" ? "Exit Completed" : exit.lifecycleStatus === "Cancelled" ? "Exit Cancelled" : "Complete Exit"} onClick={() => completeExit(exit.id)} disabled={!ready || locked} />
                   </div>
                 </div>
                 <div className="mt-5 grid grid-cols-1 gap-5 lg:grid-cols-3">
                   <div className="rounded-xl bg-white p-4">
                     <p className="mb-3 text-xs font-black uppercase tracking-widest text-primary">Assets & Access</p>
-                    {(["laptop", "idCard", "email"] as const).map((asset) => <button key={asset} type="button" disabled={locked} onClick={() => toggleAsset(exit.id, asset)} className="mb-2 flex w-full items-center justify-between rounded-lg border border-slate-100 px-3 py-2 text-xs font-bold text-slate-600 disabled:cursor-not-allowed"><span>{asset === "email" ? "System access" : asset}</span><span>{exit.assets[asset] ? (asset === "email" ? "Revoked" : "Recovered") : "Pending"}</span></button>)}
+                    {(["laptop", "idCard", "email"] as const).map((asset) => <button key={asset} type="button" disabled={locked} onClick={() => toggleAsset(exit, asset)} className="mb-2 flex w-full items-center justify-between rounded-lg border border-slate-100 px-3 py-2 text-xs font-bold text-slate-600 disabled:cursor-not-allowed"><span>{asset === "email" ? "System access" : asset}</span><span>{exit.assets[asset] ? (asset === "email" ? "Revoked" : "Recovered") : "Pending"}</span></button>)}
                   </div>
                   <div className="rounded-xl bg-white p-4">
                     <p className="mb-3 text-xs font-black uppercase tracking-widest text-primary">Department Clearances</p>
-                    {(["manager", "hr", "finance", "it"] as const).map((clearance) => <button key={clearance} type="button" disabled={locked} onClick={() => toggleClearance(exit.id, clearance)} className="mb-2 flex w-full items-center justify-between rounded-lg border border-slate-100 px-3 py-2 text-xs font-bold text-slate-600 disabled:cursor-not-allowed"><span>{clearance.toUpperCase()}</span><span>{exit.clearances[clearance] ? "Cleared" : "Pending"}</span></button>)}
+                    {(["manager", "hr", "finance", "it"] as const).map((clearance) => <button key={clearance} type="button" disabled={locked} onClick={() => toggleClearance(exit, clearance)} className="mb-2 flex w-full items-center justify-between rounded-lg border border-slate-100 px-3 py-2 text-xs font-bold text-slate-600 disabled:cursor-not-allowed"><span>{clearance.toUpperCase()}</span><span>{exit.clearances[clearance] ? "Cleared" : "Pending"}</span></button>)}
                   </div>
                   <div className="rounded-xl bg-white p-4">
                     <div className="mb-2 flex justify-between text-xs font-black uppercase tracking-widest text-slate-500"><span>Handover</span><span>{exit.handover}%</span></div>
