@@ -60,7 +60,7 @@ class EmployeeHRProfileSerializer(serializers.ModelSerializer):
 
 
 class EmployeeHRProfileWriteSerializer(serializers.Serializer):
-    employee_id = serializers.CharField(max_length=40)
+    employee_id = serializers.CharField(max_length=40, required=False, allow_blank=True)
     name = serializers.CharField(max_length=180)
     role = serializers.CharField(max_length=140)
     team = serializers.CharField(max_length=100)

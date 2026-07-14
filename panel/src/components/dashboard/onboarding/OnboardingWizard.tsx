@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { 
   CheckCircle, 
   UserPlus,
@@ -10,6 +10,7 @@ import {
   GraduationCap,
   ClipboardCheck
 } from "lucide-react";
+import { listHrmsEmployees, updateHrmsEmployee, type HrmsEmployee } from "@/services/hrms-api";
 import Step1Registration from "./Step1Registration";
 import Step2Employment from "./Step2Employment";
 import Step3Documents from "./Step3Documents";
@@ -148,17 +149,38 @@ const STEPS = [
   { id: 6, title: "Approval", description: "Final Management Sign-off", icon: Shield },
 ];
 
-export default function OnboardingWizard() {
-  const [currentStep, setCurrentStep] = useState(1);
-  const [error, setError] = useState("");
-  const [formData, setFormData] = useState<OnboardingData>({
-    // Step 1
-    employeeId: "EMP-2024-001",
-    firstName: "",
-    middleName: "",
-    lastName: "",
-    personalEmail: "",
-    mobile: "",
+function splitEmployeeName(name: string) {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  return {
+    firstName: parts[0] || "",
+    middleName: parts.length > 2 ? parts.slice(1, -1).join(" ") : "",
+    lastName: parts.length > 1 ? parts[parts.length - 1] : "",
+  };
+}
+
+function employeeTypeLabel(value: string) {
+  const normalized = value.toLowerCase();
+  if (normalized.includes("contract")) return "Contract";
+  if (normalized.includes("intern")) return "Intern";
+  return "Permanent";
+}
+
+function locationLabel(value: string) {
+  const normalized = value.toLowerCase();
+  if (normalized.includes("remote")) return "Remote";
+  if (normalized.includes("hybrid")) return "Hybrid";
+  return "Office";
+}
+
+function emptyOnboardingData(employee?: HrmsEmployee): OnboardingData {
+  const name = splitEmployeeName(employee?.name || "");
+  return {
+    employeeId: employee?.employee_id || "Select Employee",
+    firstName: name.firstName,
+    middleName: name.middleName,
+    lastName: name.lastName,
+    personalEmail: employee?.email || "",
+    mobile: employee?.mobile || "",
     alternateMobile: "",
     dob: "",
     gender: "",
@@ -167,22 +189,100 @@ export default function OnboardingWizard() {
     permanentAddress: { street: "", city: "", state: "", pincode: "" },
     emergencyContact: { name: "", relation: "", mobile: "" },
     category: "Fresher",
-    // Step 2
-    department: "",
-    designation: "",
-    employeeType: "Permanent",
-    reportingManager: "",
-    doj: "",
-    workLocation: "Office",
+    department: employee?.team || "",
+    designation: employee?.role || "",
+    employeeType: employee ? employeeTypeLabel(employee.employment_type) : "Permanent",
+    reportingManager: employee?.manager_name || "",
+    doj: employee?.joined || "",
+    workLocation: employee ? locationLabel(employee.location) : "Office",
     shiftTiming: "Morning",
-    probationPeriod: "3 Months",
-    officialEmail: "",
-    status: "Active",
+    probationPeriod: employee?.status === "probation" ? "6 Months" : "3 Months",
+    officialEmail: employee?.email || "",
+    status: employee?.status === "training" ? "On Hold" : "Active",
     documents: makeDocuments("Fresher"),
     trainingTasks: defaultTrainingTasks,
     approvals: defaultApprovals,
-    onboardingStatus: "Draft",
-  });
+    onboardingStatus: employee?.kyc_status === "complete" ? "Completed" : "Draft",
+  };
+}
+
+export default function OnboardingWizard() {
+  const [currentStep, setCurrentStep] = useState(1);
+  const [error, setError] = useState("");
+  const [employees, setEmployees] = useState<HrmsEmployee[]>([]);
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState("");
+  const [isLoadingEmployees, setIsLoadingEmployees] = useState(true);
+  const [queueError, setQueueError] = useState("");
+  const [saveMessage, setSaveMessage] = useState("");
+  const [employeeSearch, setEmployeeSearch] = useState("");
+  const [isEmployeePickerOpen, setIsEmployeePickerOpen] = useState(false);
+  const [formData, setFormData] = useState<OnboardingData>(() => emptyOnboardingData());
+
+  const onboardingQueue = useMemo(
+    () => employees.filter((employee) => !["archived", "exited"].includes(employee.status)),
+    [employees],
+  );
+
+  const filteredOnboardingQueue = useMemo(() => {
+    const search = employeeSearch.trim().toLowerCase();
+    if (!search) return onboardingQueue;
+    return onboardingQueue.filter((employee) =>
+      [
+        employee.employee_id,
+        employee.name,
+        employee.role,
+        employee.team,
+        employee.email,
+        employee.mobile,
+        employee.kyc_status_label,
+      ].join(" ").toLowerCase().includes(search),
+    );
+  }, [employeeSearch, onboardingQueue]);
+
+  const selectedEmployee = useMemo(
+    () => employees.find((employee) => employee.id === selectedEmployeeId),
+    [employees, selectedEmployeeId],
+  );
+
+  const loadEmployees = async () => {
+    setIsLoadingEmployees(true);
+    setQueueError("");
+    try {
+      const records = await listHrmsEmployees();
+      setEmployees(records);
+      if (!selectedEmployeeId && records.length > 0) {
+        const firstPending = records.find((employee) => employee.kyc_status === "pending" && !["archived", "exited"].includes(employee.status));
+        const firstEmployee = firstPending || records.find((employee) => !["archived", "exited"].includes(employee.status));
+        if (firstEmployee) {
+          setSelectedEmployeeId(firstEmployee.id);
+          setFormData(emptyOnboardingData(firstEmployee));
+        }
+      }
+    } catch (loadError) {
+      setQueueError(loadError instanceof Error ? loadError.message : "Unable to load employee onboarding queue.");
+    } finally {
+      setIsLoadingEmployees(false);
+    }
+  };
+
+  useEffect(() => {
+    const loadTimer = window.setTimeout(() => {
+      void loadEmployees();
+    }, 0);
+    return () => window.clearTimeout(loadTimer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const selectEmployee = (employeeId: string) => {
+    const employee = employees.find((item) => item.id === employeeId);
+    setSelectedEmployeeId(employeeId);
+    if (employee) setEmployeeSearch(`${employee.employee_id} - ${employee.name}`);
+    setIsEmployeePickerOpen(false);
+    setCurrentStep(1);
+    setError("");
+    setSaveMessage("");
+    setFormData(emptyOnboardingData(employee));
+  };
 
   const updateFormData = (nextData: OnboardingData | ((current: OnboardingData) => OnboardingData)) => {
     const resolved = typeof nextData === "function" ? nextData(formData) : nextData;
@@ -293,10 +393,14 @@ export default function OnboardingWizard() {
     }));
   };
 
-  const finishOnboarding = () => {
+  const finishOnboarding = async () => {
     const trainingError = validateStep(5);
     if (trainingError) {
       setError(trainingError);
+      return false;
+    }
+    if (!selectedEmployee) {
+      setError("Select an employee from the backend onboarding queue first.");
       return false;
     }
     const pendingApprovals = formData.approvals.filter((approval: ApprovalRecord) => approval.status !== "Approved");
@@ -304,9 +408,26 @@ export default function OnboardingWizard() {
       setError(`Pending approvals: ${pendingApprovals.map((approval: ApprovalRecord) => approval.role).join(", ")}.`);
       return false;
     }
-    setError("");
-    setFormData((current) => ({ ...current, onboardingStatus: "Completed" }));
-    return true;
+    try {
+      await updateHrmsEmployee(selectedEmployee.id, {
+        kyc_status: "complete",
+        status: "active",
+        role: formData.designation,
+        team: formData.department,
+        manager_name: formData.reportingManager,
+        location: formData.workLocation,
+        employment_type: formData.employeeType,
+        joined: formData.doj || null,
+      });
+      setError("");
+      setSaveMessage("Employee onboarding completed and synced with Employee Directory.");
+      setFormData((current) => ({ ...current, onboardingStatus: "Completed" }));
+      await loadEmployees();
+      return true;
+    } catch (finishError) {
+      setError(finishError instanceof Error ? finishError.message : "Unable to complete onboarding.");
+      return false;
+    }
   };
 
   const renderStep = () => {
@@ -322,7 +443,70 @@ export default function OnboardingWizard() {
   };
 
   return (
-    <div className="flex flex-col lg:flex-row gap-8 animate-in fade-in duration-500">
+    <div className="space-y-6 animate-in fade-in duration-500">
+      <section className="rounded-2xl border border-border bg-white p-5 shadow-sm">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-400">Backend Employee Queue</p>
+            <h2 className="mt-1 text-2xl font-black text-primary">Employee Onboarding</h2>
+            <p className="mt-1 text-sm font-semibold text-secondary">
+              Employees created in Employee Directory appear here for document, training, and approval completion.
+            </p>
+          </div>
+          <div className="w-full xl:max-w-2xl">
+            <div className="relative">
+              <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-slate-400">Search or Select Employee</label>
+              <input
+                value={employeeSearch}
+                onFocus={() => setIsEmployeePickerOpen(true)}
+                onChange={(event) => {
+                  setEmployeeSearch(event.target.value);
+                  setSelectedEmployeeId("");
+                  setIsEmployeePickerOpen(true);
+                }}
+                placeholder="Type employee name, ID, role, email, mobile..."
+                disabled={isLoadingEmployees}
+                className="h-12 w-full rounded-xl border border-border bg-white px-4 text-sm font-bold text-primary outline-none focus:border-primary focus:ring-4 focus:ring-primary/10"
+              />
+              {isEmployeePickerOpen ? (
+                <div className="absolute left-0 right-0 top-[4.75rem] z-30 max-h-80 overflow-y-auto rounded-2xl border border-border bg-white p-2 shadow-2xl">
+                  {filteredOnboardingQueue.length > 0 ? filteredOnboardingQueue.slice(0, 10).map((employee) => (
+                    <button
+                      key={employee.id}
+                      type="button"
+                      onMouseDown={(event) => {
+                        event.preventDefault();
+                        selectEmployee(employee.id);
+                      }}
+                      className="flex w-full items-center justify-between gap-4 rounded-xl px-4 py-3 text-left hover:bg-slate-50"
+                    >
+                      <span className="min-w-0">
+                        <span className="block truncate text-sm font-black text-primary">{employee.employee_id} - {employee.name}</span>
+                        <span className="mt-1 block truncate text-[10px] font-black uppercase tracking-widest text-slate-400">{employee.role} - {employee.team}</span>
+                      </span>
+                      <span className="shrink-0 rounded-full bg-slate-100 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-slate-500">{employee.kyc_status_label}</span>
+                    </button>
+                  )) : (
+                    <p className="px-4 py-3 text-sm font-bold text-slate-500">No employee found.</p>
+                  )}
+                </div>
+              ) : null}
+            </div>
+          </div>
+        </div>
+        {queueError ? <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">{queueError}</div> : null}
+        {saveMessage ? <div className="mt-4 rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm font-bold text-green-700">{saveMessage}</div> : null}
+        {selectedEmployee ? (
+          <div className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-4">
+            <div className="rounded-xl bg-slate-50 p-4"><p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Employee</p><p className="mt-1 text-sm font-black text-primary">{selectedEmployee.name}</p></div>
+            <div className="rounded-xl bg-slate-50 p-4"><p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Role</p><p className="mt-1 text-sm font-black text-primary">{selectedEmployee.role}</p></div>
+            <div className="rounded-xl bg-slate-50 p-4"><p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Directory Status</p><p className="mt-1 text-sm font-black text-primary">{selectedEmployee.status_label}</p></div>
+            <div className="rounded-xl bg-slate-50 p-4"><p className="text-[10px] font-black uppercase tracking-widest text-slate-400">KYC</p><p className="mt-1 text-sm font-black text-primary">{selectedEmployee.kyc_status_label}</p></div>
+          </div>
+        ) : null}
+      </section>
+
+      <div className="flex flex-col lg:flex-row gap-8">
       {/* Vertical Sidebar for Steps */}
       <aside className="w-full lg:w-80 shrink-0">
         <div className="bg-white rounded-2xl border border-border shadow-sm overflow-hidden sticky top-24">
@@ -410,6 +594,7 @@ export default function OnboardingWizard() {
             {renderStep()}
           </div>
         </div>
+      </div>
       </div>
     </div>
   );

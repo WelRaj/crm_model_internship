@@ -696,6 +696,7 @@ Team Performance page action audit:
 Canonical HRMS page names:
 
 - Employee Directory
+- Employee Onboarding
 - Attendance
 - Leave Management
 - Payroll
@@ -709,6 +710,8 @@ Frontend integration rule:
 
 - All HRMS frontend calls must go through `panel/src/services/hrms-api.ts`.
 - `HRMSHub.tsx` must not call fetch or backend endpoints directly.
+- `OnboardingWizard.tsx` must use `panel/src/services/hrms-api.ts` for Employee Directory handoff and final onboarding status sync.
+- Employee Onboarding must use one combined searchable employee picker: typing filters the backend employee queue and the dropdown result list selects the employee.
 - Backend is the source of truth; mock/local seed state is not the persistence layer.
 
 HRMS API endpoints:
@@ -716,6 +719,7 @@ HRMS API endpoints:
 | Page | Endpoint |
 | --- | --- |
 | Employee Directory | `/api/v1/hrms/employees/` |
+| Employee Onboarding Queue/Completion | `/api/v1/hrms/employees/`, `/api/v1/hrms/employees/{employee_id}/` |
 | Employee Detail/Edit/Archive | `/api/v1/hrms/employees/{employee_id}/` |
 | Attendance | `/api/v1/hrms/attendance/` |
 | Attendance Update | `/api/v1/hrms/attendance/{attendance_id}/` |
@@ -731,6 +735,7 @@ HRMS API endpoints:
 HRMS backend rules:
 
 - Employee Directory reuses `accounts.User` and `accounts.UserProfile` for identity/profile data; HRMS-specific fields are stored in `employees`.
+- Employee Directory employee IDs are auto-generated as `EMP-YYYY-###`; frontend shows the generated ID as read-only and backend also generates the next ID when API payload omits it.
 - Employee ID, email, and mobile duplicates are blocked.
 - Attendance duplicate employee/date records are blocked at service and database level.
 - Payroll duplicate employee/month records are blocked at service and database level.
@@ -766,6 +771,7 @@ HRMS page-by-page verification progress:
 | Page | Status | Notes |
 | --- | --- | --- |
 | Employee Directory | Verified | Add, Save, Update, View, Edit, Offboard, Archive, Export, Clear Filters, search/status filter, close/cancel checked; targeted API test includes create/edit/archive/offboard/list and passes. |
+| Employee Onboarding | Connected | Loads employees created in Employee Directory through centralized HRMS API, pre-fills the onboarding wizard, and final submit updates the selected backend employee to active/KYC complete. |
 | Attendance | Verified | Regularize, Update Regularization, Approve, Reject, Export, Clear Filters, search/status filter, close/cancel checked; readable employee code fixed for search/export; approved/auto-approved rows cannot be rejected from UI/API; targeted API test passes. |
 | Leave Management | Verified | Apply Leave, Save, Manager Approve, HR Approve, Reject, Cancel, Export, Clear Filters, search/status filter, close/cancel checked; readable employee code fixed for search/export; targeted API test covers approve/reject/cancel and passes. |
 | Payroll | Verified | New Payroll, Save, HR Approve, Finance Approve, Mark Paid, Hold, Recheck, Release, Export, Clear Filters, search/status filter, close/cancel checked; readable employee code fixed for search/export; backend blocks repeated hold/paid hold; targeted API test passes. |
@@ -886,3 +892,7 @@ Session continuity rule:
 | 2026-07-14 | Completed HRMS page-by-page verification for Employee Directory, Attendance, Leave Management, Payroll, and Exit Process; fixed readable employee code search/export across Attendance, Leave, Payroll, and Exit; tightened Attendance/Payroll invalid action guards; full HRMS tests, frontend TypeScript, lint, and production build passed. |
 | 2026-07-14 | Cleaned local HRMS verification tables, created 20 fresh HRMS verification employees, ran them through attendance, leave, payroll, and exit flows, and confirmed expected counts/statuses in the local database; Django check and full HRMS tests passed after the data run. |
 | 2026-07-14 | Completed manual browser verification of HRMS pages with the 20 fresh employees using headless Chrome: Employee Directory, Attendance, Leave Management, Payroll, and Exit Process all rendered backend data and visible controls/forms correctly; saved screenshot artifact `hrms-browser-verification-final.png`. |
+| 2026-07-14 | Fixed HRMS Employee Directory -> Employee Onboarding gap: Onboarding now loads backend employees through centralized `hrms-api.ts`, pre-fills selected employee details, and final submit syncs the selected employee back to Employee Directory as active/KYC complete; frontend TypeScript, lint, and production build passed. |
+| 2026-07-14 | Changed HRMS Employee Directory employee ID handling to automatic generation: frontend Add Employee now pre-fills a read-only `EMP-YYYY-###` ID and backend creates the next ID if API payload omits employee_id; Django check, HRMS tests, frontend TypeScript, lint, and production build passed. |
+| 2026-07-14 | Reworked Employee Onboarding employee selection into one combined searchable picker over the backend employee queue; typing filters by employee ID, name, role, team, email, mobile, and KYC status, and the same dropdown result list selects the employee; frontend TypeScript, lint, and production build passed. |
+| 2026-07-14 | Re-verified HRMS pages after onboarding picker and auto employee ID updates: Django check, HRMS tests, frontend TypeScript, lint, production build, dashboard HTTP check, and headless Chrome smoke passed for Employee Onboarding combined picker, Employee Directory Add Employee auto/read-only ID, Attendance, Leave Management, Payroll, and Exit Process. |

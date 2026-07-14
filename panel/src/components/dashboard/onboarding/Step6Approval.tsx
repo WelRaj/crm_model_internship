@@ -9,8 +9,9 @@ export default function Step6Approval({ data, approvals, updateApproval, onFinis
   const [isFinishing, setIsFinishing] = useState(false);
   const [isCompleted, setIsCompleted] = useState(false);
 
-  const handleFinish = () => {
-    if (!onFinish()) return;
+  const handleFinish = async () => {
+    const canFinish = await onFinish();
+    if (!canFinish) return;
     setIsFinishing(true);
     setTimeout(() => {
       setIsFinishing(false);

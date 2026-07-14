@@ -19,6 +19,18 @@ LEAVE_LIMITS = {
 }
 
 
+def _next_employee_id() -> str:
+    prefix = f"EMP-{timezone.now().year}-"
+    existing_ids = User.objects.filter(employee_id__startswith=prefix).values_list("employee_id", flat=True)
+    max_number = 0
+    for employee_id in existing_ids:
+        try:
+            max_number = max(max_number, int(employee_id.removeprefix(prefix)))
+        except ValueError:
+            continue
+    return f"{prefix}{max_number + 1:03d}"
+
+
 def _date_range(start: date, end: date):
     current = start
     while current <= end:
@@ -64,7 +76,10 @@ class HRMSService:
     @staticmethod
     @transaction.atomic
     def create_employee(*, data, actor, request=None):
-        if User.objects.filter(employee_id=data["employee_id"]).exists():
+        employee_id = (data.get("employee_id") or "").strip() or _next_employee_id()
+        while User.objects.filter(employee_id=employee_id).exists():
+            employee_id = _next_employee_id()
+        if User.objects.filter(employee_id=employee_id).exists():
             raise ValidationError({"employee_id": "Employee ID already exists."})
         if User.objects.filter(email__iexact=data["email"]).exists():
             raise ValidationError({"email": "A user with this email already exists."})
@@ -76,7 +91,7 @@ class HRMSService:
             email=data["email"].lower(),
             mobile=data["mobile"],
             password=data.get("password"),
-            employee_id=data["employee_id"],
+            employee_id=employee_id,
             first_name=names[0],
             last_name=names[1] if len(names) > 1 else "",
             department=data["team"],

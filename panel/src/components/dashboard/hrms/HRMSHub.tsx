@@ -392,6 +392,18 @@ const blankEmployeeForm: EmployeeFormState = {
   assetTag: "",
 };
 
+function nextEmployeeCode(employees: EmployeeRecord[]) {
+  const year = new Date().getFullYear();
+  const prefix = `EMP-${year}-`;
+  const maxNumber = employees.reduce((max, employee) => {
+    const code = employee.code || employee.id;
+    if (!code.startsWith(prefix)) return max;
+    const numericPart = Number(code.slice(prefix.length));
+    return Number.isFinite(numericPart) ? Math.max(max, numericPart) : max;
+  }, 0);
+  return `${prefix}${String(maxNumber + 1).padStart(3, "0")}`;
+}
+
 function Badge({ children, tone = "slate" }: { children: ReactNode; tone?: Tone }) {
   return <span className={`inline-flex items-center rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-widest ${toneClasses[tone]}`}>{children}</span>;
 }
@@ -572,7 +584,7 @@ function EmployeeForm({
       </div>
       {error ? <div className="mb-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-xs font-black text-red-700">{error}</div> : null}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
-        <FieldGroup label="Employee ID"><input value={form.id} onChange={(event) => onField("id", event.target.value)} className={inputClass} /></FieldGroup>
+        <FieldGroup label="Employee ID"><input value={form.id} readOnly className={`${inputClass} cursor-not-allowed bg-slate-100 text-slate-500`} /></FieldGroup>
         <FieldGroup label="Name"><input value={form.name} onChange={(event) => onField("name", event.target.value)} className={inputClass} /></FieldGroup>
         <FieldGroup label="Role"><input value={form.role} onChange={(event) => onField("role", event.target.value)} className={inputClass} /></FieldGroup>
         <FieldGroup label="Team"><select value={form.team} onChange={(event) => onField("team", event.target.value)} className={inputClass}>{teams.map((team) => <option key={team}>{team}</option>)}</select></FieldGroup>
@@ -731,7 +743,7 @@ export default function HRMSHub({ activeView, onAddEmployee }: { activeView: HRM
       setEmployeeForm({ ...employee, id: employee.code || employee.id });
       setEditingEmployeeId(employee.id);
     } else {
-      setEmployeeForm(blankEmployeeForm);
+      setEmployeeForm({ ...blankEmployeeForm, id: nextEmployeeCode(employees) });
       setEditingEmployeeId(null);
       if (activeView === "employees" && onAddEmployee) onAddEmployee();
     }
