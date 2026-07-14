@@ -629,6 +629,10 @@ function TeamTrackingView({
       return matchesSearch && matchesProject && matchesStatus;
     });
   }, [assignments, projectFilter, searchTerm, statusFilter]);
+  const visibleProjects = useMemo(() => {
+    const visibleProjectIds = new Set(filteredAssignments.map((assignment) => assignment.projectId));
+    return projects.filter((project) => visibleProjectIds.has(project.id));
+  }, [filteredAssignments, projects]);
 
   const activeAssignments = assignments.filter((assignment) => assignment.status === "Active");
   const completedAssignments = assignments.filter((assignment) => assignment.status === "Completed").length;
@@ -636,7 +640,8 @@ function TeamTrackingView({
     if (assignment.status === "Active") acc[assignment.employeeId] = (acc[assignment.employeeId] || 0) + 1;
     return acc;
   }, {})).filter((count) => count > 2).length;
-  const overdueAssignments = assignments.filter((assignment) => assignment.status === "Active" && assignment.endDate < "2026-06-23" && assignment.progress < 100).length;
+  const today = new Date().toISOString().slice(0, 10);
+  const overdueAssignments = assignments.filter((assignment) => assignment.status === "Active" && assignment.endDate && assignment.endDate < today && assignment.progress < 100).length;
 
   const resetMemberForm = () => {
     setNewMem(blankMemberForm);
@@ -683,7 +688,7 @@ function TeamTrackingView({
 
   const handleEditMember = (projectId: string, member: TeamMember) => {
     setNewMem({
-      employeeId: member.employeeId,
+      employeeId: member.backendUserId ? String(member.backendUserId) : member.employeeId,
       name: member.name,
       role: member.role,
       task: member.assignedWork,
@@ -758,7 +763,7 @@ function TeamTrackingView({
         </div>
       </Panel>
 
-      {projects.map((project) => (
+      {visibleProjects.map((project) => (
         <Panel 
           key={project.id} 
           title={project.name} 
@@ -818,7 +823,17 @@ function TeamTrackingView({
           {activeAddForm === project.id && (
              <div className="p-8 bg-slate-50 rounded-[2rem] border border-slate-100 mb-8 grid grid-cols-1 md:grid-cols-4 gap-6 animate-in slide-in-from-top-4 shadow-sm">
                 {memberError ? <div className="md:col-span-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-xs font-black text-red-700">{memberError}</div> : null}
-                <Field label="Employee" options={users.map((employee) => `${employee.id} - ${employee.employee_id || employee.id} - ${backendUserName(employee)}`)} value={newMem.employeeId ? `${newMem.employeeId} - ${newMem.name}` : ""} onChange={(e: ChangeEvent<HTMLSelectElement>) => handleEmployeeSelect(e.target.value.split(" - ")[0])} />
+                <label className="block space-y-1.5">
+                  <span className="text-xs font-black uppercase tracking-widest text-slate-500">Employee</span>
+                  <select value={newMem.employeeId} onChange={(e: ChangeEvent<HTMLSelectElement>) => handleEmployeeSelect(e.target.value)} className="h-11 w-full rounded-xl border border-border bg-white px-3 text-sm font-semibold text-primary outline-none transition-all focus:border-primary focus:ring-4 focus:ring-primary/10">
+                    <option value="">Select Employee...</option>
+                    {users.map((employee) => (
+                      <option key={employee.id} value={employee.id}>
+                        {employee.employee_id || employee.id} - {backendUserName(employee)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
                 <Field label="Role" value={newMem.role} onChange={(e: ChangeEvent<HTMLInputElement>) => setNewMem({...newMem, role: e.target.value})} />
                 <Field label="Task Detail" value={newMem.task} onChange={(e: ChangeEvent<HTMLInputElement>) => setNewMem({...newMem, task: e.target.value})} />
                 <div className="grid grid-cols-2 gap-2">
@@ -869,6 +884,11 @@ function TeamTrackingView({
           </DataTable>
         </Panel>
       ))}
+      {visibleProjects.length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-border bg-slate-50 p-6 text-center text-xs font-black uppercase tracking-widest text-slate-400">
+          No team assignments match the selected filters
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -967,7 +987,7 @@ function GlobalTasksTracker({
 
   const handleEditTask = (task: TeamMember & { projectId: string }) => {
     setTaskForm({
-      employeeId: task.employeeId,
+      employeeId: task.backendUserId ? String(task.backendUserId) : task.employeeId,
       name: task.name,
       role: task.role,
       task: task.assignedWork,
@@ -1035,7 +1055,17 @@ function GlobalTasksTracker({
           {taskError ? <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-xs font-black text-red-700">{taskError}</div> : null}
           <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
             <Field label="Project" options={projects.map((project) => `${project.id} - ${project.name}`)} value={targetProjectId ? `${targetProjectId} - ${projects.find((project) => project.id === targetProjectId)?.name || ""}` : ""} onChange={(e: ChangeEvent<HTMLSelectElement>) => setTargetProjectId(e.target.value.split(" - ")[0])} />
-            <Field label="Owner" options={users.map((employee) => `${employee.id} - ${employee.employee_id || employee.id} - ${backendUserName(employee)}`)} value={taskForm.employeeId ? `${taskForm.employeeId} - ${taskForm.name}` : ""} onChange={(e: ChangeEvent<HTMLSelectElement>) => handleEmployeeSelect(e.target.value.split(" - ")[0])} />
+            <label className="block space-y-1.5">
+              <span className="text-xs font-black uppercase tracking-widest text-slate-500">Owner</span>
+              <select value={taskForm.employeeId} onChange={(e: ChangeEvent<HTMLSelectElement>) => handleEmployeeSelect(e.target.value)} className="h-11 w-full rounded-xl border border-border bg-white px-3 text-sm font-semibold text-primary outline-none transition-all focus:border-primary focus:ring-4 focus:ring-primary/10">
+                <option value="">Select Owner...</option>
+                {users.map((employee) => (
+                  <option key={employee.id} value={employee.id}>
+                    {employee.employee_id || employee.id} - {backendUserName(employee)}
+                  </option>
+                ))}
+              </select>
+            </label>
             <Field label="Role" value={taskForm.role} onChange={(e: ChangeEvent<HTMLInputElement>) => setTaskForm({ ...taskForm, role: e.target.value })} />
             <Field label="Task" value={taskForm.task} onChange={(e: ChangeEvent<HTMLInputElement>) => setTaskForm({ ...taskForm, task: e.target.value })} />
             <Field label="Start Date" type="date" value={taskForm.start} onChange={(e: ChangeEvent<HTMLInputElement>) => setTaskForm({ ...taskForm, start: e.target.value })} />
