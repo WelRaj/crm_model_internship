@@ -12,8 +12,8 @@ import {
   ActionButton, DataTable, StatusBadge, Panel, MetricCard, ProgressBar, Field 
 } from "../accounting/AccountingComponents";
 import { type ClientContactSnapshot } from "./projectHandoff";
-import { listUsers } from "@/services/accounts-api";
 import type { AuthUser } from "@/services/auth-api";
+import { listHrmsEmployees } from "@/services/hrms-api";
 import { listProjectHandoffs, type ProjectHandoffRecord } from "@/services/leads-api";
 import {
   assignProjectTeamMember,
@@ -1871,14 +1871,14 @@ export default function ProjectHub({ activeView = "projects" }: { activeView?: s
       setIsLoading(true);
       setBackendMessage("");
       try {
-        const [projectResponse, userResponse] = await Promise.all([
+        const [projectResponse, activeHrmsEmployees] = await Promise.all([
           listDeliveryProjects(),
-          listUsers({ status: "active", limit: 200 }),
+          listHrmsEmployees({ status: "active" }),
         ]);
         const handoffResponse = await listProjectHandoffs();
         if (!isMounted) return;
         setProjects(projectResponse.map(projectFromBackend));
-        setBackendUsers(userResponse.data);
+        setBackendUsers(activeHrmsEmployees.map((employee) => employee.user_detail).filter((user) => user?.is_active));
         setProjectHandoffs(handoffResponse);
       } catch (error) {
         if (isMounted) setBackendMessage(error instanceof Error ? error.message : "Unable to load delivery projects.");

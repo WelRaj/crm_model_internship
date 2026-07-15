@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { CheckCircle2, Download, Filter, Save, Search, XCircle } from "lucide-react";
+import { listHrmsEmployees } from "@/services/hrms-api";
 import {
   listFollowUps,
   saveLeadOutcome,
@@ -121,9 +122,17 @@ export default function LeadOutcomes() {
     let isMounted = true;
     const loadOutcomes = async () => {
       try {
-        const response = await listFollowUps({ due_status: "done" });
+        const [response, activeHrmsEmployees] = await Promise.all([
+          listFollowUps({ due_status: "done" }),
+          listHrmsEmployees({ status: "active" }),
+        ]);
         if (!isMounted) return;
-        const nextRows = latestDoneRows(response);
+        const activeOwnerIds = new Set(activeHrmsEmployees.map((employee) => employee.user_detail?.id).filter(Boolean));
+        const activeOwnerFollowUps = response.filter((item) => {
+          const assignedOwnerId = item.lead_detail?.assigned_to?.id;
+          return Boolean(assignedOwnerId && activeOwnerIds.has(assignedOwnerId));
+        });
+        const nextRows = latestDoneRows(activeOwnerFollowUps);
         setRows(nextRows);
         setDrafts(
           Object.fromEntries(

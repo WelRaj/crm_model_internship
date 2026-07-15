@@ -4,6 +4,7 @@ from django.utils import timezone
 from apps.accounts.models import Role, User, UserRole
 from apps.audit.models import AuditLog
 from apps.crm.models import ClientContact, Lead, LeadFollowUp, ProjectAgreement, ProjectClient, ProjectHandoff
+from apps.hrms.models import EmployeeHRProfile
 
 
 class LeadApiTests(APITestCase):
@@ -13,6 +14,16 @@ class LeadApiTests(APITestCase):
             mobile="9876543999",
             password="User@12345",
             first_name="CRM",
+            employee_id="EMP-CRM-001",
+            department="Client Operations",
+            designation="CRM User",
+        )
+        EmployeeHRProfile.objects.create(
+            user=self.user,
+            role="CRM User",
+            team="Client Operations",
+            status=EmployeeHRProfile.Status.ACTIVE,
+            kyc_status=EmployeeHRProfile.KycStatus.COMPLETE,
         )
         self.client.force_authenticate(user=self.user)
 
@@ -78,6 +89,16 @@ class LeadApiTests(APITestCase):
             mobile="9876543111",
             password="User@12345",
             first_name="Assign",
+            employee_id="EMP-CRM-ASSIGN",
+            department="Client Operations",
+            designation="Telecaller",
+        )
+        EmployeeHRProfile.objects.create(
+            user=assignee,
+            role="Telecaller",
+            team="Client Operations",
+            status=EmployeeHRProfile.Status.ACTIVE,
+            kyc_status=EmployeeHRProfile.KycStatus.COMPLETE,
         )
 
         detail_response = self.client.get(f"/api/v1/leads/{lead.id}/")
@@ -124,6 +145,29 @@ class LeadApiTests(APITestCase):
         self.assertEqual(AuditLog.objects.filter(module="crm", action="assign").count(), audit_count)
         self.assertEqual(LeadFollowUp.objects.filter(lead=lead).count(), 1)
 
+        archived_user = User.objects.create_user(
+            email="archived.assignee@example.com",
+            mobile="9876543112",
+            password="User@12345",
+            first_name="Archived",
+            employee_id="EMP-CRM-ARCHIVED",
+            department="Client Operations",
+            designation="Telecaller",
+        )
+        EmployeeHRProfile.objects.create(
+            user=archived_user,
+            role="Telecaller",
+            team="Client Operations",
+            status=EmployeeHRProfile.Status.ARCHIVED,
+            kyc_status=EmployeeHRProfile.KycStatus.COMPLETE,
+        )
+        archived_response = self.client.post(
+            f"/api/v1/leads/{lead.id}/assign/",
+            {"assigned_to_id": archived_user.id},
+            format="json",
+        )
+        self.assertEqual(archived_response.status_code, 400)
+
     def test_assignment_auto_balances_when_requested_telecaller_is_overloaded(self):
         role = Role.objects.create(code="telecaller", name="Telecaller")
         busy_user = User.objects.create_user(
@@ -131,12 +175,32 @@ class LeadApiTests(APITestCase):
             mobile="9876543121",
             password="User@12345",
             first_name="Busy",
+            employee_id="EMP-CRM-BUSY",
+            department="Client Operations",
+            designation="Telecaller",
         )
         free_user = User.objects.create_user(
             email="free.telecaller@example.com",
             mobile="9876543122",
             password="User@12345",
             first_name="Free",
+            employee_id="EMP-CRM-FREE",
+            department="Client Operations",
+            designation="Telecaller",
+        )
+        EmployeeHRProfile.objects.create(
+            user=busy_user,
+            role="Telecaller",
+            team="Client Operations",
+            status=EmployeeHRProfile.Status.ACTIVE,
+            kyc_status=EmployeeHRProfile.KycStatus.COMPLETE,
+        )
+        EmployeeHRProfile.objects.create(
+            user=free_user,
+            role="Telecaller",
+            team="Client Operations",
+            status=EmployeeHRProfile.Status.ACTIVE,
+            kyc_status=EmployeeHRProfile.KycStatus.COMPLETE,
         )
         UserRole.objects.create(user=busy_user, role=role, assigned_by=self.user)
         UserRole.objects.create(user=free_user, role=role, assigned_by=self.user)
@@ -311,6 +375,47 @@ class LeadApiTests(APITestCase):
         self.assertEqual(handoff_response.status_code, 201)
         self.assertEqual(ProjectHandoff.objects.count(), 1)
         self.assertTrue(AuditLog.objects.filter(module="crm", entity_type="ProjectHandoff").exists())
+
+        duplicate_handoff_response = self.client.post(
+            "/api/v1/project-handoffs/",
+            {
+                "client_id": client_id,
+                "project_code": "PRJ-CRM-002",
+                "project_manager": "Delivery Manager",
+                "start_date": "2026-07-13",
+                "target_end_date": "2026-08-13",
+                "priority": "medium",
+                "billing_model": "Milestone Based",
+                "delivery_method": "Agile",
+                "communication_channel": "WhatsApp",
+                "repository_url": "https://example.com/repo-2",
+                "kickoff_notes": "Duplicate active handoff should be blocked.",
+            },
+            format="json",
+        )
+        self.assertEqual(duplicate_handoff_response.status_code, 400)
+        self.assertEqual(ProjectHandoff.objects.count(), 1)
+
+        handoff_id = handoff_response.data["data"]["id"]
+        update_handoff_response = self.client.put(
+            f"/api/v1/project-handoffs/{handoff_id}/",
+            {
+                "client_id": client_id,
+                "project_code": "PRJ-CRM-001",
+                "project_manager": "Updated Delivery Manager",
+                "start_date": "2026-07-14",
+                "target_end_date": "2026-08-14",
+                "priority": "critical",
+                "billing_model": "Milestone Based",
+                "delivery_method": "Agile",
+                "communication_channel": "Email",
+                "repository_url": "https://example.com/repo",
+                "kickoff_notes": "Existing handoff update remains allowed.",
+            },
+            format="json",
+        )
+        self.assertEqual(update_handoff_response.status_code, 200)
+        self.assertEqual(ProjectHandoff.objects.count(), 1)
 
     def test_won_project_leads_are_available_as_project_clients(self):
         Lead.objects.create(

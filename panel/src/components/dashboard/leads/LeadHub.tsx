@@ -2,8 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Briefcase, Check, ChevronDown, Eye, Headphones, Target, X } from "lucide-react";
-import { listUsers } from "@/services/accounts-api";
 import { type AuthUser } from "@/services/auth-api";
+import { listHrmsEmployees } from "@/services/hrms-api";
 import {
   assignLead,
   createLead,
@@ -86,12 +86,12 @@ export default function LeadHub() {
       try {
         const [leadResponse, userResponse] = await Promise.all([
           listLeads({ limit: 100 }),
-          listUsers({ limit: 100, status: "active" }),
+          listHrmsEmployees({ status: "active" }),
         ]);
         if (!isMounted) return;
 
         setBackendLeads(leadResponse.data);
-        setActiveUsers(userResponse.data);
+        setActiveUsers(userResponse.map((employee) => employee.user_detail).filter((user) => user?.is_active));
         setApiError("");
       } catch (error) {
         if (isMounted) setApiError(error instanceof Error ? error.message : "Unable to load leads.");

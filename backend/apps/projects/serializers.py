@@ -4,7 +4,19 @@ from apps.accounts.models import User
 from apps.accounts.serializers import UserSummarySerializer
 from apps.crm.models import ProjectAgreement, ProjectHandoff
 from apps.crm.serializers import ProjectClientSerializer, ProjectHandoffSerializer
+from apps.hrms.models import EmployeeHRProfile
 from apps.projects.models import DeliveryProject, EmployeePerformanceReview, ProjectDeadline, ProjectMilestone, ProjectTask, ProjectTeamAssignment
+
+
+def get_active_hrms_user(user_id: int, error_message: str):
+    try:
+        return User.objects.select_related("hr_profile").get(
+            id=user_id,
+            is_active=True,
+            hr_profile__status=EmployeeHRProfile.Status.ACTIVE,
+        )
+    except User.DoesNotExist as exc:
+        raise serializers.ValidationError(error_message) from exc
 
 
 class DeliveryProjectSerializer(serializers.ModelSerializer):
@@ -101,10 +113,7 @@ class DeliveryProjectCreateSerializer(serializers.Serializer):
     def validate_project_manager_id(self, value):
         if value is None:
             return value
-        try:
-            return User.objects.get(id=value, is_active=True)
-        except User.DoesNotExist as exc:
-            raise serializers.ValidationError("Active project manager user does not exist.") from exc
+        return get_active_hrms_user(value, "Active HRMS project manager does not exist.")
 
     def validate(self, attrs):
         handoff = ProjectHandoff.objects.select_related("client").get(id=attrs.pop("project_handoff_id"), is_deleted=False)
@@ -136,10 +145,7 @@ class DeliveryProjectUpdateSerializer(serializers.Serializer):
     def validate_project_manager_id(self, value):
         if value is None:
             return value
-        try:
-            return User.objects.get(id=value, is_active=True)
-        except User.DoesNotExist as exc:
-            raise serializers.ValidationError("Active project manager user does not exist.") from exc
+        return get_active_hrms_user(value, "Active HRMS project manager does not exist.")
 
     def validate(self, attrs):
         project = self.context["project"]
@@ -174,10 +180,7 @@ class ProjectTeamAssignmentWriteSerializer(serializers.Serializer):
     notes = serializers.CharField(max_length=240, required=False, allow_blank=True)
 
     def validate_user_id(self, value):
-        try:
-            return User.objects.get(id=value, is_active=True)
-        except User.DoesNotExist as exc:
-            raise serializers.ValidationError("Active project team user does not exist.") from exc
+        return get_active_hrms_user(value, "Active HRMS project team user does not exist.")
 
     def validate(self, attrs):
         attrs["user"] = attrs.pop("user_id")
@@ -246,10 +249,7 @@ class ProjectTaskWriteSerializer(serializers.Serializer):
     def validate_assigned_to_id(self, value):
         if value is None:
             return value
-        try:
-            return User.objects.get(id=value, is_active=True)
-        except User.DoesNotExist as exc:
-            raise serializers.ValidationError("Active assignee user does not exist.") from exc
+        return get_active_hrms_user(value, "Active HRMS task assignee does not exist.")
 
     def validate(self, attrs):
         project = self.context.get("project")
@@ -368,18 +368,12 @@ class EmployeePerformanceReviewWriteSerializer(serializers.Serializer):
     feedback = serializers.DictField(required=False)
 
     def validate_employee_id(self, value):
-        try:
-            return User.objects.get(id=value, is_active=True)
-        except User.DoesNotExist as exc:
-            raise serializers.ValidationError("Active employee user does not exist.") from exc
+        return get_active_hrms_user(value, "Active HRMS employee user does not exist.")
 
     def validate_manager_id(self, value):
         if value is None:
             return value
-        try:
-            return User.objects.get(id=value, is_active=True)
-        except User.DoesNotExist as exc:
-            raise serializers.ValidationError("Active manager user does not exist.") from exc
+        return get_active_hrms_user(value, "Active HRMS manager user does not exist.")
 
     def validate(self, attrs):
         review = self.context.get("review")

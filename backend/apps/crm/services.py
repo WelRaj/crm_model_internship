@@ -6,6 +6,7 @@ from apps.accounts.models import User
 from apps.audit.services import record_audit_log
 from apps.core.models import Sequence
 from apps.crm.models import ClientContact, Lead, LeadFollowUp, ProjectAgreement, ProjectClient, ProjectHandoff
+from apps.hrms.models import EmployeeHRProfile
 
 MAX_ACTIVE_LEADS_PER_TELECALLER = 5
 OPEN_LEAD_STATUSES = [
@@ -114,7 +115,7 @@ def _active_lead_count(user):
 
 def _least_loaded_telecaller(*, exclude_user_id=None):
     queryset = (
-        User.objects.filter(is_active=True, user_roles__role__code="telecaller")
+        User.objects.filter(is_active=True, user_roles__role__code="telecaller", hr_profile__status=EmployeeHRProfile.Status.ACTIVE)
         .exclude(id=exclude_user_id)
         .annotate(
             active_lead_count=Count(
@@ -127,6 +128,17 @@ def _least_loaded_telecaller(*, exclude_user_id=None):
         .distinct()
     )
     return queryset.first()
+
+
+def _get_active_hrms_lead_owner(user_id):
+    try:
+        return User.objects.select_related("hr_profile").get(
+            id=user_id,
+            is_active=True,
+            hr_profile__status=EmployeeHRProfile.Status.ACTIVE,
+        )
+    except User.DoesNotExist as exc:
+        raise ValidationError({"assigned_to_id": "Active HRMS employee does not exist for lead assignment."}) from exc
 
 
 class LeadService:
@@ -214,7 +226,7 @@ class LeadService:
         requested_user = None
         auto_balance_note = ""
         if assigned_to_id is not None:
-            requested_user = User.objects.get(id=assigned_to_id, is_active=True)
+            requested_user = _get_active_hrms_lead_owner(assigned_to_id)
             assigned_user = requested_user
             requested_load = _active_lead_count(requested_user)
             if requested_load >= MAX_ACTIVE_LEADS_PER_TELECALLER:
@@ -487,6 +499,17 @@ class ProjectClientService:
             project.client = client
             project.save(update_fields=[*values.keys(), "client", "updated_at"])
         else:
+            active_handoff_exists = ProjectHandoff.objects.filter(
+                client=client,
+                is_deleted=False,
+                status__in=[
+                    ProjectHandoff.Status.PLANNING,
+                    ProjectHandoff.Status.ACTIVE,
+                    ProjectHandoff.Status.ON_HOLD,
+                ],
+            ).exists()
+            if active_handoff_exists:
+                raise ValidationError({"client_id": "Active project handoff already exists for this client. Edit the existing handoff instead."})
             project = ProjectHandoff.objects.create(
                 client=client,
                 status=ProjectHandoff.Status.PLANNING,

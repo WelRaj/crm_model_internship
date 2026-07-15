@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { CalendarClock, CheckCircle2, Clock, Download, MessageCircle, PhoneCall, Search } from "lucide-react";
+import { listHrmsEmployees } from "@/services/hrms-api";
 import { createLeadFollowUp, listFollowUps, type LeadFollowUpRecord } from "@/services/leads-api";
 
 type FollowUpStatus = "Due Today" | "Overdue" | "Scheduled" | "Done" | "No Date";
@@ -100,8 +101,18 @@ export default function FollowUps() {
 
   const loadRows = async () => {
     try {
-      const response = await listFollowUps();
-      const nextRows = response.map(rowFromFollowUp).filter((row): row is FollowUpRow => Boolean(row));
+      const [response, activeHrmsEmployees] = await Promise.all([
+        listFollowUps(),
+        listHrmsEmployees({ status: "active" }),
+      ]);
+      const activeOwnerIds = new Set(activeHrmsEmployees.map((employee) => employee.user_detail?.id).filter(Boolean));
+      const nextRows = response
+        .filter((item) => {
+          const assignedOwnerId = item.lead_detail?.assigned_to?.id;
+          return Boolean(assignedOwnerId && activeOwnerIds.has(assignedOwnerId));
+        })
+        .map(rowFromFollowUp)
+        .filter((row): row is FollowUpRow => Boolean(row));
       setRows(nextRows);
       setSelectedId((current) => current || nextRows[0]?.id || "");
       setApiError("");

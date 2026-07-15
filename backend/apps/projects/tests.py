@@ -5,6 +5,7 @@ from rest_framework.test import APITestCase
 from apps.accounts.models import User
 from apps.audit.models import AuditLog
 from apps.crm.models import ProjectAgreement, ProjectClient, ProjectHandoff
+from apps.hrms.models import EmployeeHRProfile
 from apps.projects.models import DeliveryProject, EmployeePerformanceReview, ProjectDeadline, ProjectMilestone, ProjectTask, ProjectTeamAssignment
 from apps.projects.services import DeliveryProjectService
 
@@ -12,6 +13,17 @@ from apps.projects.services import DeliveryProjectService
 class DeliveryProjectModelTests(APITestCase):
     def setUp(self):
         self.user = User.objects.create_user(email="project.user@example.com", mobile="9811111111", password="User@12345")
+        self.user.employee_id = "EMP-PROJECT-001"
+        self.user.department = "Product Engineering"
+        self.user.designation = "Delivery Engineer"
+        self.user.save(update_fields=["employee_id", "department", "designation"])
+        EmployeeHRProfile.objects.create(
+            user=self.user,
+            role="Delivery Engineer",
+            team="Product Engineering",
+            status=EmployeeHRProfile.Status.ACTIVE,
+            kyc_status=EmployeeHRProfile.KycStatus.COMPLETE,
+        )
         self.client.force_authenticate(user=self.user)
         self.client_record = ProjectClient.objects.create(
             client_number="ACC-TEST-001",
@@ -194,6 +206,34 @@ class DeliveryProjectModelTests(APITestCase):
         self.assertEqual(team_update_response.data["data"]["id"], assignment_id)
         self.assertEqual(team_update_response.data["data"]["allocation_percent"], 60)
 
+        archived_user = User.objects.create_user(
+            email="archived.delivery@example.com",
+            mobile="9811111199",
+            password="User@12345",
+            employee_id="EMP-PROJECT-ARCHIVED",
+            department="Product Engineering",
+            designation="Archived Developer",
+        )
+        EmployeeHRProfile.objects.create(
+            user=archived_user,
+            role="Archived Developer",
+            team="Product Engineering",
+            status=EmployeeHRProfile.Status.ARCHIVED,
+            kyc_status=EmployeeHRProfile.KycStatus.COMPLETE,
+        )
+        archived_team_response = self.client.post(
+            f"/api/v1/projects/{project_id}/team/",
+            {
+                "user_id": archived_user.id,
+                "role": "developer",
+                "allocation_percent": 50,
+                "start_date": str(date.today()),
+                "notes": "Archived employee should not be assignable.",
+            },
+            format="json",
+        )
+        self.assertEqual(archived_team_response.status_code, 400)
+
         milestone_response = self.client.post(
             f"/api/v1/projects/{project_id}/milestones/",
             {
@@ -350,6 +390,25 @@ class DeliveryProjectModelTests(APITestCase):
 
         duplicate_response = self.client.post("/api/v1/projects/performance-reviews/", payload, format="json")
         self.assertEqual(duplicate_response.status_code, 400)
+
+        archived_user = User.objects.create_user(
+            email="archived.performance@example.com",
+            mobile="9811111188",
+            password="User@12345",
+            employee_id="EMP-PERF-ARCHIVED",
+            department="Product Engineering",
+            designation="Archived Reviewer",
+        )
+        EmployeeHRProfile.objects.create(
+            user=archived_user,
+            role="Archived Reviewer",
+            team="Product Engineering",
+            status=EmployeeHRProfile.Status.ARCHIVED,
+            kyc_status=EmployeeHRProfile.KycStatus.COMPLETE,
+        )
+        archived_payload = {**payload, "employee_id": archived_user.id, "manager_id": self.user.id, "review_cycle": "Q3 2026"}
+        archived_response = self.client.post("/api/v1/projects/performance-reviews/", archived_payload, format="json")
+        self.assertEqual(archived_response.status_code, 400)
 
         update_payload = {**payload, "status": "archived", "review_stage": "finalized", "rating": "4.5"}
         update_response = self.client.put(f"/api/v1/projects/performance-reviews/{review_id}/", update_payload, format="json")

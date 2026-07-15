@@ -93,13 +93,14 @@ Current status:
 - Current state is stable for auth, profile, admin control, lead intake, lead detail, assignment, and lead follow-ups. Next backend work should connect the broader CRM operational screens such as Lead Assignment and Calling Desk to these backend records.
 - CRM lead detail/update/assignment APIs are now added for `GET/PUT /api/v1/leads/{id}/` and `POST /api/v1/leads/{id}/assign/` with transactional updates, duplicate checks, audit logs, and frontend API wrappers.
 - CRM lead follow-up history is now backend-backed with `LeadFollowUp`, audited create flow, and Lead drawer add/list UI.
-- Lead Assignment screen now loads backend leads and active backend users, assigns selected leads through the centralized lead assignment API, and stores assignment notes as lead follow-ups.
-- Lead Assignment owner selection now uses a backend active-user dropdown instead of free text, preventing assignments from saving without a valid backend user id.
+- Lead Assignment screen now loads backend leads and active HRMS employees, assigns selected leads through the centralized lead assignment API, and stores assignment notes as lead follow-ups.
+- Lead Assignment owner selection now uses an active HRMS employee dropdown instead of free text, preventing assignments from saving without a valid backend user id.
 - Local verification seed data includes 5 active telecaller users (`TEL-VERIFY-001` to `TEL-VERIFY-005`, password `Tele@12345`) and 5 unassigned fresh trading leads (`Trading Verify Lead 01` to `Trading Verify Lead 05`) for assignment testing.
 - Lead assignment is now idempotent for the same assignee: repeated clicks with the same `assigned_to_id` do not create extra reassignment audit events or churn the lead state.
 - Lead Assignment history is backend-owned: actual assignment changes create a `LeadFollowUp` history row in the backend, and the Lead Assignment history table renders selected-lead backend follow-ups instead of local-only activity state.
 - Calling Desk now loads backend assigned leads, groups them by backend assigned user, and saves call logs through centralized lead follow-up APIs instead of seed-only local call state.
 - Lead assignment now has backend smart balancing: if the requested telecaller already has 5 active open leads, the lead is assigned to the least-loaded active telecaller instead, with an auto-balance note saved in backend history.
+- Lead assignment employee eligibility is tied to HRMS: Lead Desk owner dropdown, Lead Assignment calling owner dropdown, and smart telecaller balancing use active HRMS employees only; backend rejects archived/exited/non-HRMS users for assignment.
 - Follow-ups screen now uses backend `LeadFollowUp` data through the centralized frontend leads API wrapper, including a global `/api/v1/follow-ups/` queue endpoint with basic filters.
 - Lead Outcomes now immediately syncs project leads into Project Clients when a completed-follow-up project lead is saved as `won`.
 - Client Operations full verification seed data includes 5 trading leads (`LEAD-00014`, `LEAD-00016`, `LEAD-00018`, `LEAD-00020`, `LEAD-00022`) and 5 project leads (`LEAD-00015`, `LEAD-00017`, `LEAD-00019`, `LEAD-00021`, `LEAD-00023`) created through backend services for end-to-end testing.
@@ -591,6 +592,20 @@ Canonical Client Operations page names:
 | Project Clients | Won project client records, contacts, and project handoffs |
 | Legal Agreements | Project agreement drafting and signing workflow |
 
+Client Operations employee source rule:
+
+| Area | Rule |
+| --- | --- |
+| Lead Desk owner selection | Loads users from `panel/src/services/hrms-api.ts` with `status=active`; no direct generic user API call in the component |
+| Lead Assignment calling owner | Loads users from `panel/src/services/hrms-api.ts` with `status=active`; selected owner must be a valid backend user linked to an active HRMS profile |
+| Calling Desk owner queue | Loads active HRMS employees through `panel/src/services/hrms-api.ts` and shows only assigned leads whose owner is still an active HRMS employee |
+| Follow-ups queue | Loads follow-up records through `leads-api.ts`, loads active HRMS employees through `hrms-api.ts`, and shows only follow-ups whose lead owner is still an active HRMS employee |
+| Lead Outcomes queue | Loads completed follow-up records through `leads-api.ts`, loads active HRMS employees through `hrms-api.ts`, and shows only outcome decisions whose lead owner is still an active HRMS employee |
+| Project Clients | Loads won project client/contact/handoff records through centralized `leads-api.ts`; client contacts are external client people, while delivery employee assignment continues in Delivery Projects through active HRMS employee selectors |
+| Legal Agreements | Loads backend project handoffs and agreements through centralized `leads-api.ts`; active agreements require signed attachment names, update client agreement status to signed, and duplicate agreements for the same project handoff are blocked |
+| Backend lead assignment | `POST /api/v1/leads/{id}/assign/` rejects archived, exited, on-notice, inactive, or non-HRMS users |
+| Smart telecaller balancing | Least-loaded telecaller selection only considers active users with telecaller role and active HRMS profile |
+
 Implemented Projects / Delivery Operations APIs:
 
 | Method | Endpoint | Purpose |
@@ -609,7 +624,7 @@ Implemented Projects / Delivery Operations APIs:
 | `POST` | `/api/v1/projects/{id}/deadlines/` | Create a critical project deadline |
 | `PUT` | `/api/v1/projects/deadlines/{id}/` | Update project deadline title, date, severity, status, and notes |
 | `GET` | `/api/v1/projects/performance-reviews/` | List employee performance reviews with search, department, status, and cycle filters |
-| `POST` | `/api/v1/projects/performance-reviews/` | Create an employee performance review linked to a backend active user |
+| `POST` | `/api/v1/projects/performance-reviews/` | Create an employee performance review linked to an active HRMS employee |
 | `PUT` | `/api/v1/projects/performance-reviews/{id}/` | Update review stage, scores, status, manager notes, career signals, and archive/restore state |
 
 Canonical Delivery Projects page names:
@@ -636,6 +651,7 @@ Team Assignment page action audit:
 | Remove assignment row | Calls `DELETE /api/v1/projects/team/{id}/` and soft-deletes with audit |
 | Remove task row | Calls `DELETE /api/v1/projects/tasks/{id}/` and soft-deletes with audit |
 | Set Team Leader | Updates delivery project manager and saves a `team_lead` assignment through backend APIs |
+| HRMS active employee guard | Team leader, assign member, and task owner choices come from active HRMS employees only; backend rejects archived/exited/non-HRMS users for project manager, team assignment, and task assignee APIs |
 
 Tasks page action audit:
 
@@ -690,6 +706,7 @@ Team Performance page action audit:
 | Archive/Restore | Calls centralized `updateEmployeePerformanceReview`; archive maps to backend `archived`, restore maps to `meets_expectations` |
 | View Drawer | Displays the selected backend-loaded review detail without mutation |
 | Metrics | Active reviews, top performers, average rating, coaching needs, and promotion-ready counts use backend-loaded records |
+| HRMS active employee guard | Employee and manager dropdowns use active HRMS employees only; backend rejects archived/exited/non-HRMS users for performance review employee and manager APIs |
 
 ## 12.2 HRMS / People Operations Backend Status
 
@@ -896,3 +913,13 @@ Session continuity rule:
 | 2026-07-14 | Changed HRMS Employee Directory employee ID handling to automatic generation: frontend Add Employee now pre-fills a read-only `EMP-YYYY-###` ID and backend creates the next ID if API payload omits employee_id; Django check, HRMS tests, frontend TypeScript, lint, and production build passed. |
 | 2026-07-14 | Reworked Employee Onboarding employee selection into one combined searchable picker over the backend employee queue; typing filters by employee ID, name, role, team, email, mobile, and KYC status, and the same dropdown result list selects the employee; frontend TypeScript, lint, and production build passed. |
 | 2026-07-14 | Re-verified HRMS pages after onboarding picker and auto employee ID updates: Django check, HRMS tests, frontend TypeScript, lint, production build, dashboard HTTP check, and headless Chrome smoke passed for Employee Onboarding combined picker, Employee Directory Add Employee auto/read-only ID, Attendance, Leave Management, Payroll, and Exit Process. |
+| 2026-07-15 | Connected Delivery Team Assignment eligibility to HRMS active employee status: ProjectHub now loads active HRMS employees for project manager/team/task dropdowns, and backend project manager/team assignment/task assignee serializers reject archived, exited, or non-HRMS users; added projects regression coverage and verified Django check, projects tests, HRMS tests, frontend TypeScript, lint, and production build. |
+| 2026-07-15 | Connected Delivery Team Performance review eligibility to HRMS active employee status: EmployeePerformance now loads active HRMS employees for employee/manager dropdowns, and backend performance review serializers reject archived, exited, or non-HRMS users; added projects regression coverage and verified Django check, projects tests, HRMS tests, frontend TypeScript, lint, and production build. |
+| 2026-07-15 | Manually verified Delivery Projects HRMS active-employee eligibility in headless Chrome: opened Delivery Projects, Team Assignment, and Team Performance; confirmed active HRMS employees appear in dropdowns and exited HRMS employees (`HRMS-VERIFY-001`, `HRMS-VERIFY-002`) are hidden from Team Assignment and Performance Review selects. |
+| 2026-07-15 | Connected Client Operations employee eligibility to HRMS active employee status: Lead Desk and Lead Assignment now load owner options from centralized `hrms-api.ts` with `status=active`, and backend lead assignment plus smart telecaller balancing reject archived/exited/non-HRMS users; added CRM regression coverage and verified Django check plus frontend TypeScript. |
+| 2026-07-15 | Verified cross-module employee source rule against local backend data: `/api/v1/hrms/employees/?status=active` returned 16 active employees only from the 20 HRMS verification employees, while exited/on-notice samples (`HRMS-VERIFY-001`, `HRMS-VERIFY-002`, `HRMS-VERIFY-004`, `HRMS-VERIFY-005`) were rejected by Lead Assignment, Delivery Team Assignment, and Team Performance APIs with HTTP 400. |
+| 2026-07-15 | Completed Calling Desk page verification/fix: `TelecallerDesk.tsx` now loads active HRMS employees through centralized `hrms-api.ts`, filters the calling queue to active HRMS owners only, hides old non-HRMS assignments, and call-log create/history APIs were verified on `LEAD-00019` assigned to `HRMS-VERIFY-003` (`POST follow-up` 201, history 200). |
+| 2026-07-15 | Completed Follow-ups page verification/fix: `FollowUps.tsx` now combines centralized `leads-api.ts` follow-up queue data with active HRMS employees from `hrms-api.ts`, hides follow-ups for old non-active/non-HRMS owners, and quick-log completion was verified on `LEAD-00019` (`POST follow-up` 201, done queue visible for Lead Outcomes). |
+| 2026-07-15 | Completed Lead Outcomes page verification/fix: `LeadOutcomes.tsx` now combines completed follow-ups from centralized `leads-api.ts` with active HRMS employees from `hrms-api.ts`, hides outcome decisions for old non-active/non-HRMS owners, and verified project lead `LEAD-00019` outcome save as won (`POST outcome` 200) with Project Client sync remaining idempotent (`1 -> 1`, repeat `1`). |
+| 2026-07-15 | Completed Project Clients page verification/fix: `ClientsContacts.tsx` already used centralized `leads-api.ts` only; verified project client sync idempotency (`16 -> 16`), contact add (`POST contact` 201), role counts, and project handoff create (`POST handoff` 201). Added backend guard so repeated active handoff creation for the same client is blocked (`POST duplicate handoff` 400, handoff count unchanged) while existing handoff updates remain allowed. |
+| 2026-07-15 | Completed Legal Agreements page verification: `ProjectAgreement.tsx` uses centralized `leads-api.ts` only; verified backend agreement list/search, invalid expiry-date rejection, active-without-PDF rejection, agreement create (`POST` 201), duplicate same-handoff block (`POST` 400), update existing agreement (`PUT` 200), and client agreement status syncing to signed. |

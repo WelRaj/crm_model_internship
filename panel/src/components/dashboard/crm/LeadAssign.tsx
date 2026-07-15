@@ -13,8 +13,8 @@ import {
   ShieldCheck,
   UserCheck,
 } from "lucide-react";
-import { listUsers } from "@/services/accounts-api";
 import { type AuthUser } from "@/services/auth-api";
+import { listHrmsEmployees } from "@/services/hrms-api";
 import { assignLead as assignBackendLead, listLeadFollowUps, listLeads, type LeadFollowUpRecord, type LeadRecord } from "@/services/leads-api";
 
 type LeadKind = "Project Lead" | "Trading Lead";
@@ -202,13 +202,13 @@ export default function LeadAssign() {
         setApiError("");
 
         try {
-          const userResponse = await listUsers({ limit: 100, status: "active" });
+          const userResponse = await listHrmsEmployees({ status: "active" });
           if (!isMounted) return;
-          setActiveUsers(userResponse.data);
+          setActiveUsers(userResponse.map((employee) => employee.user_detail).filter((user) => user?.is_active));
         } catch {
           if (!isMounted) return;
           setActiveUsers([]);
-          setApiError("Assignment queue loaded, but active users could not be loaded. Sign in as admin or check user API permission.");
+          setApiError("Assignment queue loaded, but active HRMS employees could not be loaded. Sign in as admin or check HRMS employee access.");
         }
       } catch (error) {
         if (isMounted) setApiError(error instanceof Error ? error.message : "Unable to load assignment queue.");
@@ -303,12 +303,12 @@ export default function LeadAssign() {
     if (!selectedLead || !typedTelecaller) return;
 
     if (activeUsers.length === 0) {
-      setApiError("Active backend users are not loaded, so this assignment cannot be saved yet.");
+      setApiError("Active HRMS employees are not loaded, so this assignment cannot be saved yet.");
       return;
     }
     const matchedUser = activeUsers.find((user) => user.id === form.assignedUserId) || null;
     if (!matchedUser) {
-      setApiError("Choose an active backend user from Calling Owner dropdown.");
+      setApiError("Choose an active HRMS employee from Calling Owner dropdown.");
       return;
     }
 
@@ -623,7 +623,7 @@ export default function LeadAssign() {
                   }}
                   className="w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm font-semibold outline-none focus:border-primary"
                 >
-                  <option value="">Select active backend user</option>
+                  <option value="">Select active HRMS employee</option>
                   {activeUsers.map((user) => (
                     <option key={user.id} value={user.id}>
                       {userDisplayName(user)} | {user.employee_id || "No employee ID"} | {user.department || "CRM"}
@@ -631,7 +631,7 @@ export default function LeadAssign() {
                   ))}
                 </select>
                 <p className="mt-2 text-[11px] font-semibold text-slate-500">
-                  This list comes from backend active users. Linked: {form.telecallerId || "Pending"} {form.telecallerEmployeeId ? `| ${form.telecallerEmployeeId}` : "| Employee ID not linked"}
+                  This list comes from active HRMS employees. Linked: {form.telecallerId || "Pending"} {form.telecallerEmployeeId ? `| ${form.telecallerEmployeeId}` : "| Employee ID not linked"}
                 </p>
                 <div className="mt-3 grid gap-2 rounded-xl border border-slate-100 bg-slate-50 p-3 text-[11px] font-black uppercase tracking-widest text-slate-500 sm:grid-cols-3">
                   <span>Name: {form.telecallerName.trim() || "Pending"}</span>

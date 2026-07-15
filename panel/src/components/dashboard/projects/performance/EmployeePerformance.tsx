@@ -32,8 +32,8 @@ import {
   X,
   Zap,
 } from "lucide-react";
-import { listUsers } from "@/services/accounts-api";
 import type { AuthUser } from "@/services/auth-api";
+import { listHrmsEmployees } from "@/services/hrms-api";
 import {
   createEmployeePerformanceReview,
   listEmployeePerformanceReviews,
@@ -797,11 +797,11 @@ export default function EmployeePerformance() {
       try {
         const [reviews, users] = await Promise.all([
           listEmployeePerformanceReviews(),
-          listUsers({ status: "active", limit: 200 }),
+          listHrmsEmployees({ status: "active" }),
         ]);
         if (!isMounted) return;
         setEmployees(reviews.map(reviewFromBackend));
-        setBackendUsers(users.data);
+        setBackendUsers(users.map((employee) => employee.user_detail).filter((user) => user?.is_active));
       } catch (error) {
         if (isMounted) setBackendMessage(error instanceof Error ? error.message : "Unable to load performance reviews.");
       } finally {

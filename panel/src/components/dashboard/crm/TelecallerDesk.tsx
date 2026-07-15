@@ -15,6 +15,7 @@ import {
   UserCheck,
 } from "lucide-react";
 import { type AuthUser } from "@/services/auth-api";
+import { listHrmsEmployees } from "@/services/hrms-api";
 import {
   createLeadFollowUp,
   listLeadFollowUps,
@@ -209,22 +210,27 @@ export default function TelecallerDesk() {
 
     async function loadAssignedQueue() {
       try {
-        const response = await listLeads({ limit: 100 });
+        const [response, activeHrmsEmployees] = await Promise.all([
+          listLeads({ limit: 100 }),
+          listHrmsEmployees({ status: "active" }),
+        ]);
         if (!isMounted) return;
 
+        const activeOwnerMap = new Map<number, AuthUser>();
+        activeHrmsEmployees.forEach((employee) => {
+          if (employee.user_detail?.is_active) activeOwnerMap.set(employee.user_detail.id, employee.user_detail);
+        });
         const backendRows = response.data
           .map(backendLeadToTelecallerLead)
-          .filter((lead): lead is TelecallerLead => Boolean(lead));
-        const ownerMap = new Map<number, AuthUser>();
-        response.data.forEach((lead) => {
-          if (lead.assigned_to) ownerMap.set(lead.assigned_to.id, lead.assigned_to);
-        });
+          .filter((lead): lead is TelecallerLead => Boolean(lead))
+          .filter((lead) => Boolean(lead.assignedUserId && activeOwnerMap.has(lead.assignedUserId)));
+        const assignedOwnerIds = new Set(backendRows.map((lead) => lead.assignedUserId).filter((id): id is number => Boolean(id)));
+        const owners = Array.from(activeOwnerMap.values()).filter((owner) => assignedOwnerIds.has(owner.id));
+        const firstOwner = owners[0];
+        const firstLead = firstOwner ? backendRows.find((lead) => lead.ownerId === String(firstOwner.id)) : backendRows[0];
 
         setRows(backendRows);
-        const owners = Array.from(ownerMap.values());
         setBackendOwners(owners);
-        const firstOwner = owners[0];
-        const firstLead = backendRows[0];
         setSelectedTelecaller(firstOwner ? String(firstOwner.id) : "");
         setSelectedLeadId(firstLead?.id || "");
         setForm(defaultForm(firstLead));
