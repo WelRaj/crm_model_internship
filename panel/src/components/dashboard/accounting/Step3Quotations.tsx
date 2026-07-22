@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useFieldArray, useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -13,23 +13,23 @@ import {
   AccountingPage, ActionButton, DataTable, Field,
   MetricCard, Panel, StatusBadge, WorkflowSteps,
 } from "./AccountingComponents";
+import {
+  createQuotation,
+  listFinanceClients,
+  listFinanceResource,
+  listQuotations,
+  runQuotationAction,
+  updateQuotation,
+  type FinanceClientRecord,
+  type QuotationPayload,
+  type QuotationRecord as BackendQuotationRecord,
+} from "@/services/finance-api";
+import { listDeliveryProjects, type DeliveryProjectRecord } from "@/services/projects-api";
 
 const INR = "\u20b9";
-const quotationStatuses = ["Draft", "Pending Approval", "Approved", "Sent", "Client Accepted", "Client Rejected", "Expired", "Archived"] as const;
+const DIRECT_PROJECT_ID = "__direct_quotation__";
+const quotationStatuses = ["Draft", "Pending Approval", "Approved", "Sent", "Client Accepted", "Archived"] as const;
 const currencies = ["INR", "USD", "AED", "GBP", "EUR"] as const;
-
-const clientOptions = [
-  { id: "CL-24001", name: "Apex Finserve Pvt Ltd" },
-  { id: "CL-24002", name: "Nexa Retail Cloud" },
-  { id: "CL-24003", name: "Bluebird Logistics" },
-  { id: "CL-24004", name: "KraftEdge Export LLP" },
-];
-
-const projectOptions = [
-  { id: "PRJ-001", clientId: "CL-24001", name: "Loan Automation Platform", agreementId: "AGR-2024-002" },
-  { id: "PRJ-002", clientId: "CL-24002", name: "E-commerce Mobile App", agreementId: "AGR-2024-001" },
-  { id: "PRJ-003", clientId: "CL-24003", name: "Logistics Control Tower", agreementId: "" },
-];
 
 const lineItemSchema = z.object({
   description: z.string().trim().min(2, "Description required"),
@@ -60,10 +60,6 @@ const quotationSchema = z.object({
   if (data.discount > subtotal) {
     ctx.addIssue({ code: "custom", path: ["discount"], message: "Discount cannot exceed subtotal" });
   }
-  const project = projectOptions.find((item) => item.id === data.projectId);
-  if (project && project.clientId !== data.clientId) {
-    ctx.addIssue({ code: "custom", path: ["projectId"], message: "Project does not belong to selected client" });
-  }
 });
 
 type QuotationFormInput = z.input<typeof quotationSchema>;
@@ -80,6 +76,7 @@ type QuotationLineItem = {
 
 type QuotationRecord = {
   id: string;
+  backendId: string;
   clientId: string;
   clientName: string;
   projectId: string;
@@ -103,63 +100,32 @@ type QuotationRecord = {
 };
 
 type BankRecord = {
-  accountName?: string;
-  bankName?: string;
-  accountNumber?: string;
-  ifscCode?: string;
+  account_name?: string;
+  bank_name?: string;
+  account_number?: string;
+  ifsc_code?: string;
   status?: string;
-  verificationStatus?: string;
-  isPrimary?: boolean;
+  verification_status?: string;
+  is_primary?: boolean;
 };
 
-const initialQuotations: QuotationRecord[] = [
-  {
-    id: "QT-2026-041",
-    clientId: "CL-24001",
-    clientName: "Apex Finserve Pvt Ltd",
-    projectId: "PRJ-001",
-    projectName: "Loan Automation Platform",
-    agreementId: "AGR-2024-002",
-    quoteDate: "2026-06-11",
-    validTill: "2026-06-25",
-    currency: "INR",
-    items: [{ id: "QL-041-1", description: "Loan automation platform design and implementation", qty: 1, rate: 800000, amount: 800000 }],
-    subtotal: 800000,
-    discount: 0,
-    gstPercent: 18,
-    gstAmount: 144000,
-    totalAmount: 944000,
-    serviceSummary: "Loan Automation Platform",
-    commercialTerms: "30% advance, 40% on UAT, 30% on production release.",
-    status: "Approved",
-    owner: "Finance Manager",
-    createdAt: "2026-06-11T10:00:00.000Z",
-    updatedAt: "2026-06-18T10:00:00.000Z",
-  },
-  {
-    id: "QT-2026-042",
-    clientId: "CL-24002",
-    clientName: "Nexa Retail Cloud",
-    projectId: "PRJ-002",
-    projectName: "E-commerce Mobile App",
-    agreementId: "AGR-2024-001",
-    quoteDate: "2026-06-14",
-    validTill: "2026-06-28",
-    currency: "INR",
-    items: [{ id: "QL-042-1", description: "Mobile commerce application delivery", qty: 1, rate: 1125000, amount: 1125000 }],
-    subtotal: 1125000,
-    discount: 44492,
-    gstPercent: 18,
-    gstAmount: 194492,
-    totalAmount: 1275000,
-    serviceSummary: "E-commerce Mobile App",
-    commercialTerms: "50% advance and 50% after production acceptance.",
-    status: "Client Accepted",
-    owner: "Director",
-    createdAt: "2026-06-14T10:00:00.000Z",
-    updatedAt: "2026-06-20T10:00:00.000Z",
-  },
-];
+const apiToStatus: Record<BackendQuotationRecord["status"], QuotationStatus> = {
+  draft: "Draft",
+  pending_approval: "Pending Approval",
+  approved: "Approved",
+  sent: "Sent",
+  client_accepted: "Client Accepted",
+  archived: "Archived",
+};
+
+const statusToApi: Record<QuotationStatus, BackendQuotationRecord["status"]> = {
+  Draft: "draft",
+  "Pending Approval": "pending_approval",
+  Approved: "approved",
+  Sent: "sent",
+  "Client Accepted": "client_accepted",
+  Archived: "archived",
+};
 
 const defaultFormValues: QuotationFormInput = {
   clientId: "",
@@ -202,11 +168,77 @@ function downloadFile(filename: string, content: string, type: string) {
   URL.revokeObjectURL(url);
 }
 
+function projectClientId(project: DeliveryProjectRecord) {
+  return project.client_detail?.id || project.client;
+}
+
+function quotationFromBackend(row: BackendQuotationRecord, clients: FinanceClientRecord[], projects: DeliveryProjectRecord[]): QuotationRecord {
+  const client = clients.find((item) => item.id === row.client);
+  const project = projects.find((item) => item.id === row.project);
+  const items = row.items.map((item) => ({
+    id: item.id,
+    description: item.description,
+    qty: Number(item.quantity),
+    rate: Number(item.unit_price),
+    amount: Number(item.amount),
+  }));
+  return {
+    id: row.quotation_number,
+    backendId: row.id,
+    clientId: row.client,
+    clientName: client?.company_name || "Finance client",
+    projectId: row.project || DIRECT_PROJECT_ID,
+    projectName: project?.name || "Direct quotation",
+    agreementId: row.agreement || "",
+    quoteDate: row.created_at.split("T")[0],
+    validTill: row.valid_until || row.created_at.split("T")[0],
+    currency: row.currency,
+    items,
+    subtotal: Number(row.subtotal),
+    discount: Number(row.discount),
+    gstPercent: Number(row.gst_rate),
+    gstAmount: Number(row.gst_amount),
+    totalAmount: Number(row.total_amount),
+    serviceSummary: row.title,
+    commercialTerms: row.terms,
+    status: apiToStatus[row.status],
+    owner: "Finance",
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function quotationPayload(data: QuotationFormData, status: QuotationStatus): QuotationPayload {
+  return {
+    client_id: data.clientId,
+    project_id: data.projectId === DIRECT_PROJECT_ID ? null : data.projectId,
+    agreement_id: data.agreementId || null,
+    title: data.serviceSummary,
+    description: data.serviceSummary,
+    status: statusToApi[status],
+    currency: data.currency,
+    discount: String(data.discount),
+    gst_rate: String(data.gstPercent),
+    valid_until: data.validTill,
+    terms: data.commercialTerms,
+    items: data.items.map((item) => ({
+      description: item.description,
+      quantity: String(item.qty),
+      unit_price: String(item.rate),
+    })),
+  };
+}
+
 export default function Step3Quotations() {
-  const [quotations, setQuotations] = useState<QuotationRecord[]>(initialQuotations);
+  const [clients, setClients] = useState<FinanceClientRecord[]>([]);
+  const [projects, setProjects] = useState<DeliveryProjectRecord[]>([]);
+  const [quotations, setQuotations] = useState<QuotationRecord[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState("");
+  const [backendMessage, setBackendMessage] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
   const [bankDetails, setBankDetails] = useState<BankRecord | null>(null);
@@ -233,21 +265,75 @@ export default function Step3Quotations() {
     [watchedItems, watchedDiscount, watchedGstPercent],
   );
 
-  const loadBankDetails = () => {
+  const clientOptions = useMemo(
+    () => clients.filter((client) => client.status === "active").map((client) => ({ id: client.id, name: client.company_name })),
+    [clients],
+  );
+
+  const applyBackendRows = (
+    clientRows: FinanceClientRecord[],
+    projectRows: DeliveryProjectRecord[],
+    quotationRows: BackendQuotationRecord[],
+    bankRows: BankRecord[],
+  ) => {
+    setClients(clientRows);
+    setProjects(projectRows);
+    setQuotations(quotationRows.map((quotation) => quotationFromBackend(quotation, clientRows, projectRows)));
+    const activeBank = bankRows.find((bank) => bank.status === "active" && bank.verification_status === "verified" && bank.is_primary)
+      ?? bankRows.find((bank) => bank.status === "active" && bank.verification_status === "verified")
+      ?? bankRows.find((bank) => bank.status === "active")
+      ?? null;
+    setBankDetails(activeBank);
+  };
+
+  const fetchBackendRows = async () => Promise.all([
+    listFinanceClients({ status: "active" }),
+    listDeliveryProjects(),
+    listQuotations(),
+    listFinanceResource<BankRecord>("bank-accounts", { status: "active" }),
+  ]);
+
+  const loadData = async () => {
     try {
-      const raw = localStorage.getItem("crm_company_banks");
-      const banks = raw ? JSON.parse(raw) as BankRecord[] : [];
-      const activeBank = banks.find((bank) => bank.status === "Active" && bank.verificationStatus === "Verified" && bank.isPrimary)
-        ?? banks.find((bank) => bank.status === "Active" && bank.verificationStatus === "Verified")
-        ?? banks.find((bank) => bank.status === "Active")
-        ?? null;
-      setBankDetails(activeBank);
-    } catch {
+      setIsLoading(true);
+      const [clientRows, projectRows, quotationRows, bankRows] = await fetchBackendRows();
+      applyBackendRows(clientRows, projectRows, quotationRows, bankRows);
+    } catch (error) {
+      setBackendMessage(error instanceof Error ? error.message : "Unable to load quotation backend data.");
       setBankDetails(null);
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const filteredProjects = projectOptions.filter((project) => !watchedClientId || project.clientId === watchedClientId);
+  useEffect(() => {
+    let isMounted = true;
+    fetchBackendRows()
+      .then(([clientRows, projectRows, quotationRows, bankRows]) => {
+        if (!isMounted) return;
+        applyBackendRows(clientRows, projectRows, quotationRows, bankRows);
+      })
+      .catch((error) => {
+        if (!isMounted) return;
+        setBackendMessage(error instanceof Error ? error.message : "Unable to load quotation backend data.");
+        setBankDetails(null);
+      })
+      .finally(() => {
+        if (isMounted) setIsLoading(false);
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const filteredProjects = useMemo(() => {
+    const linkedClient = clients.find((client) => client.id === watchedClientId);
+    const projectClient = linkedClient?.project_client;
+    const matches = projects
+      .filter((project) => !projectClient || projectClientId(project) === projectClient)
+      .map((project) => ({ id: project.id, name: project.name, agreementId: "" }));
+    return [{ id: DIRECT_PROJECT_ID, name: "Direct quotation / not linked to delivery project", agreementId: "" }, ...matches];
+  }, [clients, projects, watchedClientId]);
   const filteredQuotations = useMemo(() => quotations.filter((quotation) => {
     const query = searchTerm.trim().toLowerCase();
     const matchesSearch = !query || [
@@ -261,15 +347,16 @@ export default function Step3Quotations() {
   const openCreateForm = () => {
     setEditingId(null);
     setSuccessMsg("");
+    setBackendMessage("");
     reset(defaultFormValues);
-    loadBankDetails();
     setShowForm(true);
   };
 
   const openEditForm = (quotation: QuotationRecord) => {
     if (!["Draft", "Pending Approval"].includes(quotation.status)) return;
-    setEditingId(quotation.id);
+    setEditingId(quotation.backendId);
     setSuccessMsg("");
+    setBackendMessage("");
     reset({
       clientId: quotation.clientId,
       projectId: quotation.projectId,
@@ -283,7 +370,6 @@ export default function Step3Quotations() {
       serviceSummary: quotation.serviceSummary,
       commercialTerms: quotation.commercialTerms,
     });
-    loadBankDetails();
     setShowForm(true);
   };
 
@@ -294,83 +380,42 @@ export default function Step3Quotations() {
     reset(defaultFormValues);
   };
 
-  const persistQuotation = (data: QuotationFormData, status: QuotationStatus) => {
+  const persistQuotation = async (data: QuotationFormData, status: QuotationStatus) => {
     const client = clientOptions.find((item) => item.id === data.clientId);
-    const project = projectOptions.find((item) => item.id === data.projectId);
+    const project = filteredProjects.find((item) => item.id === data.projectId);
     if (!client || !project) return;
 
-    const calculated = calculateTotals(data.items, data.discount, data.gstPercent);
-    const now = new Date().toISOString();
-    const lineItems: QuotationLineItem[] = data.items.map((item, index) => ({
-      id: editingId
-        ? quotations.find((quotation) => quotation.id === editingId)?.items[index]?.id ?? `${editingId}-L${index + 1}`
-        : `QL-${Date.now()}-${index + 1}`,
-      description: item.description,
-      qty: item.qty,
-      rate: item.rate,
-      amount: item.qty * item.rate,
-    }));
-
-    if (editingId) {
-      setQuotations((current) => current.map((quotation) => quotation.id === editingId ? {
-        ...quotation,
-        clientId: client.id,
-        clientName: client.name,
-        projectId: project.id,
-        projectName: project.name,
-        agreementId: data.agreementId || project.agreementId,
-        quoteDate: data.quoteDate,
-        validTill: data.validTill,
-        currency: data.currency,
-        items: lineItems,
-        subtotal: calculated.subtotal,
-        discount: data.discount,
-        gstPercent: data.gstPercent,
-        gstAmount: calculated.gstAmount,
-        totalAmount: calculated.totalAmount,
-        serviceSummary: data.serviceSummary,
-        commercialTerms: data.commercialTerms,
-        status,
-        updatedAt: now,
-      } : quotation));
-      setSuccessMsg(status === "Draft" ? "Quotation draft updated" : "Quotation submitted for approval");
-    } else {
-      const nextNumber = Math.max(42, ...quotations.map((quotation) => Number(quotation.id.split("-").pop()) || 0)) + 1;
-      setQuotations((current) => [{
-        id: `QT-${new Date().getFullYear()}-${String(nextNumber).padStart(3, "0")}`,
-        clientId: client.id,
-        clientName: client.name,
-        projectId: project.id,
-        projectName: project.name,
-        agreementId: data.agreementId || project.agreementId,
-        quoteDate: data.quoteDate,
-        validTill: data.validTill,
-        currency: data.currency,
-        items: lineItems,
-        subtotal: calculated.subtotal,
-        discount: data.discount,
-        gstPercent: data.gstPercent,
-        gstAmount: calculated.gstAmount,
-        totalAmount: calculated.totalAmount,
-        serviceSummary: data.serviceSummary,
-        commercialTerms: data.commercialTerms,
-        status,
-        owner: "Accountant",
-        createdAt: now,
-        updatedAt: now,
-      }, ...current]);
-      setSuccessMsg(status === "Draft" ? "Quotation draft saved" : "Quotation submitted for approval");
+    try {
+      setIsSaving(true);
+      setBackendMessage("");
+      if (editingId) {
+        await updateQuotation(editingId, quotationPayload(data, status));
+      } else {
+        await createQuotation(quotationPayload(data, status));
+      }
+      await loadData();
+      setSuccessMsg(editingId
+        ? (status === "Draft" ? "Quotation draft updated" : "Quotation submitted for approval")
+        : (status === "Draft" ? "Quotation draft saved" : "Quotation submitted for approval"));
+      setTimeout(closeForm, 900);
+    } catch (error) {
+      setBackendMessage(error instanceof Error ? error.message : "Unable to save quotation.");
+    } finally {
+      setIsSaving(false);
     }
-    setTimeout(closeForm, 900);
   };
 
   const saveDraft = handleSubmit((data) => persistQuotation(data, "Draft"));
   const submitForApproval = handleSubmit((data) => persistQuotation(data, "Pending Approval"));
 
-  const updateStatus = (quotationId: string, status: QuotationStatus) => {
-    setQuotations((current) => current.map((quotation) => quotation.id === quotationId
-      ? { ...quotation, status, updatedAt: new Date().toISOString() }
-      : quotation));
+  const updateStatus = async (quotationId: string, status: QuotationStatus) => {
+    try {
+      setBackendMessage("");
+      await runQuotationAction(quotationId, statusToApi[status]);
+      await loadData();
+    } catch (error) {
+      setBackendMessage(error instanceof Error ? error.message : "Unable to update quotation status.");
+    }
   };
 
   const exportQuotations = () => {
@@ -407,12 +452,12 @@ export default function Step3Quotations() {
   };
 
   const acceptedValue = quotations.filter((quotation) => quotation.status === "Client Accepted").reduce((sum, quotation) => sum + quotation.totalAmount, 0);
-  const openCount = quotations.filter((quotation) => !["Client Accepted", "Client Rejected", "Expired", "Archived"].includes(quotation.status)).length;
+  const openCount = quotations.filter((quotation) => !["Client Accepted", "Archived"].includes(quotation.status)).length;
   const averageDiscount = quotations.length
     ? quotations.reduce((sum, quotation) => sum + (quotation.subtotal ? quotation.discount / quotation.subtotal * 100 : 0), 0) / quotations.length
     : 0;
   const expiringCount = quotations.filter((quotation) => {
-    if (["Client Accepted", "Client Rejected", "Expired", "Archived"].includes(quotation.status)) return false;
+    if (["Client Accepted", "Archived"].includes(quotation.status)) return false;
     const days = (new Date(`${quotation.validTill}T00:00:00`).getTime() - todayTimestamp) / 86400000;
     return days >= 0 && days <= 7;
   }).length;
@@ -438,6 +483,18 @@ export default function Step3Quotations() {
         <MetricCard label="Avg Discount" value={`${averageDiscount.toFixed(1)}%`} helper="Across all proposals" icon={Wallet} tone="purple" />
         <MetricCard label="Expiring Soon" value={String(expiringCount)} helper="Within 7 days" icon={Clock} tone="amber" />
       </div>
+
+      {backendMessage ? (
+        <div className="rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-sm font-bold text-red-700">
+          {backendMessage}
+        </div>
+      ) : null}
+
+      {isLoading ? (
+        <div className="rounded-2xl border border-border bg-white px-5 py-4 text-sm font-bold text-slate-500">
+          Loading backend quotation register...
+        </div>
+      ) : null}
 
       {showForm && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-sm animate-in fade-in">
@@ -475,7 +532,7 @@ export default function Step3Quotations() {
                           <span className="text-xs font-black uppercase tracking-widest text-slate-500">Project <span className="text-red-500">*</span></span>
                           <select {...register("projectId")} className={`h-11 w-full rounded-xl border bg-white px-3 text-sm font-semibold text-primary outline-none transition-all focus:ring-4 focus:ring-primary/10 ${errors.projectId ? "border-red-500" : "border-border focus:border-primary"}`}>
                             <option value="">Select Project...</option>
-                            {filteredProjects.map((project) => <option key={project.id} value={project.id}>{project.id} - {project.name}</option>)}
+                          {filteredProjects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}
                           </select>
                           {errors.projectId ? <p className="text-[10px] font-black uppercase tracking-widest text-red-500">{errors.projectId.message}</p> : null}
                         </label>
@@ -528,10 +585,10 @@ export default function Step3Quotations() {
                     <Panel title="Payment Information (Buyer View)" icon={Landmark} description="Active treasury details displayed on the proposal.">
                       {bankDetails ? (
                         <div className="grid grid-cols-1 gap-5 rounded-2xl border border-emerald-100 bg-emerald-50 p-6 md:grid-cols-2">
-                          <div><p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Beneficiary</p><p className="text-sm font-black text-primary">{bankDetails.accountName}</p></div>
-                          <div><p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Bank</p><p className="text-sm font-black text-primary">{bankDetails.bankName}</p></div>
-                          <div><p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Account</p><p className="font-mono text-sm font-black text-primary">{bankDetails.accountNumber}</p></div>
-                          <div><p className="text-[10px] font-black uppercase tracking-widest text-slate-400">IFSC</p><p className="font-mono text-sm font-black text-primary">{bankDetails.ifscCode}</p></div>
+                          <div><p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Beneficiary</p><p className="text-sm font-black text-primary">{bankDetails.account_name}</p></div>
+                          <div><p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Bank</p><p className="text-sm font-black text-primary">{bankDetails.bank_name}</p></div>
+                          <div><p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Account</p><p className="font-mono text-sm font-black text-primary">{bankDetails.account_number}</p></div>
+                          <div><p className="text-[10px] font-black uppercase tracking-widest text-slate-400">IFSC</p><p className="font-mono text-sm font-black text-primary">{bankDetails.ifsc_code}</p></div>
                         </div>
                       ) : (
                         <div className="rounded-2xl border-2 border-dashed border-slate-200 p-8 text-center text-xs font-bold text-slate-400">
@@ -560,8 +617,8 @@ export default function Step3Quotations() {
                             </div>
                           </div>
                         </div>
-                        <ActionButton icon={ShieldCheck} label="Submit for Approval" variant="accent" type="submit" />
-                        <ActionButton icon={FileText} label="Save Draft" variant="outline" onClick={saveDraft} />
+                        <ActionButton icon={ShieldCheck} label={isSaving ? "Saving..." : "Submit for Approval"} variant="accent" type="submit" />
+                        <ActionButton icon={FileText} label={isSaving ? "Saving..." : "Save Draft"} variant="outline" onClick={saveDraft} />
                       </div>
                     </Panel>
                   </div>
@@ -607,7 +664,7 @@ export default function Step3Quotations() {
                 <p className="text-[11px] font-semibold text-slate-400">Created {formatDate(quotation.quoteDate)}</p>
               </td>
               <td className="px-4 py-4">
-                <StatusBadge tone={quotation.status === "Client Accepted" || quotation.status === "Approved" ? "green" : quotation.status === "Client Rejected" || quotation.status === "Expired" || quotation.status === "Archived" ? "red" : quotation.status === "Pending Approval" ? "amber" : "blue"}>
+                <StatusBadge tone={quotation.status === "Client Accepted" || quotation.status === "Approved" ? "green" : quotation.status === "Archived" ? "red" : quotation.status === "Pending Approval" ? "amber" : "blue"}>
                   {quotation.status}
                 </StatusBadge>
               </td>
@@ -617,22 +674,22 @@ export default function Step3Quotations() {
                     <button type="button" onClick={() => openEditForm(quotation)} className="rounded-lg border border-border p-2 text-slate-500 hover:text-primary" title="Edit quotation"><Edit3 size={15} /></button>
                   ) : null}
                   {quotation.status === "Draft" ? (
-                    <button type="button" onClick={() => updateStatus(quotation.id, "Pending Approval")} className="rounded-lg border border-border p-2 text-slate-500 hover:text-amber-600" title="Submit for approval"><ShieldCheck size={15} /></button>
+                    <button type="button" onClick={() => updateStatus(quotation.backendId, "Pending Approval")} className="rounded-lg border border-border p-2 text-slate-500 hover:text-amber-600" title="Submit for approval"><ShieldCheck size={15} /></button>
                   ) : null}
                   {quotation.status === "Pending Approval" ? (
-                    <button type="button" onClick={() => updateStatus(quotation.id, "Approved")} className="rounded-lg border border-border p-2 text-slate-500 hover:text-green-600" title="Approve quotation"><Check size={15} /></button>
+                    <button type="button" onClick={() => updateStatus(quotation.backendId, "Approved")} className="rounded-lg border border-border p-2 text-slate-500 hover:text-green-600" title="Approve quotation"><Check size={15} /></button>
                   ) : null}
                   {quotation.status === "Approved" ? (
-                    <button type="button" onClick={() => updateStatus(quotation.id, "Sent")} className="rounded-lg border border-border p-2 text-slate-500 hover:text-blue-600" title="Mark sent to client"><Send size={15} /></button>
+                    <button type="button" onClick={() => updateStatus(quotation.backendId, "Sent")} className="rounded-lg border border-border p-2 text-slate-500 hover:text-blue-600" title="Mark sent to client"><Send size={15} /></button>
                   ) : null}
                   {quotation.status === "Sent" ? (
-                    <button type="button" onClick={() => updateStatus(quotation.id, "Client Accepted")} className="rounded-lg border border-border p-2 text-slate-500 hover:text-green-600" title="Mark client accepted"><CheckCircle2 size={15} /></button>
+                    <button type="button" onClick={() => updateStatus(quotation.backendId, "Client Accepted")} className="rounded-lg border border-border p-2 text-slate-500 hover:text-green-600" title="Mark client accepted"><CheckCircle2 size={15} /></button>
                   ) : null}
                   <button type="button" onClick={() => downloadQuotation(quotation)} className="rounded-lg border border-border p-2 text-slate-500 hover:text-primary" title="Download quotation"><Download size={15} /></button>
                   {quotation.status === "Archived" ? (
-                    <button type="button" onClick={() => updateStatus(quotation.id, "Draft")} className="rounded-lg border border-border p-2 text-slate-500 hover:text-green-600" title="Restore quotation"><RotateCcw size={15} /></button>
+                    <button type="button" onClick={() => updateStatus(quotation.backendId, "Draft")} className="rounded-lg border border-border p-2 text-slate-500 hover:text-green-600" title="Restore quotation"><RotateCcw size={15} /></button>
                   ) : (
-                    <button type="button" onClick={() => updateStatus(quotation.id, "Archived")} className="rounded-lg border border-border p-2 text-slate-500 hover:text-red-600" title="Archive quotation"><Archive size={15} /></button>
+                    <button type="button" onClick={() => updateStatus(quotation.backendId, "Archived")} className="rounded-lg border border-border p-2 text-slate-500 hover:text-red-600" title="Archive quotation"><Archive size={15} /></button>
                   )}
                 </div>
               </td>

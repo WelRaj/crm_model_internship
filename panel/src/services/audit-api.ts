@@ -28,6 +28,11 @@ export type AuditLogRecord = {
   new_values: Record<string, unknown>;
   ip_address: string | null;
   user_agent: string;
+  investigation_status: "clear" | "flagged" | "investigating" | "resolved";
+  investigation_status_label: "Clear" | "Flagged" | "Investigating" | "Resolved";
+  investigation_note: string;
+  investigated_by: string | null;
+  investigated_at: string | null;
   created_at: string;
 };
 
@@ -38,6 +43,7 @@ export type AuditLogListParams = {
   module?: string;
   action?: string;
   entity_type?: string;
+  investigation_status?: string;
 };
 
 function toQueryString(params: AuditLogListParams = {}) {
@@ -54,4 +60,8 @@ function toQueryString(params: AuditLogListParams = {}) {
 
 export async function listAuditLogs(params?: AuditLogListParams) {
   return api.get<PaginatedResponse<AuditLogRecord[]>>(`/audit/logs/${toQueryString(params)}`);
+}
+
+export async function updateAuditInvestigation(logId: string, payload: Pick<AuditLogRecord, "investigation_status" | "investigation_note">) {
+  return api.put<ApiResponse<AuditLogRecord>>(`/audit/logs/${logId}/investigation/`, payload);
 }

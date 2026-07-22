@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ChangeEvent } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -32,6 +32,12 @@ import {
   Panel,
   StatusBadge,
 } from "./AccountingComponents";
+import {
+  createFinanceResource,
+  deleteFinanceResource,
+  listFinanceResource,
+  updateFinanceResource,
+} from "@/services/finance-api";
 
 const ACCOUNTING_MODULES = [
   "Client Master",
@@ -66,6 +72,7 @@ type AuditLevel = (typeof auditLevels)[number];
 
 type RoleRecord = {
   id: string;
+  policyIds: Record<AccountingModule, string>;
   name: string;
   description: string;
   users: number;
@@ -79,6 +86,48 @@ type RoleRecord = {
   lastReviewedAt: string;
   nextReviewDate: string;
   updatedAt: string;
+};
+
+type BackendAccessPolicy = {
+  id: string;
+  role_name: string;
+  description: string;
+  module: AccountingModule;
+  status: "active" | "inactive";
+  is_protected: boolean;
+  users_count: number;
+  data_scope: DataScope;
+  approval_limit: string | null;
+  audit_access: AuditLevel;
+  last_reviewed_at: string | null;
+  next_review_date: string | null;
+  can_view: boolean;
+  can_create: boolean;
+  can_edit: boolean;
+  can_archive: boolean;
+  can_approve: boolean;
+  can_export: boolean;
+  updated_at: string;
+};
+
+type BackendAccessPayload = {
+  role_name: string;
+  description: string;
+  module: AccountingModule;
+  status: "active" | "inactive";
+  is_protected: boolean;
+  users_count: number;
+  data_scope: DataScope;
+  approval_limit: string | null;
+  audit_access: AuditLevel;
+  last_reviewed_at: string;
+  next_review_date: string;
+  can_view: boolean;
+  can_create: boolean;
+  can_edit: boolean;
+  can_archive: boolean;
+  can_approve: boolean;
+  can_export: boolean;
 };
 
 const roleSchema = z.object({
@@ -101,73 +150,6 @@ const inDays = (days: number) => {
   return date.toISOString().slice(0, 10);
 };
 
-const initialRoles: RoleRecord[] = [
-  {
-    id: "ROLE-ADMIN",
-    name: "Director/Admin",
-    description: "Protected security owner with final approval and access administration responsibility.",
-    users: 2,
-    status: "Active",
-    protected: true,
-    modules: [...ACCOUNTING_MODULES],
-    actions: [...ACTIONS],
-    dataScope: "All Records",
-    approvalLimit: null,
-    auditAccess: "Investigate",
-    lastReviewedAt: "2026-06-01",
-    nextReviewDate: "2026-07-01",
-    updatedAt: "2026-06-01T10:30:00.000Z",
-  },
-  {
-    id: "ROLE-FIN-MGR",
-    name: "Finance Manager",
-    description: "Owns finance review, approvals, compliance monitoring, budgets, and reporting.",
-    users: 2,
-    status: "Active",
-    protected: false,
-    modules: ["Client Master", "Vendor Master", "Quotations", "Invoices", "Payments", "Sales, Purchases & Expenses", "Budget Control", "Payroll Register", "GST Compliance", "TDS Compliance", "Finance Reports", "Finance Approvals", "Audit Logs", "Bank Details"],
-    actions: ["Create", "Edit", "Archive", "Approve", "Export"],
-    dataScope: "All Records",
-    approvalLimit: 1000000,
-    auditAccess: "Read Only",
-    lastReviewedAt: "2026-06-05",
-    nextReviewDate: "2026-07-05",
-    updatedAt: "2026-06-05T09:00:00.000Z",
-  },
-  {
-    id: "ROLE-ACCOUNTANT",
-    name: "Accountant",
-    description: "Processes finance masters, billing, collections, expenses, and statutory records.",
-    users: 4,
-    status: "Active",
-    protected: false,
-    modules: ["Client Master", "Vendor Master", "Quotations", "Invoices", "Payments", "Reminders", "Credit Notes", "Sales, Purchases & Expenses", "GST Compliance", "TDS Compliance", "Finance Reports"],
-    actions: ["Create", "Edit", "Export"],
-    dataScope: "Business Unit",
-    approvalLimit: 0,
-    auditAccess: "No Access",
-    lastReviewedAt: "2026-05-20",
-    nextReviewDate: "2026-06-20",
-    updatedAt: "2026-05-20T12:00:00.000Z",
-  },
-  {
-    id: "ROLE-HR",
-    name: "HR Payroll Reviewer",
-    description: "Reviews salary inputs and employee reimbursement expenses without treasury access.",
-    users: 3,
-    status: "Active",
-    protected: false,
-    modules: ["Sales, Purchases & Expenses", "Payroll Register", "Finance Reports"],
-    actions: ["Create", "Edit", "Approve", "Export"],
-    dataScope: "Department",
-    approvalLimit: 250000,
-    auditAccess: "No Access",
-    lastReviewedAt: "2026-06-10",
-    nextReviewDate: "2026-07-10",
-    updatedAt: "2026-06-10T11:15:00.000Z",
-  },
-];
-
 const money = (value: number | null) =>
   value === null
     ? "Unlimited"
@@ -175,8 +157,82 @@ const money = (value: number | null) =>
 
 const csvCell = (value: string | number) => `"${String(value).replaceAll('"', '""')}"`;
 
+function statusFromBackend(status: BackendAccessPolicy["status"]): RoleStatus {
+  return status === "active" ? "Active" : "Inactive";
+}
+
+function statusToBackend(status: RoleStatus): BackendAccessPolicy["status"] {
+  return status === "Active" ? "active" : "inactive";
+}
+
+function actionsFromPolicy(policy: BackendAccessPolicy): PermissionAction[] {
+  return [
+    policy.can_create ? "Create" : null,
+    policy.can_edit ? "Edit" : null,
+    policy.can_archive ? "Archive" : null,
+    policy.can_approve ? "Approve" : null,
+    policy.can_export ? "Export" : null,
+  ].filter(Boolean) as PermissionAction[];
+}
+
+function groupPolicies(rows: BackendAccessPolicy[]): RoleRecord[] {
+  const grouped = new Map<string, BackendAccessPolicy[]>();
+  rows.forEach((row) => {
+    grouped.set(row.role_name, [...(grouped.get(row.role_name) || []), row]);
+  });
+  return [...grouped.entries()].map(([roleName, policies]) => {
+    const primary = policies[0];
+    const actionSet = new Set<PermissionAction>();
+    const policyIds = {} as Record<AccountingModule, string>;
+    policies.forEach((policy) => {
+      policyIds[policy.module] = policy.id;
+      actionsFromPolicy(policy).forEach((action) => actionSet.add(action));
+    });
+    return {
+      id: roleName,
+      policyIds,
+      name: roleName,
+      description: primary.description,
+      users: primary.users_count,
+      status: statusFromBackend(primary.status),
+      protected: primary.is_protected,
+      modules: policies.map((policy) => policy.module).sort((a, b) => ACCOUNTING_MODULES.indexOf(a) - ACCOUNTING_MODULES.indexOf(b)),
+      actions: [...actionSet].sort((a, b) => ACTIONS.indexOf(a) - ACTIONS.indexOf(b)),
+      dataScope: primary.data_scope,
+      approvalLimit: primary.approval_limit === null ? null : Number(primary.approval_limit),
+      auditAccess: primary.audit_access,
+      lastReviewedAt: primary.last_reviewed_at || today(),
+      nextReviewDate: primary.next_review_date || today(),
+      updatedAt: primary.updated_at,
+    };
+  }).sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function payloadForModule(data: RoleFormData, module: AccountingModule, actions: PermissionAction[], protectedRole: boolean): BackendAccessPayload {
+  return {
+    role_name: data.roleName.trim(),
+    description: data.description.trim(),
+    module,
+    status: statusToBackend(protectedRole ? "Active" : data.roleStatus),
+    is_protected: protectedRole,
+    users_count: 0,
+    data_scope: data.dataScope,
+    approval_limit: protectedRole ? null : data.approvalLimit > 0 ? String(data.approvalLimit) : null,
+    audit_access: module === "Audit Logs" ? data.auditAccess : "No Access",
+    last_reviewed_at: today(),
+    next_review_date: data.nextReviewDate,
+    can_view: true,
+    can_create: actions.includes("Create"),
+    can_edit: actions.includes("Edit"),
+    can_archive: actions.includes("Archive"),
+    can_approve: actions.includes("Approve"),
+    can_export: actions.includes("Export"),
+  };
+}
+
 export default function Step16Access() {
-  const [roles, setRoles] = useState<RoleRecord[]>(initialRoles);
+  const [roles, setRoles] = useState<RoleRecord[]>([]);
+  const [backendRows, setBackendRows] = useState<BackendAccessPolicy[]>([]);
   const [showRoleForm, setShowRoleForm] = useState(false);
   const [auditRoleId, setAuditRoleId] = useState<string | null>(null);
   const [editingRoleId, setEditingRoleId] = useState<string | null>(null);
@@ -186,6 +242,7 @@ export default function Step16Access() {
   const [statusFilter, setStatusFilter] = useState<"All" | RoleStatus>("All");
   const [formError, setFormError] = useState("");
   const [notice, setNotice] = useState("");
+  const [loading, setLoading] = useState(true);
 
   const {
     register,
@@ -225,6 +282,27 @@ export default function Step16Access() {
 
   const auditedRole = roles.find((role) => role.id === auditRoleId) ?? null;
   const editingRole = roles.find((role) => role.id === editingRoleId) ?? null;
+
+  const loadPolicies = useCallback(async () => {
+    setLoading(true);
+    setNotice("");
+    try {
+      const rows = await listFinanceResource<BackendAccessPolicy>("access-policies");
+      setBackendRows(rows);
+      setRoles(groupPolicies(rows));
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Unable to load finance access policies.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void loadPolicies();
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [loadPolicies]);
 
   const closeForm = () => {
     setShowRoleForm(false);
@@ -281,7 +359,7 @@ export default function Step16Access() {
     );
   };
 
-  const onSubmit = (data: RoleFormData) => {
+  const onSubmit = async (data: RoleFormData) => {
     setFormError("");
     if (selectedModules.length === 0) {
       setFormError("Select at least one finance module.");
@@ -319,66 +397,67 @@ export default function Step16Access() {
       return;
     }
 
-    const now = new Date().toISOString();
-    if (editingRole) {
-      setRoles((current) =>
-        current.map((role) =>
-          role.id === editingRole.id
-            ? {
-                ...role,
-                name: data.roleName.trim(),
-                description: data.description.trim(),
-                status: role.protected ? "Active" : data.roleStatus,
-                modules: selectedModules,
-                actions: role.protected ? [...ACTIONS] : selectedActions,
-                dataScope: data.dataScope,
-                approvalLimit: role.protected ? null : data.approvalLimit,
-                auditAccess: data.auditAccess,
-                nextReviewDate: data.nextReviewDate,
-                lastReviewedAt: today(),
-                updatedAt: now,
-              }
-            : role,
-        ),
-      );
-      setNotice(`${data.roleName.trim()} policy updated in this local prototype.`);
-    } else {
-      setRoles((current) => [
-        ...current,
-        {
-          id: `ROLE-${Date.now()}`,
-          name: data.roleName.trim(),
-          description: data.description.trim(),
-          users: 0,
-          status: data.roleStatus,
-          protected: false,
-          modules: selectedModules,
-          actions: selectedActions,
-          dataScope: data.dataScope,
-          approvalLimit: data.approvalLimit,
-          auditAccess: data.auditAccess,
-          lastReviewedAt: today(),
-          nextReviewDate: data.nextReviewDate,
-          updatedAt: now,
-        },
-      ]);
-      setNotice(`${data.roleName.trim()} role created with zero assigned users.`);
+    try {
+      const protectedRole = Boolean(editingRole?.protected);
+      if (editingRole) {
+        const existingModules = new Set(editingRole.modules);
+        const nextModules = new Set(selectedModules);
+        const currentRows = backendRows.filter((row) => row.role_name === editingRole.name);
+        const savedRows = await Promise.all(selectedModules.map((module) => {
+          const existingId = editingRole.policyIds[module];
+          const payload = payloadForModule(data, module, protectedRole ? [...ACTIONS] : selectedActions, protectedRole);
+          return existingId
+            ? updateFinanceResource<BackendAccessPolicy, BackendAccessPayload>("access-policies", existingId, payload)
+            : createFinanceResource<BackendAccessPolicy, BackendAccessPayload>("access-policies", payload);
+        }));
+        await Promise.all(currentRows
+          .filter((row) => existingModules.has(row.module) && !nextModules.has(row.module))
+          .map((row) => deleteFinanceResource<BackendAccessPolicy>("access-policies", row.id)));
+        const removedIds = new Set(currentRows.filter((row) => !nextModules.has(row.module)).map((row) => row.id));
+        const savedById = new Map(savedRows.map((row) => [row.id, row]));
+        const nextRows = [
+          ...backendRows.filter((row) => row.role_name !== editingRole.name || (!removedIds.has(row.id) && !savedById.has(row.id))),
+          ...savedRows,
+        ];
+        setBackendRows(nextRows);
+        setRoles(groupPolicies(nextRows));
+        setNotice(`${data.roleName.trim()} policy updated in backend.`);
+      } else {
+        const savedRows = await Promise.all(selectedModules.map((module) =>
+          createFinanceResource<BackendAccessPolicy, BackendAccessPayload>("access-policies", payloadForModule(data, module, selectedActions, false)),
+        ));
+        const nextRows = [...backendRows, ...savedRows];
+        setBackendRows(nextRows);
+        setRoles(groupPolicies(nextRows));
+        setNotice(`${data.roleName.trim()} role created in backend.`);
+      }
+      closeForm();
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : "Unable to save role policy.");
     }
-    closeForm();
   };
 
-  const toggleRoleStatus = (role: RoleRecord) => {
+  const toggleRoleStatus = async (role: RoleRecord) => {
     if (role.protected) {
       setNotice("Protected administrator role cannot be disabled.");
       return;
     }
     const nextStatus: RoleStatus = role.status === "Active" ? "Inactive" : "Active";
-    setRoles((current) =>
-      current.map((item) =>
-        item.id === role.id ? { ...item, status: nextStatus, updatedAt: new Date().toISOString() } : item,
-      ),
-    );
-    setNotice(`${role.name} is now ${nextStatus.toLowerCase()}. Existing sessions require server-side revocation.`);
+    try {
+      const rows = backendRows.filter((row) => row.role_name === role.name);
+      const savedRows = await Promise.all(rows.map((row) =>
+        updateFinanceResource<BackendAccessPolicy, BackendAccessPayload>("access-policies", row.id, {
+          status: statusToBackend(nextStatus),
+        }),
+      ));
+      const savedById = new Map(savedRows.map((row) => [row.id, row]));
+      const nextRows = backendRows.map((row) => savedById.get(row.id) ?? row);
+      setBackendRows(nextRows);
+      setRoles(groupPolicies(nextRows));
+      setNotice(`${role.name} is now ${nextStatus.toLowerCase()} in backend. Existing sessions require server-side revocation.`);
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Unable to update role status.");
+    }
   };
 
   const exportRoles = () => {
@@ -433,8 +512,8 @@ export default function Step16Access() {
           <div>
             <p className="text-sm font-black text-amber-900">Policy design workspace</p>
             <p className="mt-1 text-xs font-semibold leading-5 text-amber-800">
-              Changes work in this page prototype. Production authorization must be enforced by the backend on every API,
-              with authenticated users, session revocation, immutable audit events, and maker-checker approval for privileged changes.
+              Changes are persisted to backend finance access policies. Runtime API enforcement, session revocation,
+              immutable audit events, and maker-checker approval remain mandatory controls for privileged changes.
             </p>
           </div>
         </div>
@@ -518,7 +597,7 @@ export default function Step16Access() {
           })}
         </DataTable>
         {filteredRoles.length === 0 ? (
-          <div className="py-10 text-center text-sm font-semibold text-slate-500">No role matches the current filters.</div>
+          <div className="py-10 text-center text-sm font-semibold text-slate-500">{loading ? "Loading access policies..." : "No role matches the current filters."}</div>
         ) : null}
       </Panel>
 

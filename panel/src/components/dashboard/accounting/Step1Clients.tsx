@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -12,6 +12,13 @@ import {
   AccountingPage, ActionButton, DataTable, Field,
   MetricCard, Panel, StatusBadge,
 } from "./AccountingComponents";
+import {
+  createFinanceClient,
+  listFinanceClients,
+  updateFinanceClient,
+  type FinanceClientPayload,
+  type FinanceClientRecord,
+} from "@/services/finance-api";
 
 const INR = "\u20b9";
 
@@ -56,77 +63,6 @@ type ClientRecord = {
   updatedAt: string;
 };
 
-const initialClients: ClientRecord[] = [
-  {
-    id: "CL-24001",
-    companyName: "Apex Finserve Pvt Ltd",
-    contactPerson: "Rohit Mehta",
-    email: "accounts@apexfinserve.com",
-    mobile: "9876543210",
-    gstin: "27AAHCA8123D1Z6",
-    pan: "AAHCA8123D",
-    terms: "Net 15",
-    status: "Active",
-    address: "Business Center, Andheri East, Mumbai, Maharashtra - 400069",
-    currency: "INR",
-    outstandingAmount: 480000,
-    creditLimit: 750000,
-    createdAt: "2026-04-03T10:30:00.000Z",
-    updatedAt: "2026-06-18T10:30:00.000Z",
-  },
-  {
-    id: "CL-24002",
-    companyName: "Nexa Retail Cloud",
-    contactPerson: "Priya Nair",
-    email: "finance@nexaretail.cloud",
-    mobile: "9988776655",
-    gstin: "29AAECN4471B1ZW",
-    pan: "AAECN4471B",
-    terms: "50% Advance",
-    status: "Active",
-    address: "Indiranagar, Bengaluru, Karnataka - 560038",
-    currency: "INR",
-    outstandingAmount: 0,
-    creditLimit: 500000,
-    createdAt: "2026-04-11T10:30:00.000Z",
-    updatedAt: "2026-06-20T10:30:00.000Z",
-  },
-  {
-    id: "CL-24003",
-    companyName: "Bluebird Logistics",
-    contactPerson: "Amit Soni",
-    email: "amit@bluebirdlogistics.in",
-    mobile: "9123456789",
-    gstin: "06AAGCB9122K1ZP",
-    pan: "AAGCB9122K",
-    terms: "Milestone",
-    status: "On Hold",
-    address: "Sector 44, Gurugram, Haryana - 122003",
-    currency: "INR",
-    outstandingAmount: 125000,
-    creditLimit: 300000,
-    createdAt: "2026-05-05T10:30:00.000Z",
-    updatedAt: "2026-06-12T10:30:00.000Z",
-  },
-  {
-    id: "CL-24004",
-    companyName: "KraftEdge Export LLP",
-    contactPerson: "Neha Jain",
-    email: "accounts@kraftedgeexports.com",
-    mobile: "9012345678",
-    gstin: "07AAIFK2210M1Z4",
-    pan: "AAIFK2210M",
-    terms: "Net 30",
-    status: "Blacklisted",
-    address: "Karol Bagh, New Delhi, Delhi - 110005",
-    currency: "INR",
-    outstandingAmount: 78500,
-    creditLimit: 100000,
-    createdAt: "2026-05-17T10:30:00.000Z",
-    updatedAt: "2026-06-10T10:30:00.000Z",
-  },
-];
-
 const emptyClientDefaults: ClientFormInput = {
   companyName: "",
   contactPerson: "",
@@ -140,6 +76,58 @@ const emptyClientDefaults: ClientFormInput = {
   currency: "INR",
   creditLimit: 0,
 };
+
+const statusToApi: Record<ClientStatus, FinanceClientRecord["status"]> = {
+  Active: "active",
+  Inactive: "inactive",
+  "On Hold": "on_hold",
+  Blacklisted: "blacklisted",
+  Archived: "archived",
+};
+
+const statusFromApi: Record<FinanceClientRecord["status"], ClientStatus> = {
+  active: "Active",
+  inactive: "Inactive",
+  on_hold: "On Hold",
+  blacklisted: "Blacklisted",
+  archived: "Archived",
+};
+
+function clientFromBackend(row: FinanceClientRecord): ClientRecord {
+  return {
+    id: row.id,
+    companyName: row.company_name,
+    contactPerson: row.contact_person,
+    email: row.email,
+    mobile: row.mobile,
+    gstin: row.gstin,
+    pan: row.pan,
+    status: statusFromApi[row.status] || "Active",
+    terms: row.payment_terms,
+    address: row.billing_address,
+    currency: row.currency,
+    outstandingAmount: Number(row.outstanding_amount || 0),
+    creditLimit: Number(row.credit_limit || 0),
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function payloadFromForm(data: ClientFormData): FinanceClientPayload {
+  return {
+    company_name: data.companyName,
+    contact_person: data.contactPerson,
+    email: data.email,
+    mobile: data.mobile,
+    gstin: data.gstin,
+    pan: data.pan,
+    status: statusToApi[data.status],
+    payment_terms: data.terms,
+    billing_address: data.address,
+    currency: data.currency,
+    credit_limit: String(data.creditLimit),
+  };
+}
 
 function money(value: number, currency = "INR") {
   const symbol = currency === "INR" ? INR : currency;
@@ -180,10 +168,12 @@ function exportCsv(filename: string, rows: ClientRecord[]) {
 }
 
 export default function Step1Clients() {
-  const [clients, setClients] = useState<ClientRecord[]>(initialClients);
+  const [clients, setClients] = useState<ClientRecord[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState("");
+  const [backendMessage, setBackendMessage] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
   const [gstCheckMessage, setGstCheckMessage] = useState("");
@@ -198,6 +188,31 @@ export default function Step1Clients() {
     resolver: zodResolver(clientSchema),
     defaultValues: emptyClientDefaults,
   });
+
+  const reloadClients = async () => {
+    const rows = await listFinanceClients();
+    setClients(rows.map(clientFromBackend));
+  };
+
+  useEffect(() => {
+    let isMounted = true;
+    const load = async () => {
+      setIsLoading(true);
+      setBackendMessage("");
+      try {
+        const rows = await listFinanceClients();
+        if (isMounted) setClients(rows.map(clientFromBackend));
+      } catch (error) {
+        if (isMounted) setBackendMessage(error instanceof Error ? error.message : "Unable to load finance clients.");
+      } finally {
+        if (isMounted) setIsLoading(false);
+      }
+    };
+    void load();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const filteredClients = useMemo(() => {
     return clients.filter((client) => {
@@ -250,7 +265,7 @@ export default function Step1Clients() {
     return clients.find((client) => client.id !== editingId && normalize(client[field]) === normalize(value));
   };
 
-  const onSubmit = (data: ClientFormData) => {
+  const onSubmit = async (data: ClientFormData) => {
     const duplicateChecks: Array<[keyof Pick<ClientRecord, "gstin" | "pan" | "email" | "mobile">, keyof ClientFormData, string]> = [
       ["gstin", "gstin", "GSTIN already exists in Client Master"],
       ["pan", "pan", "PAN already exists in Client Master"],
@@ -263,44 +278,29 @@ export default function Step1Clients() {
       return;
     }
 
-    const now = new Date().toISOString();
-    if (editingId) {
-      setClients((current) => current.map((client) => (
-        client.id === editingId
-          ? { ...client, ...data, updatedAt: now }
-          : client
-      )));
-      setSuccessMsg("Client updated successfully");
-    } else {
-      const sequence = clients.length + 1;
-      const newClient: ClientRecord = {
-        id: `CL-${String(24000 + sequence).padStart(5, "0")}`,
-        companyName: data.companyName,
-        contactPerson: data.contactPerson,
-        email: data.email,
-        mobile: data.mobile,
-        gstin: data.gstin,
-        pan: data.pan,
-        terms: data.terms,
-        status: data.status,
-        address: data.address,
-        currency: data.currency,
-        outstandingAmount: 0,
-        creditLimit: data.creditLimit,
-        createdAt: now,
-        updatedAt: now,
-      };
-      setClients((current) => [newClient, ...current]);
-      setSuccessMsg("Client registered successfully");
+    try {
+      if (editingId) {
+        await updateFinanceClient(editingId, payloadFromForm(data));
+        await reloadClients();
+        setSuccessMsg("Client updated successfully");
+      } else {
+        await createFinanceClient(payloadFromForm(data));
+        await reloadClients();
+        setSuccessMsg("Client registered successfully");
+      }
+      setTimeout(closeForm, 900);
+    } catch (error) {
+      setBackendMessage(error instanceof Error ? error.message : "Unable to save finance client.");
     }
-
-    setTimeout(closeForm, 900);
   };
 
-  const updateStatus = (clientId: string, status: ClientStatus) => {
-    setClients((current) => current.map((client) => (
-      client.id === clientId ? { ...client, status, updatedAt: new Date().toISOString() } : client
-    )));
+  const updateStatus = async (clientId: string, status: ClientStatus) => {
+    try {
+      await updateFinanceClient(clientId, { status: statusToApi[status] });
+      await reloadClients();
+    } catch (error) {
+      setBackendMessage(error instanceof Error ? error.message : "Unable to update finance client status.");
+    }
   };
 
   const checkGstinSearch = () => {
@@ -329,6 +329,16 @@ export default function Step1Clients() {
         </>
       }
     >
+      {backendMessage ? (
+        <div className="rounded-2xl border border-red-200 bg-red-50 px-5 py-3 text-sm font-black text-red-700">
+          {backendMessage}
+        </div>
+      ) : null}
+      {isLoading ? (
+        <div className="rounded-2xl border border-slate-200 bg-white px-5 py-4 text-xs font-black uppercase tracking-widest text-slate-400">
+          Loading backend client master...
+        </div>
+      ) : null}
       <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-4">
         <MetricCard label="Active Clients" value={String(activeClients.length)} helper={`${clients.length} total records`} icon={Users} tone="blue" />
         <MetricCard label="Receivables" value={money(totalReceivable)} helper="Open approved invoices" icon={Wallet} tone="amber" />
@@ -359,7 +369,7 @@ export default function Step1Clients() {
                   <CheckCircle2 size={48} />
                 </div>
                 <h3 className="text-2xl font-black text-primary">{successMsg}</h3>
-                <p className="text-xs font-bold uppercase tracking-widest text-slate-500">Master record and backend-ready data shape are updated.</p>
+                <p className="text-xs font-bold uppercase tracking-widest text-slate-500">Master record has been saved to Finance backend.</p>
               </div>
             ) : (
               <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">

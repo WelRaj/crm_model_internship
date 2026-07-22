@@ -7,6 +7,7 @@ class AuditLogSerializer(serializers.ModelSerializer):
     actor_id = serializers.SerializerMethodField()
     actor_name = serializers.SerializerMethodField()
     actor_role = serializers.SerializerMethodField()
+    investigation_status_label = serializers.CharField(source="get_investigation_status_display", read_only=True)
 
     class Meta:
         model = AuditLog
@@ -23,6 +24,28 @@ class AuditLogSerializer(serializers.ModelSerializer):
             "new_values",
             "ip_address",
             "user_agent",
+            "investigation_status",
+            "investigation_status_label",
+            "investigation_note",
+            "investigated_by",
+            "investigated_at",
+            "created_at",
+        )
+        read_only_fields = (
+            "id",
+            "actor_id",
+            "actor_name",
+            "actor_role",
+            "module",
+            "action",
+            "entity_type",
+            "entity_id",
+            "old_values",
+            "new_values",
+            "ip_address",
+            "user_agent",
+            "investigated_by",
+            "investigated_at",
             "created_at",
         )
 
@@ -41,3 +64,16 @@ class AuditLogSerializer(serializers.ModelSerializer):
             return "System"
         role = obj.actor.user_roles.select_related("role").first()
         return role.role.name if role else "User"
+
+
+class AuditInvestigationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AuditLog
+        fields = ("investigation_status", "investigation_note")
+
+    def validate(self, attrs):
+        status = attrs.get("investigation_status", getattr(self.instance, "investigation_status", AuditLog.InvestigationStatus.CLEAR))
+        note = attrs.get("investigation_note", getattr(self.instance, "investigation_note", ""))
+        if status != AuditLog.InvestigationStatus.CLEAR and len(note.strip()) < 5:
+            raise serializers.ValidationError({"investigation_note": "Investigation note is required for non-clear audit events."})
+        return attrs

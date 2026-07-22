@@ -1,13 +1,20 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import LedgerEntryDialog, { type LedgerEntryData } from "./LedgerEntryDialog";
 import { useAuth } from "./AccessControlContext";
 import { Calculator, Download, IndianRupee, Pencil, Plus, ReceiptText, TrendingDown } from "lucide-react";
 import { AccountingPage, ActionButton, MetricCard, Panel } from "./AccountingComponents";
+import {
+  createFinanceResource,
+  deleteFinanceResource,
+  listFinanceResource,
+  updateFinanceResource,
+} from "@/services/finance-api";
 
 interface LedgerEntry {
   id: string;
+  backendId?: string;
   status: "active" | "deleted";
   date: string;
   voucherNo: string;
@@ -42,16 +49,27 @@ interface AuditLog {
   summary: string;
 }
 
-type LedgerEntryPayload = LedgerEntry;
-
-interface BackendSyncJob {
+type BackendLedgerRecord = {
   id: string;
-  action: AuditAction;
-  method: "POST" | "PUT" | "PATCH";
-  endpoint: string;
-  payload: LedgerEntryPayload;
-  queuedAt: string;
-}
+  entry_number: string;
+  entry_type: "sale" | "purchase" | "expense" | "payroll" | "tax" | "adjustment";
+  entry_date: string;
+  description: string;
+  debit: string;
+  credit: string;
+  status: string;
+  created_at: string;
+  updated_at: string;
+};
+
+type BackendLedgerPayload = {
+  entry_type: BackendLedgerRecord["entry_type"];
+  entry_date: string;
+  description: string;
+  debit: string;
+  credit: string;
+  status: string;
+};
 
 const permissions: Record<UserRole, { add: boolean; edit: boolean; delete: boolean }> = {
   Admin: { add: true, edit: true, delete: true },
@@ -63,33 +81,9 @@ const permissions: Record<UserRole, { add: boolean; edit: boolean; delete: boole
 };
 
 const nowIso = () => new Date().toISOString();
-const toLedgerPayload = (entry: LedgerEntry): LedgerEntryPayload => ({ ...entry });
-const ledgerEndpoint = (entryId?: string) => `/accounting/ledger-entries${entryId ? `/${entryId}` : ""}`;
 const parseNum = (value: string) => parseFloat(value) || 0;
 const INR = "\u20b9";
 const fmt = (value: number) => INR + value.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-
-const createEntry = (id: string, actor: string): LedgerEntry => ({
-  id,
-  status: "active",
-  date: "",
-  voucherNo: "",
-  partyName: "",
-  category: "",
-  description: "",
-  purchase: "",
-  purchaseChecked: false,
-  sales: "",
-  salesChecked: false,
-  expenses: "",
-  expensesChecked: false,
-  slabPercent: "",
-  gstTreatment: "Exclusive",
-  createdBy: actor,
-  updatedBy: actor,
-  createdAt: nowIso(),
-  updatedAt: nowIso(),
-});
 
 const calcTax = (amount: string, checked: boolean, slabPercent: string, gstTreatment: LedgerEntry["gstTreatment"]) => {
   if (!checked) return 0;
@@ -104,18 +98,118 @@ const calcSGST = (row: LedgerEntry) => calcTax(row.sales, row.salesChecked, row.
 const calcTDS = (row: LedgerEntry) => calcTax(row.expenses, row.expensesChecked, row.slabPercent, row.gstTreatment);
 const csvCell = (value: string | number) => `"${String(value).replace(/"/g, '""')}"`;
 
-let nextId = 6;
-const newId = () => String(nextId++);
+const metadataSep = " | ";
+
+const entryTypeFor = (entry: LedgerEntryData): BackendLedgerRecord["entry_type"] => {
+  if (parseNum(entry.sales) > 0) return "sale";
+  if (parseNum(entry.purchase) > 0) return "purchase";
+  if (parseNum(entry.expenses) > 0) return "expense";
+  return "adjustment";
+};
+
+const ledgerPayload = (entry: LedgerEntryData): BackendLedgerPayload => {
+  const purchase = parseNum(entry.purchase);
+  const sales = parseNum(entry.sales);
+  const expenses = parseNum(entry.expenses);
+  return {
+    entry_type: entryTypeFor(entry),
+    entry_date: entry.date,
+    description: [
+      entry.description,
+      `voucher=${entry.voucherNo}`,
+      `party=${entry.partyName}`,
+      `category=${entry.category}`,
+      `purchase=${entry.purchase || "0"}`,
+      `purchaseChecked=${entry.purchaseChecked ? "1" : "0"}`,
+      `sales=${entry.sales || "0"}`,
+      `salesChecked=${entry.salesChecked ? "1" : "0"}`,
+      `expenses=${entry.expenses || "0"}`,
+      `expensesChecked=${entry.expensesChecked ? "1" : "0"}`,
+      `slab=${entry.slabPercent || "0"}`,
+      `gstTreatment=${entry.gstTreatment}`,
+    ].join(metadataSep),
+    debit: String(purchase + expenses),
+    credit: String(sales),
+    status: "posted",
+  };
+};
+
+const parseMeta = (description: string) => {
+  const parts = description.split(metadataSep);
+  const meta = new Map<string, string>();
+  parts.slice(1).forEach((part) => {
+    const index = part.indexOf("=");
+    if (index > -1) meta.set(part.slice(0, index), part.slice(index + 1));
+  });
+  return { description: parts[0] || "", meta };
+};
+
+const rowFromBackend = (row: BackendLedgerRecord, actor: string): LedgerEntry => {
+  const { description, meta } = parseMeta(row.description);
+  return {
+    id: row.entry_number,
+    backendId: row.id,
+    status: row.status === "archived" || row.status === "deleted" ? "deleted" : "active",
+    date: row.entry_date,
+    voucherNo: meta.get("voucher") || row.entry_number,
+    partyName: meta.get("party") || "",
+    category: meta.get("category") || row.entry_type,
+    description,
+    purchase: meta.get("purchase") || (row.entry_type === "purchase" ? row.debit : ""),
+    purchaseChecked: meta.get("purchaseChecked") === "1",
+    sales: meta.get("sales") || (row.entry_type === "sale" ? row.credit : ""),
+    salesChecked: meta.get("salesChecked") === "1",
+    expenses: meta.get("expenses") || (row.entry_type === "expense" ? row.debit : ""),
+    expensesChecked: meta.get("expensesChecked") === "1",
+    slabPercent: meta.get("slab") || "",
+    gstTreatment: meta.get("gstTreatment") === "Inclusive" ? "Inclusive" : "Exclusive",
+    createdBy: actor,
+    updatedBy: actor,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+};
 
 export default function Step8salepurchaseExpenses() {
   const { role } = useAuth();
   const currentUser = { name: "Rajkumar Rathore", role };
   const can = permissions[role];
-  const [entries, setEntries] = useState<LedgerEntry[]>(["1", "2", "3", "4", "5"].map((id) => createEntry(id, currentUser.name)));
+  const [entries, setEntries] = useState<LedgerEntry[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
-  const [pendingSyncs, setPendingSyncs] = useState<BackendSyncJob[]>([]);
+  const [backendMessage, setBackendMessage] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
   const [showDialog, setShowDialog] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+
+  const loadEntries = async () => {
+    try {
+      setIsLoading(true);
+      setBackendMessage("");
+      const rows = await listFinanceResource<BackendLedgerRecord>("ledger-entries");
+      setEntries(rows.map((row) => rowFromBackend(row, currentUser.name)));
+    } catch (error) {
+      setBackendMessage(error instanceof Error ? error.message : "Unable to load ledger entries.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    let isMounted = true;
+    listFinanceResource<BackendLedgerRecord>("ledger-entries")
+      .then((rows) => {
+        if (isMounted) setEntries(rows.map((row) => rowFromBackend(row, currentUser.name)));
+      })
+      .catch((error) => {
+        if (isMounted) setBackendMessage(error instanceof Error ? error.message : "Unable to load ledger entries.");
+      })
+      .finally(() => {
+        if (isMounted) setIsLoading(false);
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, [currentUser.name]);
 
   const logAudit = (entryId: string, action: AuditAction, summary: string) => {
     setAuditLogs((prev) => [{
@@ -128,32 +222,22 @@ export default function Step8salepurchaseExpenses() {
     }, ...prev]);
   };
 
-  const queueBackendSync = (action: AuditAction, payload: LedgerEntryPayload) => {
-    setPendingSyncs((prev) => [{
-      id: `${Date.now()}-${payload.id}-sync`,
-      action,
-      method: action === "created" ? "POST" : action === "updated" ? "PUT" : "PATCH",
-      endpoint: action === "created" ? ledgerEndpoint() : ledgerEndpoint(payload.id),
-      payload,
-      queuedAt: nowIso(),
-    }, ...prev]);
-  };
-
-  const softDeleteRow = (id: string) => {
+  const softDeleteRow = async (id: string) => {
     const row = entries.find((entry) => entry.id === id);
-    if (!row) return;
-    const at = nowIso();
-    const deletedEntry = toLedgerPayload({
-      ...row,
-      status: "deleted",
-      deletedAt: at,
-      deletedBy: currentUser.name,
-      updatedAt: at,
-      updatedBy: currentUser.name,
-    });
-    setEntries((prev) => prev.map((entry) => entry.id === id ? deletedEntry : entry));
-    logAudit(id, "deleted", "Ledger entry soft deleted.");
-    queueBackendSync("deleted", deletedEntry);
+    if (!row?.backendId) {
+      setBackendMessage("Unable to delete ledger entry because backend id is missing.");
+      return false;
+    }
+    try {
+      setBackendMessage("");
+      await deleteFinanceResource<BackendLedgerRecord>("ledger-entries", row.backendId);
+      await loadEntries();
+      logAudit(id, "deleted", "Ledger entry archived in backend.");
+      return true;
+    } catch (error) {
+      setBackendMessage(error instanceof Error ? error.message : "Unable to delete ledger entry.");
+      return false;
+    }
   };
 
   const openAddDialog = () => {
@@ -168,31 +252,36 @@ export default function Step8salepurchaseExpenses() {
     setShowDialog(true);
   };
 
-  const saveEntry = (entry: LedgerEntryData) => {
-    const at = nowIso();
+  const saveEntry = async (entry: LedgerEntryData) => {
     if (editingId) {
       const row = entries.find((item) => item.id === editingId);
-      if (!row) return;
-      const updatedEntry = toLedgerPayload({ ...row, ...entry, updatedAt: at, updatedBy: currentUser.name });
-      setEntries((prev) => prev.map((item) => item.id === editingId ? updatedEntry : item));
-      logAudit(editingId, "updated", "Ledger entry updated.");
-      queueBackendSync("updated", updatedEntry);
-      return;
+      if (!row) return false;
+      if (!row.backendId) {
+        setBackendMessage("Unable to update ledger entry because backend id is missing.");
+        return false;
+      }
+      try {
+        setBackendMessage("");
+        await updateFinanceResource<BackendLedgerRecord, BackendLedgerPayload>("ledger-entries", row.backendId, ledgerPayload(entry));
+        await loadEntries();
+        logAudit(editingId, "updated", "Ledger entry updated in backend.");
+        return true;
+      } catch (error) {
+        setBackendMessage(error instanceof Error ? error.message : "Unable to update ledger entry.");
+        return false;
+      }
     }
 
-    const id = newId();
-    const newEntry = toLedgerPayload({
-      ...createEntry(id, currentUser.name),
-      ...entry,
-      status: "active",
-      createdAt: at,
-      updatedAt: at,
-      createdBy: currentUser.name,
-      updatedBy: currentUser.name,
-    });
-    setEntries((prev) => [...prev, newEntry]);
-    logAudit(id, "created", "Ledger entry created.");
-    queueBackendSync("created", newEntry);
+    try {
+      setBackendMessage("");
+      const saved = await createFinanceResource<BackendLedgerRecord, BackendLedgerPayload>("ledger-entries", ledgerPayload(entry));
+      await loadEntries();
+      logAudit(saved.entry_number, "created", "Ledger entry created in backend.");
+      return true;
+    } catch (error) {
+      setBackendMessage(error instanceof Error ? error.message : "Unable to create ledger entry.");
+      return false;
+    }
   };
 
   const editingEntry = editingId ? entries.find((row) => row.id === editingId) : undefined;
@@ -264,6 +353,12 @@ export default function Step8salepurchaseExpenses() {
         </>
       }
     >
+      {backendMessage ? (
+        <div className="mb-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">
+          {backendMessage}
+        </div>
+      ) : null}
+
       <div className="mb-8 grid grid-cols-1 gap-5 md:grid-cols-3">
         <MetricCard label="Total Sales" value={fmt(totals.sales)} helper="Gross revenue" icon={IndianRupee} tone="green" />
         <MetricCard label="Total Purchases" value={fmt(totals.purchase)} helper="Procurement costs" icon={Calculator} tone="blue" />
@@ -271,6 +366,11 @@ export default function Step8salepurchaseExpenses() {
       </div>
 
       <Panel title="Ledger Register" description="Detailed line-item transactions.">
+        {isLoading ? (
+          <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-500">
+            Loading backend ledger entries...
+          </div>
+        ) : null}
         <div className="w-full overflow-x-auto rounded-xl">
           <table cellSpacing={0} cellPadding={0} style={{ width: "100%", minWidth: 1650, borderCollapse: "collapse", fontSize: 13 }}>
             <thead>
@@ -332,6 +432,13 @@ export default function Step8salepurchaseExpenses() {
                   </tr>
                 );
               })}
+              {!isLoading && visibleEntries.length === 0 ? (
+                <tr>
+                  <td colSpan={15} style={{ padding: "28px 12px", textAlign: "center", color: "#94a3b8", fontWeight: 700 }}>
+                    No backend ledger entries found.
+                  </td>
+                </tr>
+              ) : null}
             </tbody>
             <tfoot>
               <tr style={{ borderTop: "2px solid #f1f5f9", background: "#fafafa" }}>
@@ -367,31 +474,6 @@ export default function Step8salepurchaseExpenses() {
         </Panel>
       ) : null}
 
-      {pendingSyncs.length ? (
-        <Panel title="Backend Sync Queue" description="Prepared API mutations for persistence.">
-          <div className="overflow-x-auto">
-            <table cellSpacing={0} cellPadding={0} style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-              <thead>
-                <tr style={{ borderBottom: "2px solid #f1f5f9" }}>
-                  {["Action", "Method", "Endpoint", "Queued"].map((label) => (
-                    <th key={label} style={{ padding: "10px 12px", textAlign: "left", color: "#64748b", fontSize: 12, fontWeight: 700 }}>{label}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {pendingSyncs.slice(0, 3).map((job) => (
-                  <tr key={job.id} style={{ borderBottom: "1px solid #f8fafc" }}>
-                    <td style={{ padding: "10px 12px", color: "#0f172a", fontWeight: 700 }}>{job.action}</td>
-                    <td style={{ padding: "10px 12px", color: "#64748b" }}>{job.method}</td>
-                    <td style={{ padding: "10px 12px", color: "#64748b" }}>{job.endpoint}</td>
-                    <td style={{ padding: "10px 12px", color: "#94a3b8" }}>{new Date(job.queuedAt).toLocaleString("en-IN")}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </Panel>
-      ) : null}
     </AccountingPage>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -12,6 +12,13 @@ import {
   AccountingPage, ActionButton, DataTable, Field,
   MetricCard, Panel, StatusBadge,
 } from "./AccountingComponents";
+import {
+  createVendor,
+  listVendors,
+  updateVendor,
+  type VendorPayload,
+  type VendorRecord as BackendVendorRecord,
+} from "@/services/finance-api";
 
 const INR = "\u20b9";
 
@@ -69,85 +76,6 @@ type VendorRecord = {
   updatedAt: string;
 };
 
-const initialVendors: VendorRecord[] = [
-  {
-    id: "VEN-001",
-    vendorName: "Amazon Web Services India",
-    contactPerson: "AWS Billing Desk",
-    email: "billing@aws.amazon.in",
-    mobile: "9876501234",
-    category: "Cloud Hosting",
-    gstin: "29AAICA3918J1ZK",
-    pan: "AAICA3918J",
-    tds: "Yes - 2%",
-    monthlyCommitment: 245000,
-    status: "Active",
-    bankName: "HDFC Bank",
-    accountNo: "50200012345678",
-    ifsc: "HDFC0001234",
-    address: "Bengaluru, Karnataka",
-    createdAt: "2026-04-04T10:30:00.000Z",
-    updatedAt: "2026-06-14T10:30:00.000Z",
-  },
-  {
-    id: "VEN-002",
-    vendorName: "Razorpay Software Pvt Ltd",
-    contactPerson: "Payments Support",
-    email: "accounts@razorpay.com",
-    mobile: "9988701234",
-    category: "Payment Gateway",
-    gstin: "29AAICR2714C1Z7",
-    pan: "AAICR2714C",
-    tds: "Yes - 2%",
-    monthlyCommitment: 38000,
-    status: "Active",
-    bankName: "ICICI Bank",
-    accountNo: "123456789012",
-    ifsc: "ICIC0001234",
-    address: "Koramangala, Bengaluru",
-    createdAt: "2026-04-12T10:30:00.000Z",
-    updatedAt: "2026-06-18T10:30:00.000Z",
-  },
-  {
-    id: "VEN-003",
-    vendorName: "Airtel Business",
-    contactPerson: "Enterprise Desk",
-    email: "enterprise@airtel.com",
-    mobile: "9123409876",
-    category: "Internet",
-    gstin: "07AAACB2894G1ZR",
-    pan: "AAACB2894G",
-    tds: "No",
-    monthlyCommitment: 18500,
-    status: "Active",
-    bankName: "Axis Bank",
-    accountNo: "918273645012",
-    ifsc: "UTIB0001234",
-    address: "Connaught Place, New Delhi",
-    createdAt: "2026-05-02T10:30:00.000Z",
-    updatedAt: "2026-06-11T10:30:00.000Z",
-  },
-  {
-    id: "VEN-004",
-    vendorName: "TechDepot Hardware",
-    contactPerson: "Mehul Shah",
-    email: "mehul@techdepot.in",
-    mobile: "9012309876",
-    category: "Hardware",
-    gstin: "06AAFFT3344G1Z1",
-    pan: "AAFFT3344G",
-    tds: "Yes - 1%",
-    monthlyCommitment: 0,
-    status: "Review",
-    bankName: "",
-    accountNo: "",
-    ifsc: "",
-    address: "Gurugram, Haryana",
-    createdAt: "2026-05-19T10:30:00.000Z",
-    updatedAt: "2026-06-09T10:30:00.000Z",
-  },
-];
-
 const emptyVendorDefaults: VendorFormInput = {
   vendorName: "",
   contactPerson: "",
@@ -164,6 +92,70 @@ const emptyVendorDefaults: VendorFormInput = {
   ifsc: "",
   address: "",
 };
+
+const statusToApi: Record<VendorStatus, BackendVendorRecord["status"]> = {
+  Active: "active",
+  Inactive: "inactive",
+  Review: "on_hold",
+  Blocked: "on_hold",
+  Archived: "archived",
+};
+
+const statusFromApi: Record<BackendVendorRecord["status"], VendorStatus> = {
+  active: "Active",
+  inactive: "Inactive",
+  on_hold: "Review",
+  archived: "Archived",
+};
+
+function parseTerms(value: string) {
+  const parts = value.split(" | ");
+  return {
+    category: parts[0] || "Software Licenses",
+    tds: parts[1] || "No",
+    monthlyCommitment: Number(parts[2] || 0),
+    bankName: parts[3] || "",
+    accountNo: parts[4] || "",
+    ifsc: parts[5] || "",
+  };
+}
+
+function vendorFromBackend(row: BackendVendorRecord): VendorRecord {
+  const terms = parseTerms(row.payment_terms);
+  return {
+    id: row.id,
+    vendorName: row.company_name,
+    contactPerson: row.contact_person,
+    email: row.email,
+    mobile: row.mobile,
+    category: terms.category,
+    gstin: row.gstin,
+    pan: row.pan,
+    tds: terms.tds,
+    monthlyCommitment: terms.monthlyCommitment,
+    status: statusFromApi[row.status] || "Active",
+    bankName: terms.bankName,
+    accountNo: terms.accountNo,
+    ifsc: terms.ifsc,
+    address: row.billing_address,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function payloadFromForm(data: VendorFormData): VendorPayload {
+  return {
+    company_name: data.vendorName,
+    contact_person: data.contactPerson || "",
+    email: data.email,
+    mobile: data.mobile,
+    gstin: data.gstin,
+    pan: data.pan,
+    billing_address: data.address || "",
+    payment_terms: [data.category, data.tds, String(data.monthlyCommitment), data.bankName || "", data.accountNo || "", data.ifsc || ""].join(" | "),
+    status: statusToApi[data.status],
+  };
+}
 
 function money(value: number) {
   return `${INR} ${value.toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
@@ -214,10 +206,12 @@ function exportCsv(filename: string, rows: VendorRecord[]) {
 }
 
 export default function Step2Vendors() {
-  const [vendors, setVendors] = useState<VendorRecord[]>(initialVendors);
+  const [vendors, setVendors] = useState<VendorRecord[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState("");
+  const [backendMessage, setBackendMessage] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
   const [categoryFilter, setCategoryFilter] = useState("All");
@@ -232,6 +226,31 @@ export default function Step2Vendors() {
     resolver: zodResolver(vendorSchema),
     defaultValues: emptyVendorDefaults,
   });
+
+  const reloadVendors = async () => {
+    const rows = await listVendors();
+    setVendors(rows.map(vendorFromBackend));
+  };
+
+  useEffect(() => {
+    let isMounted = true;
+    const load = async () => {
+      setIsLoading(true);
+      setBackendMessage("");
+      try {
+        const rows = await listVendors();
+        if (isMounted) setVendors(rows.map(vendorFromBackend));
+      } catch (error) {
+        if (isMounted) setBackendMessage(error instanceof Error ? error.message : "Unable to load vendors.");
+      } finally {
+        if (isMounted) setIsLoading(false);
+      }
+    };
+    void load();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const filteredVendors = useMemo(() => {
     return vendors.filter((vendor) => {
@@ -289,7 +308,7 @@ export default function Step2Vendors() {
     return vendors.find((vendor) => vendor.id !== editingId && normalize(vendor[field]) === normalize(value));
   };
 
-  const onSubmit = (data: VendorFormData) => {
+  const onSubmit = async (data: VendorFormData) => {
     const duplicateChecks: Array<[keyof Pick<VendorRecord, "gstin" | "pan" | "email" | "mobile" | "accountNo">, keyof VendorFormData, string]> = [
       ["gstin", "gstin", "GSTIN already exists in Vendor Master"],
       ["pan", "pan", "PAN already exists in Vendor Master"],
@@ -303,63 +322,29 @@ export default function Step2Vendors() {
       return;
     }
 
-    const now = new Date().toISOString();
-    if (editingId) {
-      setVendors((current) => current.map((vendor) => (
-        vendor.id === editingId
-          ? {
-              ...vendor,
-              vendorName: data.vendorName,
-              contactPerson: data.contactPerson ?? "",
-              email: data.email,
-              mobile: data.mobile,
-              gstin: data.gstin,
-              pan: data.pan,
-              status: data.status,
-              category: data.category,
-              tds: data.tds,
-              monthlyCommitment: data.monthlyCommitment,
-              bankName: data.bankName ?? "",
-              accountNo: data.accountNo,
-              ifsc: data.ifsc,
-              address: data.address ?? "",
-              updatedAt: now,
-            }
-          : vendor
-      )));
-      setSuccessMsg("Vendor updated successfully");
-    } else {
-      const sequence = vendors.length + 1;
-      const newVendor: VendorRecord = {
-        id: `VEN-${String(sequence).padStart(3, "0")}`,
-        vendorName: data.vendorName,
-        contactPerson: data.contactPerson ?? "",
-        email: data.email,
-        mobile: data.mobile,
-        category: data.category,
-        gstin: data.gstin,
-        pan: data.pan,
-        tds: data.tds,
-        monthlyCommitment: data.monthlyCommitment,
-        status: data.status,
-        bankName: data.bankName ?? "",
-        accountNo: data.accountNo,
-        ifsc: data.ifsc,
-        address: data.address ?? "",
-        createdAt: now,
-        updatedAt: now,
-      };
-      setVendors((current) => [newVendor, ...current]);
-      setSuccessMsg("Vendor added successfully");
+    try {
+      if (editingId) {
+        await updateVendor(editingId, payloadFromForm(data));
+        await reloadVendors();
+        setSuccessMsg("Vendor updated successfully");
+      } else {
+        await createVendor(payloadFromForm(data));
+        await reloadVendors();
+        setSuccessMsg("Vendor added successfully");
+      }
+      setTimeout(closeForm, 900);
+    } catch (error) {
+      setBackendMessage(error instanceof Error ? error.message : "Unable to save vendor.");
     }
-
-    setTimeout(closeForm, 900);
   };
 
-  const updateStatus = (vendorId: string, status: VendorStatus) => {
-    setVendors((current) => current.map((vendor) => (
-      vendor.id === vendorId ? { ...vendor, status, updatedAt: new Date().toISOString() } : vendor
-    )));
+  const updateStatus = async (vendorId: string, status: VendorStatus) => {
+    try {
+      await updateVendor(vendorId, { status: statusToApi[status] });
+      await reloadVendors();
+    } catch (error) {
+      setBackendMessage(error instanceof Error ? error.message : "Unable to update vendor status.");
+    }
   };
 
   return (
@@ -375,6 +360,16 @@ export default function Step2Vendors() {
         </>
       }
     >
+      {backendMessage ? (
+        <div className="rounded-2xl border border-red-200 bg-red-50 px-5 py-3 text-sm font-black text-red-700">
+          {backendMessage}
+        </div>
+      ) : null}
+      {isLoading ? (
+        <div className="rounded-2xl border border-slate-200 bg-white px-5 py-4 text-xs font-black uppercase tracking-widest text-slate-400">
+          Loading backend vendor master...
+        </div>
+      ) : null}
       <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-4">
         <MetricCard label="Active Vendors" value={String(activeVendors.length)} helper={`${vendors.length} total registered`} icon={Truck} tone="blue" />
         <MetricCard label="Monthly Commitments" value={money(monthlyCommitments)} helper="Subscriptions and utilities" icon={WalletCards} tone="amber" />
@@ -399,7 +394,7 @@ export default function Step2Vendors() {
                   <CheckCircle2 size={48} />
                 </div>
                 <h3 className="text-2xl font-black text-primary">{successMsg}</h3>
-                <p className="text-xs font-bold uppercase tracking-widest text-slate-500">Expense master, tax setup, and payout metadata are updated.</p>
+                <p className="text-xs font-bold uppercase tracking-widest text-slate-500">Expense master, tax setup, and payout metadata are saved to Finance backend.</p>
               </div>
             ) : (
               <form onSubmit={handleSubmit(onSubmit)} className="space-y-10">

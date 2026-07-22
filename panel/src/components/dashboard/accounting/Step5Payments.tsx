@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -12,21 +12,27 @@ import {
   AccountingPage, ActionButton, DataTable, Field,
   MetricCard, Panel, ProgressBar, StatusBadge, WorkflowSteps,
 } from "./AccountingComponents";
+import {
+  createPayment,
+  listFinanceClients,
+  listFinanceResource,
+  listInvoices,
+  listPayments,
+  runPaymentAction,
+  type FinanceClientRecord,
+  type InvoiceRecord as BackendInvoiceRecord,
+  type PaymentPayload,
+  type PaymentRecord as BackendPaymentRecord,
+} from "@/services/finance-api";
 
 const INR = "\u20b9";
 const allocationTypes = ["Against Invoice", "Client Advance / Unallocated"] as const;
 const paymentModes = ["NEFT", "RTGS", "IMPS", "UPI", "Cheque", "Cash", "Stripe", "Razorpay"] as const;
 const paymentStatuses = ["Received", "Verified", "Reconciled", "Reversed"] as const;
 
-const clientOptions = [
-  { id: "CL-24001", name: "Apex Finserve Pvt Ltd" },
-  { id: "CL-24002", name: "Nexa Retail Cloud" },
-  { id: "CL-24003", name: "Bluebird Logistics" },
-  { id: "CL-24004", name: "KraftEdge Export LLP" },
-];
-
 type InvoiceReceivable = {
   id: string;
+  backendId: string;
   clientId: string;
   clientName: string;
   projectName: string;
@@ -37,45 +43,6 @@ type InvoiceReceivable = {
   dueDate: string;
   status: "Sent" | "Approved";
 };
-
-const initialInvoices: InvoiceReceivable[] = [
-  {
-    id: "INV-2026-088",
-    clientId: "CL-24002",
-    clientName: "Nexa Retail Cloud",
-    projectName: "E-commerce Mobile App",
-    currency: "INR",
-    totalAmount: 1275000,
-    cashReceived: 472000,
-    tdsAdjusted: 28000,
-    dueDate: "2026-06-21",
-    status: "Sent",
-  },
-  {
-    id: "INV-2026-086",
-    clientId: "CL-24003",
-    clientName: "Bluebird Logistics",
-    projectName: "Logistics Control Tower",
-    currency: "INR",
-    totalAmount: 360000,
-    cashReceived: 120000,
-    tdsAdjusted: 0,
-    dueDate: "2026-06-30",
-    status: "Sent",
-  },
-  {
-    id: "INV-2026-085",
-    clientId: "CL-24001",
-    clientName: "Apex Finserve Pvt Ltd",
-    projectName: "Loan Automation Platform",
-    currency: "INR",
-    totalAmount: 590000,
-    cashReceived: 0,
-    tdsAdjusted: 0,
-    dueDate: "2026-07-05",
-    status: "Approved",
-  },
-];
 
 const paymentSchema = z.object({
   allocationType: z.enum(allocationTypes),
@@ -108,8 +75,10 @@ type PaymentStatus = typeof paymentStatuses[number];
 
 type PaymentRecord = {
   id: string;
+  backendId: string;
   allocationType: typeof allocationTypes[number];
   invoiceId: string;
+  invoiceCode: string;
   clientId: string;
   clientName: string;
   amount: number;
@@ -128,50 +97,30 @@ type PaymentRecord = {
   updatedAt: string;
 };
 
-const initialPayments: PaymentRecord[] = [
-  {
-    id: "PAY-2026-101",
-    allocationType: "Against Invoice",
-    invoiceId: "INV-2026-088",
-    clientId: "CL-24002",
-    clientName: "Nexa Retail Cloud",
-    amount: 472000,
-    tdsDeducted: 28000,
-    currency: "INR",
-    date: "2026-06-11",
-    mode: "NEFT",
-    reference: "UTR-NEXA-110626",
-    tdsReference: "TDS-CLAIM-Q1",
-    bankAccount: "HDFC Current Account",
-    proofName: "nexa-neft-receipt.pdf",
-    remarks: "Kickoff advance adjusted against invoice.",
-    status: "Reconciled",
-    recordedBy: "Finance Manager",
-    createdAt: "2026-06-11T10:00:00.000Z",
-    updatedAt: "2026-06-12T10:00:00.000Z",
-  },
-  {
-    id: "PAY-2026-102",
-    allocationType: "Against Invoice",
-    invoiceId: "INV-2026-086",
-    clientId: "CL-24003",
-    clientName: "Bluebird Logistics",
-    amount: 120000,
-    tdsDeducted: 0,
-    currency: "INR",
-    date: "2026-06-05",
-    mode: "IMPS",
-    reference: "IMPS-BBL-050626",
-    tdsReference: "",
-    bankAccount: "HDFC Current Account",
-    proofName: "",
-    remarks: "Part payment received.",
-    status: "Verified",
-    recordedBy: "Accountant",
-    createdAt: "2026-06-05T10:00:00.000Z",
-    updatedAt: "2026-06-05T12:00:00.000Z",
-  },
-];
+type BankAccountRecord = {
+  id: string;
+  account_name: string;
+  bank_name: string;
+  account_number: string;
+  ifsc_code: string;
+  status: string;
+  verification_status: string;
+  is_primary: boolean;
+};
+
+const apiToPaymentStatus: Record<BackendPaymentRecord["status"], PaymentStatus> = {
+  received: "Received",
+  verified: "Verified",
+  reconciled: "Reconciled",
+  reversed: "Reversed",
+};
+
+const paymentStatusToApi: Record<PaymentStatus, BackendPaymentRecord["status"]> = {
+  Received: "received",
+  Verified: "verified",
+  Reconciled: "reconciled",
+  Reversed: "reversed",
+};
 
 const defaultFormValues: PaymentFormInput = {
   allocationType: "Against Invoice",
@@ -211,11 +160,91 @@ function outstanding(invoice: InvoiceReceivable) {
   return Math.max(0, invoice.totalAmount - invoice.cashReceived - invoice.tdsAdjusted);
 }
 
+function clientName(clientId: string, clients: FinanceClientRecord[]) {
+  return clients.find((client) => client.id === clientId)?.company_name || "Finance client";
+}
+
+function bankLabel(bankId: string | null, banks: BankAccountRecord[]) {
+  const bank = banks.find((item) => item.id === bankId);
+  return bank ? `${bank.bank_name} - ${bank.account_name}` : "";
+}
+
+function invoiceFromBackend(row: BackendInvoiceRecord, clients: FinanceClientRecord[]): InvoiceReceivable {
+  return {
+    id: row.invoice_number,
+    backendId: row.id,
+    clientId: row.client,
+    clientName: clientName(row.client, clients),
+    projectName: row.project || "Direct / Milestone",
+    currency: row.currency,
+    totalAmount: Number(row.total_amount),
+    cashReceived: Number(row.paid_amount),
+    tdsAdjusted: Number(row.tds_amount),
+    dueDate: row.due_date,
+    status: row.status === "sent" ? "Sent" : "Approved",
+  };
+}
+
+function paymentFromBackend(row: BackendPaymentRecord, clients: FinanceClientRecord[], invoices: BackendInvoiceRecord[], banks: BankAccountRecord[]): PaymentRecord {
+  const allocation = row.allocations[0];
+  const invoice = allocation ? invoices.find((item) => item.id === allocation.invoice) : null;
+  return {
+    id: row.payment_number,
+    backendId: row.id,
+    allocationType: row.allocation_type === "invoice" ? "Against Invoice" : "Client Advance / Unallocated",
+    invoiceId: allocation?.invoice || "",
+    invoiceCode: invoice?.invoice_number || "",
+    clientId: row.client,
+    clientName: clientName(row.client, clients),
+    amount: Number(row.amount),
+    tdsDeducted: Number(row.tds_amount),
+    currency: row.currency,
+    date: row.payment_date,
+    mode: row.mode as typeof paymentModes[number],
+    reference: row.reference,
+    tdsReference: row.allocations.map((item) => item.id).join(", "),
+    bankAccount: bankLabel(row.bank_account, banks),
+    proofName: row.proof_name,
+    remarks: row.remarks,
+    status: apiToPaymentStatus[row.status],
+    recordedBy: "Finance",
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function paymentPayload(data: PaymentFormData): PaymentPayload {
+  const isInvoicePayment = data.allocationType === "Against Invoice";
+  return {
+    client_id: data.clientId,
+    allocation_type: isInvoicePayment ? "invoice" : "advance",
+    amount: String(data.amount),
+    tds_amount: String(data.tdsDeducted),
+    currency: "INR",
+    payment_date: data.date,
+    mode: data.mode,
+    reference: data.reference.trim(),
+    bank_account_id: data.bankAccount || null,
+    proof_name: data.proofName?.trim() || "",
+    remarks: [data.remarks?.trim() || "", data.tdsReference?.trim() ? `TDS Ref: ${data.tdsReference.trim()}` : ""].filter(Boolean).join(" | "),
+    allocations: isInvoicePayment && data.invoiceId ? [{
+      invoice_id: data.invoiceId,
+      amount: String(data.amount),
+      tds_amount: String(data.tdsDeducted),
+    }] : [],
+  };
+}
+
 export default function Step5Payments() {
-  const [invoices, setInvoices] = useState<InvoiceReceivable[]>(initialInvoices);
-  const [payments, setPayments] = useState<PaymentRecord[]>(initialPayments);
+  const [clients, setClients] = useState<FinanceClientRecord[]>([]);
+  const [bankAccounts, setBankAccounts] = useState<BankAccountRecord[]>([]);
+  const [invoices, setInvoices] = useState<InvoiceReceivable[]>([]);
+  const [payments, setPayments] = useState<PaymentRecord[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [successMsg, setSuccessMsg] = useState("");
+  const [backendMessage, setBackendMessage] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
   const [allocationFilter, setAllocationFilter] = useState("All");
@@ -238,7 +267,7 @@ export default function Step5Payments() {
   const watchedClientId = useWatch({ control, name: "clientId" });
   const watchedAmount = useWatch({ control, name: "amount" });
   const watchedTds = useWatch({ control, name: "tdsDeducted" });
-  const selectedInvoice = invoices.find((invoice) => invoice.id === watchedInvoiceId) ?? null;
+  const selectedInvoice = invoices.find((invoice) => invoice.backendId === watchedInvoiceId) ?? null;
   const currentOutstanding = selectedInvoice ? outstanding(selectedInvoice) : 0;
   const settlementAmount = (Number(watchedAmount) || 0) + (Number(watchedTds) || 0);
   const newBalance = currentOutstanding - settlementAmount;
@@ -247,10 +276,74 @@ export default function Step5Payments() {
     outstanding(invoice) > 0 && (!watchedClientId || invoice.clientId === watchedClientId),
   );
 
+  const clientOptions = useMemo(
+    () => clients.filter((client) => client.status === "active").map((client) => ({ id: client.id, name: client.company_name })),
+    [clients],
+  );
+
+  const bankOptions = useMemo(
+    () => bankAccounts
+      .filter((bank) => bank.status === "active")
+      .map((bank) => ({ id: bank.id, label: `${bank.bank_name} - ${bank.account_name}` })),
+    [bankAccounts],
+  );
+
+  const applyBackendRows = (
+    clientRows: FinanceClientRecord[],
+    invoiceRows: BackendInvoiceRecord[],
+    paymentRows: BackendPaymentRecord[],
+    bankRows: BankAccountRecord[],
+  ) => {
+    setClients(clientRows);
+    setBankAccounts(bankRows);
+    setInvoices(invoiceRows
+      .filter((invoice) => ["approved", "sent"].includes(invoice.status))
+      .map((invoice) => invoiceFromBackend(invoice, clientRows)));
+    setPayments(paymentRows.map((payment) => paymentFromBackend(payment, clientRows, invoiceRows, bankRows)));
+  };
+
+  const fetchBackendRows = async () => Promise.all([
+    listFinanceClients({ status: "active" }),
+    listInvoices(),
+    listPayments(),
+    listFinanceResource<BankAccountRecord>("bank-accounts", { status: "active" }),
+  ]);
+
+  const loadData = async () => {
+    try {
+      setIsLoading(true);
+      const [clientRows, invoiceRows, paymentRows, bankRows] = await fetchBackendRows();
+      applyBackendRows(clientRows, invoiceRows, paymentRows, bankRows);
+    } catch (error) {
+      setBackendMessage(error instanceof Error ? error.message : "Unable to load payment backend data.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    let isMounted = true;
+    fetchBackendRows()
+      .then(([clientRows, invoiceRows, paymentRows, bankRows]) => {
+        if (!isMounted) return;
+        applyBackendRows(clientRows, invoiceRows, paymentRows, bankRows);
+      })
+      .catch((error) => {
+        if (!isMounted) return;
+        setBackendMessage(error instanceof Error ? error.message : "Unable to load payment backend data.");
+      })
+      .finally(() => {
+        if (isMounted) setIsLoading(false);
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   const filteredPayments = useMemo(() => payments.filter((payment) => {
     const query = searchTerm.trim().toLowerCase();
     const matchesSearch = !query || [
-      payment.id, payment.invoiceId, payment.clientName, payment.reference,
+      payment.id, payment.invoiceCode, payment.invoiceId, payment.clientName, payment.reference,
       payment.tdsReference, payment.mode, payment.bankAccount, payment.proofName,
     ].join(" ").toLowerCase().includes(query);
     const matchesStatus = statusFilter === "All" || payment.status === statusFilter;
@@ -259,8 +352,9 @@ export default function Step5Payments() {
   }), [allocationFilter, payments, searchTerm, statusFilter]);
 
   const openForm = () => {
-    reset(defaultFormValues);
+    reset({ ...defaultFormValues, bankAccount: bankOptions[0]?.id || "" });
     setSuccessMsg("");
+    setBackendMessage("");
     setShowForm(true);
   };
 
@@ -280,13 +374,13 @@ export default function Step5Payments() {
 
   const selectInvoice = (invoiceId: string) => {
     setValue("invoiceId", invoiceId, { shouldValidate: true });
-    const invoice = invoices.find((item) => item.id === invoiceId);
+    const invoice = invoices.find((item) => item.backendId === invoiceId);
     if (!invoice) return;
     setValue("clientId", invoice.clientId, { shouldValidate: true });
     setValue("amount", outstanding(invoice), { shouldValidate: true });
   };
 
-  const recordPayment = (data: PaymentFormData) => {
+  const recordPayment = async (data: PaymentFormData) => {
     const normalizedReference = data.reference.trim().toLowerCase();
     if (payments.some((payment) => payment.status !== "Reversed" && payment.reference.trim().toLowerCase() === normalizedReference)) {
       setError("reference", { message: "This payment reference is already recorded" });
@@ -298,7 +392,7 @@ export default function Step5Payments() {
 
     let invoice: InvoiceReceivable | undefined;
     if (data.allocationType === "Against Invoice") {
-      invoice = invoices.find((item) => item.id === data.invoiceId);
+      invoice = invoices.find((item) => item.backendId === data.invoiceId);
       if (!invoice || invoice.clientId !== data.clientId) {
         setError("invoiceId", { message: "Invoice does not belong to selected client" });
         return;
@@ -309,59 +403,38 @@ export default function Step5Payments() {
       }
     }
 
-    const now = new Date().toISOString();
-    const nextNumber = Math.max(102, ...payments.map((payment) => Number(payment.id.split("-").pop()) || 0)) + 1;
-    const newPayment: PaymentRecord = {
-      id: `PAY-${new Date().getFullYear()}-${String(nextNumber).padStart(3, "0")}`,
-      allocationType: data.allocationType,
-      invoiceId: data.allocationType === "Against Invoice" ? data.invoiceId ?? "" : "",
-      clientId: client.id,
-      clientName: client.name,
-      amount: data.amount,
-      tdsDeducted: data.tdsDeducted,
-      currency: invoice?.currency ?? "INR",
-      date: data.date,
-      mode: data.mode,
-      reference: data.reference.trim(),
-      tdsReference: data.tdsReference?.trim() ?? "",
-      bankAccount: data.bankAccount.trim(),
-      proofName: data.proofName?.trim() ?? "",
-      remarks: data.remarks?.trim() ?? "",
-      status: "Received",
-      recordedBy: "Accountant",
-      createdAt: now,
-      updatedAt: now,
-    };
-
-    setPayments((current) => [newPayment, ...current]);
-    if (invoice) {
-      setInvoices((current) => current.map((item) => item.id === invoice.id ? {
-        ...item,
-        cashReceived: item.cashReceived + data.amount,
-        tdsAdjusted: item.tdsAdjusted + data.tdsDeducted,
-      } : item));
+    try {
+      setIsSaving(true);
+      setBackendMessage("");
+      await createPayment(paymentPayload(data));
+      await loadData();
+      setSuccessMsg(invoice ? "Payment recorded and invoice balance updated" : "Client advance recorded as unallocated");
+      setTimeout(closeForm, 900);
+    } catch (error) {
+      setBackendMessage(error instanceof Error ? error.message : "Unable to record payment.");
+    } finally {
+      setIsSaving(false);
     }
-    setSuccessMsg(invoice ? "Payment recorded and invoice balance updated" : "Client advance recorded as unallocated");
-    setTimeout(closeForm, 900);
   };
 
-  const updateStatus = (paymentId: string, status: PaymentStatus) => {
-    setPayments((current) => current.map((payment) => payment.id === paymentId
-      ? { ...payment, status, updatedAt: new Date().toISOString() }
-      : payment));
+  const updateStatus = async (paymentId: string, status: PaymentStatus) => {
+    try {
+      setBackendMessage("");
+      await runPaymentAction(paymentId, paymentStatusToApi[status]);
+      await loadData();
+    } catch (error) {
+      setBackendMessage(error instanceof Error ? error.message : "Unable to update payment status.");
+    }
   };
 
-  const reversePayment = (payment: PaymentRecord) => {
+  const reversePayment = async (payment: PaymentRecord) => {
     if (payment.status === "Reconciled" || payment.status === "Reversed") return;
-    setPayments((current) => current.map((item) => item.id === payment.id
-      ? { ...item, status: "Reversed", updatedAt: new Date().toISOString() }
-      : item));
-    if (payment.invoiceId) {
-      setInvoices((current) => current.map((invoice) => invoice.id === payment.invoiceId ? {
-        ...invoice,
-        cashReceived: Math.max(0, invoice.cashReceived - payment.amount),
-        tdsAdjusted: Math.max(0, invoice.tdsAdjusted - payment.tdsDeducted),
-      } : invoice));
+    try {
+      setBackendMessage("");
+      await runPaymentAction(payment.backendId, "reversed");
+      await loadData();
+    } catch (error) {
+      setBackendMessage(error instanceof Error ? error.message : "Unable to reverse payment.");
     }
   };
 
@@ -369,7 +442,7 @@ export default function Step5Payments() {
     const rows = [
       ["Payment ID", "Allocation", "Invoice", "Client", "Date", "Mode", "Reference", "Cash Received", "TDS", "Settlement", "Bank Account", "Proof", "Status", "Recorded By"],
       ...filteredPayments.map((payment) => [
-        payment.id, payment.allocationType, payment.invoiceId || "Unallocated", payment.clientName,
+        payment.id, payment.allocationType, payment.invoiceCode || "Unallocated", payment.clientName,
         payment.date, payment.mode, payment.reference, payment.amount, payment.tdsDeducted,
         payment.amount + payment.tdsDeducted, payment.bankAccount, payment.proofName,
         payment.status, payment.recordedBy,
@@ -383,7 +456,7 @@ export default function Step5Payments() {
     const content = [
       `Payment Receipt: ${payment.id}`,
       `Client: ${payment.clientName} (${payment.clientId})`,
-      `Allocation: ${payment.invoiceId || "Client Advance / Unallocated"}`,
+      `Allocation: ${payment.invoiceCode || "Client Advance / Unallocated"}`,
       `Payment Date: ${formatDate(payment.date)}`,
       `Mode: ${payment.mode}`,
       `Reference: ${payment.reference}`,
@@ -429,6 +502,18 @@ export default function Step5Payments() {
         <MetricCard label="Invoice Outstanding" value={money(totalOutstanding)} helper={`${recoveryRate.toFixed(1)}% recovery rate`} icon={WalletCards} tone="amber" />
         <MetricCard label="Unallocated Advance" value={money(unallocatedAdvance)} helper="Client credit awaiting allocation" icon={ReceiptText} tone="blue" />
       </div>
+
+      {backendMessage ? (
+        <div className="rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-sm font-bold text-red-700">
+          {backendMessage}
+        </div>
+      ) : null}
+
+      {isLoading ? (
+        <div className="rounded-2xl border border-border bg-white px-5 py-4 text-sm font-bold text-slate-500">
+          Loading backend payment ledger...
+        </div>
+      ) : null}
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
         <Panel title="Collection Progress" description="Aggregate invoice settlement across the current receivable register.">
@@ -533,7 +618,7 @@ export default function Step5Payments() {
                             <span className="text-xs font-black uppercase tracking-widest text-slate-500">Invoice <span className="text-red-500">*</span></span>
                             <select {...register("invoiceId")} onChange={(event) => selectInvoice(event.target.value)} className={`h-11 w-full rounded-xl border bg-white px-3 text-sm font-semibold text-primary outline-none ${errors.invoiceId ? "border-red-500" : "border-border focus:border-primary"}`}>
                               <option value="">Select outstanding invoice...</option>
-                              {availableInvoices.map((invoice) => <option key={invoice.id} value={invoice.id}>{invoice.id} - {invoice.clientName} - Due {money(outstanding(invoice), invoice.currency)}</option>)}
+                              {availableInvoices.map((invoice) => <option key={invoice.backendId} value={invoice.backendId}>{invoice.id} - {invoice.clientName} - Due {money(outstanding(invoice), invoice.currency)}</option>)}
                             </select>
                             {errors.invoiceId ? <p className="text-[10px] font-black uppercase tracking-widest text-red-500">{errors.invoiceId.message}</p> : null}
                           </label>
@@ -542,7 +627,14 @@ export default function Step5Payments() {
                         <Field label="Payment Date" type="date" required register={register("date")} error={errors.date?.message} />
                         <Field label="Payment Mode" options={[...paymentModes]} required register={register("mode")} error={errors.mode?.message} />
                         <Field label="Reference / UTR / Receipt No." required register={register("reference")} error={errors.reference?.message} />
-                        <Field label="Receiving Bank Account" required register={register("bankAccount")} error={errors.bankAccount?.message} />
+                        <label className="block space-y-1.5">
+                          <span className="text-xs font-black uppercase tracking-widest text-slate-500">Receiving Bank Account <span className="text-red-500">*</span></span>
+                          <select {...register("bankAccount")} className={`h-11 w-full rounded-xl border bg-white px-3 text-sm font-semibold text-primary outline-none ${errors.bankAccount ? "border-red-500" : "border-border focus:border-primary"}`}>
+                            <option value="">Select bank account...</option>
+                            {bankOptions.map((bank) => <option key={bank.id} value={bank.id}>{bank.label}</option>)}
+                          </select>
+                          {errors.bankAccount ? <p className="text-[10px] font-black uppercase tracking-widest text-red-500">{errors.bankAccount.message}</p> : null}
+                        </label>
                         <Field label="Net Amount Received" type="number" step="0.01" required register={register("amount")} error={errors.amount?.message} />
                         {watchedAllocation === "Against Invoice" ? (
                           <>
@@ -585,7 +677,7 @@ export default function Step5Payments() {
                         </div>
                       )}
                       <div className="mt-5 flex flex-col gap-3">
-                        <ActionButton icon={Banknote} label="Record Payment" variant="accent" type="submit" />
+                        <ActionButton icon={Banknote} label={isSaving ? "Saving..." : "Record Payment"} variant="accent" type="submit" />
                         <ActionButton label="Cancel" variant="outline" onClick={closeForm} />
                       </div>
                     </Panel>
@@ -630,7 +722,7 @@ export default function Step5Payments() {
               </td>
               <td className="px-4 py-4">
                 <p className="font-black text-primary">{payment.clientName}</p>
-                <p className="text-xs font-semibold text-slate-500">{payment.invoiceId || "Client Advance / Unallocated"}</p>
+                <p className="text-xs font-semibold text-slate-500">{payment.invoiceCode || "Client Advance / Unallocated"}</p>
               </td>
               <td className="px-4 py-4">
                 <p className="font-bold text-slate-600">{payment.reference}</p>
@@ -646,10 +738,10 @@ export default function Step5Payments() {
               <td className="px-4 py-4">
                 <div className="flex flex-wrap gap-2">
                   {payment.status === "Received" ? (
-                    <button type="button" onClick={() => updateStatus(payment.id, "Verified")} className="rounded-lg border border-border p-2 text-slate-500 hover:text-blue-600" title="Verify payment"><Check size={15} /></button>
+                    <button type="button" onClick={() => updateStatus(payment.backendId, "Verified")} className="rounded-lg border border-border p-2 text-slate-500 hover:text-blue-600" title="Verify payment"><Check size={15} /></button>
                   ) : null}
                   {payment.status === "Verified" ? (
-                    <button type="button" onClick={() => updateStatus(payment.id, "Reconciled")} className="rounded-lg border border-border p-2 text-slate-500 hover:text-green-600" title="Mark bank reconciled"><Landmark size={15} /></button>
+                    <button type="button" onClick={() => updateStatus(payment.backendId, "Reconciled")} className="rounded-lg border border-border p-2 text-slate-500 hover:text-green-600" title="Mark bank reconciled"><Landmark size={15} /></button>
                   ) : null}
                   <button type="button" onClick={() => downloadReceipt(payment)} className="rounded-lg border border-border p-2 text-slate-500 hover:text-primary" title="Download receipt"><Download size={15} /></button>
                   {!["Reconciled", "Reversed"].includes(payment.status) ? (

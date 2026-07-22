@@ -22,7 +22,7 @@ class AuditLogApiTests(APITestCase):
             first_name="Audit",
             last_name="Employee",
         )
-        AuditLog.objects.create(
+        self.role_log = AuditLog.objects.create(
             actor=self.admin,
             module="accounts",
             action="update_role",
@@ -57,3 +57,29 @@ class AuditLogApiTests(APITestCase):
         response = self.client.get("/api/v1/audit/logs/")
 
         self.assertEqual(response.status_code, 403)
+
+    def test_admin_can_update_investigation_metadata_only(self):
+        self.client.force_authenticate(user=self.admin)
+
+        invalid = self.client.put(
+            f"/api/v1/audit/logs/{self.role_log.id}/investigation/",
+            {"investigation_status": "investigating", "investigation_note": ""},
+            format="json",
+        )
+        self.assertEqual(invalid.status_code, 400)
+
+        response = self.client.put(
+            f"/api/v1/audit/logs/{self.role_log.id}/investigation/",
+            {"investigation_status": "investigating", "investigation_note": "Reviewing role permission evidence."},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["data"]["investigation_status"], "investigating")
+        self.assertEqual(response.data["data"]["investigation_status_label"], "Investigating")
+        self.role_log.refresh_from_db()
+        self.assertEqual(self.role_log.investigated_by, self.admin)
+        self.assertEqual(self.role_log.action, "update_role")
+
+        filtered = self.client.get("/api/v1/audit/logs/?investigation_status=investigating")
+        self.assertEqual(filtered.status_code, 200)
+        self.assertEqual(filtered.data["pagination"]["total"], 1)

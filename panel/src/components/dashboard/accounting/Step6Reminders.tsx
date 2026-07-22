@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -13,6 +13,16 @@ import {
   AccountingPage, ActionButton, DataTable, Field,
   MetricCard, Panel, StatusBadge, WorkflowSteps,
 } from "./AccountingComponents";
+import {
+  createFinanceResource,
+  listFinanceClients,
+  listFinanceResource,
+  listInvoices,
+  updateFinanceResource,
+  type FinanceClientRecord,
+  type InvoiceRecord as BackendInvoiceRecord,
+} from "@/services/finance-api";
+import { listDeliveryProjects, type DeliveryProjectRecord } from "@/services/projects-api";
 
 const INR = "\u20b9";
 const reminderRules = ["7 Days Before Due", "3 Days Before Due", "On Due Date", "3 Days Overdue", "7 Days Overdue", "15 Days Overdue", "30 Days Overdue", "Custom Date"] as const;
@@ -21,6 +31,7 @@ const reminderStatuses = ["Scheduled", "Ready", "Sent", "Delivered", "Failed", "
 
 type InvoiceReceivable = {
   id: string;
+  backendId: string;
   clientId: string;
   clientName: string;
   projectName: string;
@@ -32,48 +43,6 @@ type InvoiceReceivable = {
   contactPhone: string;
   accountOwnerEmail: string;
 };
-
-const invoiceOptions: InvoiceReceivable[] = [
-  {
-    id: "INV-2026-088",
-    clientId: "CL-24002",
-    clientName: "Nexa Retail Cloud",
-    projectName: "E-commerce Mobile App",
-    totalAmount: 1275000,
-    outstandingAmount: 775000,
-    currency: "INR",
-    dueDate: "2026-06-21",
-    contactEmail: "finance@nexa.com",
-    contactPhone: "+91 98765 11002",
-    accountOwnerEmail: "sales.owner@company.com",
-  },
-  {
-    id: "INV-2026-086",
-    clientId: "CL-24003",
-    clientName: "Bluebird Logistics",
-    projectName: "Logistics Control Tower",
-    totalAmount: 360000,
-    outstandingAmount: 240000,
-    currency: "INR",
-    dueDate: "2026-06-30",
-    contactEmail: "accounts@bluebird.in",
-    contactPhone: "+91 98765 11003",
-    accountOwnerEmail: "logistics.owner@company.com",
-  },
-  {
-    id: "INV-2026-085",
-    clientId: "CL-24001",
-    clientName: "Apex Finserve Pvt Ltd",
-    projectName: "Loan Automation Platform",
-    totalAmount: 590000,
-    outstandingAmount: 590000,
-    currency: "INR",
-    dueDate: "2026-07-05",
-    contactEmail: "rohit@apexfin.com",
-    contactPhone: "+91 98765 11001",
-    accountOwnerEmail: "apex.owner@company.com",
-  },
-];
 
 const reminderSchema = z.object({
   invoiceId: z.string().min(1, "Select an outstanding invoice"),
@@ -118,7 +87,9 @@ type DeliveryEvent = {
 
 type ReminderRecord = {
   id: string;
+  backendId: string;
   invoiceId: string;
+  invoiceCode: string;
   clientId: string;
   clientName: string;
   projectName: string;
@@ -144,92 +115,32 @@ type ReminderRecord = {
   events: DeliveryEvent[];
 };
 
-const initialReminders: ReminderRecord[] = [
-  {
-    id: "REM-2026-001",
-    invoiceId: "INV-2026-088",
-    clientId: "CL-24002",
-    clientName: "Nexa Retail Cloud",
-    projectName: "E-commerce Mobile App",
-    dueDate: "2026-06-21",
-    outstandingAmount: 775000,
-    currency: "INR",
-    rule: "3 Days Overdue",
-    channel: "Email + WhatsApp",
-    scheduleDate: "2026-06-24",
-    recipientEmail: "finance@nexa.com",
-    recipientPhone: "+91 98765 11002",
-    cc: "sales.owner@company.com",
-    subject: "Payment follow-up for INV-2026-088",
-    message: "The outstanding payment for INV-2026-088 is overdue. Please share the expected payment date.",
-    internalNote: "Client committed payment confirmation after finance review.",
-    status: "Delivered",
-    attemptCount: 1,
-    lastSentAt: "2026-06-24T09:30:00.000Z",
-    nextActionAt: "",
-    createdBy: "Accountant",
-    createdAt: "2026-06-20T10:00:00.000Z",
-    updatedAt: "2026-06-24T09:31:00.000Z",
-    events: [
-      { at: "2026-06-24T09:30:00.000Z", action: "Sent", detail: "Email and WhatsApp queued." },
-      { at: "2026-06-24T09:31:00.000Z", action: "Delivered", detail: "Delivery acknowledged." },
-    ],
-  },
-  {
-    id: "REM-2026-002",
-    invoiceId: "INV-2026-086",
-    clientId: "CL-24003",
-    clientName: "Bluebird Logistics",
-    projectName: "Logistics Control Tower",
-    dueDate: "2026-06-30",
-    outstandingAmount: 240000,
-    currency: "INR",
-    rule: "3 Days Before Due",
-    channel: "Email",
-    scheduleDate: "2026-06-27",
-    recipientEmail: "accounts@bluebird.in",
-    recipientPhone: "+91 98765 11003",
-    cc: "logistics.owner@company.com",
-    subject: "Upcoming payment due for INV-2026-086",
-    message: "This is a reminder that payment for INV-2026-086 is due on 30 Jun 2026.",
-    internalNote: "Standard pre-due reminder.",
-    status: "Scheduled",
-    attemptCount: 0,
-    lastSentAt: "",
-    nextActionAt: "2026-06-27",
-    createdBy: "Accountant",
-    createdAt: "2026-06-20T10:00:00.000Z",
-    updatedAt: "2026-06-20T10:00:00.000Z",
-    events: [{ at: "2026-06-20T10:00:00.000Z", action: "Scheduled", detail: "Email reminder scheduled." }],
-  },
-  {
-    id: "REM-2026-003",
-    invoiceId: "INV-2026-085",
-    clientId: "CL-24001",
-    clientName: "Apex Finserve Pvt Ltd",
-    projectName: "Loan Automation Platform",
-    dueDate: "2026-07-05",
-    outstandingAmount: 590000,
-    currency: "INR",
-    rule: "7 Days Before Due",
-    channel: "Email",
-    scheduleDate: "2026-06-28",
-    recipientEmail: "rohit@apexfin.com",
-    recipientPhone: "+91 98765 11001",
-    cc: "apex.owner@company.com",
-    subject: "Upcoming payment due for INV-2026-085",
-    message: "This is a reminder that payment for INV-2026-085 will be due on 05 Jul 2026.",
-    internalNote: "First reminder for approved invoice.",
-    status: "Scheduled",
-    attemptCount: 0,
-    lastSentAt: "",
-    nextActionAt: "2026-06-28",
-    createdBy: "Accountant",
-    createdAt: "2026-06-20T10:00:00.000Z",
-    updatedAt: "2026-06-20T10:00:00.000Z",
-    events: [{ at: "2026-06-20T10:00:00.000Z", action: "Scheduled", detail: "Email reminder scheduled." }],
-  },
-];
+type BackendReminderRecord = {
+  id: string;
+  invoice: string;
+  channel: string;
+  due_at: string;
+  status: "scheduled" | "sent" | "snoozed" | "cancelled";
+  note: string;
+  created_at: string;
+  updated_at: string;
+};
+
+type ReminderNoteMeta = {
+  rule?: typeof reminderRules[number];
+  channelLabel?: typeof channels[number];
+  recipientEmail?: string;
+  recipientPhone?: string;
+  cc?: string;
+  subject?: string;
+  message?: string;
+  internalNote?: string;
+  attemptCount?: number;
+  lastSentAt?: string;
+  nextActionAt?: string;
+  uiStatus?: ReminderStatus;
+  events?: DeliveryEvent[];
+};
 
 const defaultFormValues: ReminderFormInput = {
   invoiceId: "",
@@ -279,10 +190,122 @@ function downloadFile(filename: string, content: string, type: string) {
   URL.revokeObjectURL(url);
 }
 
+function parseReminderNote(note: string): ReminderNoteMeta {
+  try {
+    const parsed = JSON.parse(note) as ReminderNoteMeta;
+    return parsed && typeof parsed === "object" ? parsed : { internalNote: note };
+  } catch {
+    return { internalNote: note };
+  }
+}
+
+function notePayload(meta: ReminderNoteMeta) {
+  return JSON.stringify(meta);
+}
+
+function backendStatus(status: ReminderStatus): BackendReminderRecord["status"] {
+  if (status === "Cancelled" || status === "Failed") return "cancelled";
+  if (status === "Snoozed") return "snoozed";
+  if (["Sent", "Delivered", "Escalated"].includes(status)) return "sent";
+  return "scheduled";
+}
+
+function uiStatus(row: BackendReminderRecord, meta: ReminderNoteMeta): ReminderStatus {
+  if (meta.uiStatus) return meta.uiStatus;
+  if (row.status === "sent") return "Sent";
+  if (row.status === "snoozed") return "Snoozed";
+  if (row.status === "cancelled") return "Cancelled";
+  return row.due_at.slice(0, 10) <= new Date().toISOString().split("T")[0] ? "Ready" : "Scheduled";
+}
+
+function invoiceFromBackend(row: BackendInvoiceRecord, clients: FinanceClientRecord[], projects: DeliveryProjectRecord[]): InvoiceReceivable {
+  const client = clients.find((item) => item.id === row.client);
+  const project = projects.find((item) => item.id === row.project);
+  const outstanding = Math.max(0, Number(row.total_amount) - Number(row.paid_amount) - Number(row.tds_amount));
+  return {
+    id: row.invoice_number,
+    backendId: row.id,
+    clientId: row.client,
+    clientName: client?.company_name || "Finance client",
+    projectName: project?.name || "Direct / Milestone",
+    totalAmount: Number(row.total_amount),
+    outstandingAmount: outstanding,
+    currency: row.currency,
+    dueDate: row.due_date,
+    contactEmail: client?.email || "",
+    contactPhone: client?.mobile || "",
+    accountOwnerEmail: client?.email || "",
+  };
+}
+
+function reminderFromBackend(row: BackendReminderRecord, invoices: InvoiceReceivable[]): ReminderRecord {
+  const invoice = invoices.find((item) => item.backendId === row.invoice);
+  const meta = parseReminderNote(row.note);
+  const status = uiStatus(row, meta);
+  return {
+    id: `REM-${row.id.slice(0, 8).toUpperCase()}`,
+    backendId: row.id,
+    invoiceId: row.invoice,
+    invoiceCode: invoice?.id || row.invoice,
+    clientId: invoice?.clientId || "",
+    clientName: invoice?.clientName || "Finance client",
+    projectName: invoice?.projectName || "Direct / Milestone",
+    dueDate: invoice?.dueDate || row.due_at.slice(0, 10),
+    outstandingAmount: invoice?.outstandingAmount || 0,
+    currency: invoice?.currency || "INR",
+    rule: meta.rule || "Custom Date",
+    channel: meta.channelLabel || "Email",
+    scheduleDate: row.due_at.slice(0, 10),
+    recipientEmail: meta.recipientEmail || "",
+    recipientPhone: meta.recipientPhone || "",
+    cc: meta.cc || "",
+    subject: meta.subject || "Payment reminder",
+    message: meta.message || "",
+    internalNote: meta.internalNote || row.note,
+    status,
+    attemptCount: meta.attemptCount || 0,
+    lastSentAt: meta.lastSentAt || "",
+    nextActionAt: meta.nextActionAt || (status === "Scheduled" || status === "Ready" || status === "Snoozed" ? row.due_at.slice(0, 10) : ""),
+    createdBy: "Finance",
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    events: meta.events || [{ at: row.created_at, action: status, detail: meta.internalNote || "Reminder created." }],
+  };
+}
+
+function reminderPayload(data: ReminderFormData, status: ReminderStatus, event: DeliveryEvent) {
+  const meta: ReminderNoteMeta = {
+    rule: data.rule,
+    channelLabel: data.channel,
+    recipientEmail: data.recipientEmail?.trim() || "",
+    recipientPhone: data.recipientPhone?.trim() || "",
+    cc: data.cc?.trim() || "",
+    subject: data.subject.trim(),
+    message: data.message.trim(),
+    internalNote: data.internalNote.trim(),
+    attemptCount: status === "Sent" ? 1 : 0,
+    lastSentAt: status === "Sent" ? event.at : "",
+    nextActionAt: status === "Sent" ? "" : data.scheduleDate,
+    uiStatus: status,
+    events: [event],
+  };
+  return {
+    invoice: data.invoiceId,
+    channel: data.channel.toLowerCase().replaceAll(" ", "_").replaceAll("+", "and").slice(0, 30),
+    due_at: `${data.scheduleDate}T09:00:00`,
+    status: backendStatus(status),
+    note: notePayload(meta),
+  };
+}
+
 export default function Step6Reminders() {
-  const [reminders, setReminders] = useState<ReminderRecord[]>(initialReminders);
+  const [invoiceOptions, setInvoiceOptions] = useState<InvoiceReceivable[]>([]);
+  const [reminders, setReminders] = useState<ReminderRecord[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [successMsg, setSuccessMsg] = useState("");
+  const [backendMessage, setBackendMessage] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
   const [channelFilter, setChannelFilter] = useState("All");
@@ -306,7 +329,59 @@ export default function Step6Reminders() {
   const watchedRule = useWatch({ control, name: "rule" });
   const watchedChannel = useWatch({ control, name: "channel" });
   const watchedMessage = useWatch({ control, name: "message" });
-  const selectedInvoice = invoiceOptions.find((invoice) => invoice.id === watchedInvoiceId) ?? null;
+  const selectedInvoice = invoiceOptions.find((invoice) => invoice.backendId === watchedInvoiceId) ?? null;
+
+  const applyBackendRows = (
+    clients: FinanceClientRecord[],
+    projects: DeliveryProjectRecord[],
+    invoices: BackendInvoiceRecord[],
+    reminderRows: BackendReminderRecord[],
+  ) => {
+    const receivables = invoices
+      .filter((invoice) => ["approved", "sent"].includes(invoice.status))
+      .map((invoice) => invoiceFromBackend(invoice, clients, projects))
+      .filter((invoice) => invoice.outstandingAmount > 0);
+    setInvoiceOptions(receivables);
+    setReminders(reminderRows.map((reminder) => reminderFromBackend(reminder, receivables)));
+  };
+
+  const fetchBackendRows = async () => Promise.all([
+    listFinanceClients({ status: "active" }),
+    listDeliveryProjects(),
+    listInvoices(),
+    listFinanceResource<BackendReminderRecord>("reminders"),
+  ]);
+
+  const loadData = async () => {
+    try {
+      setIsLoading(true);
+      const [clients, projects, invoices, reminderRows] = await fetchBackendRows();
+      applyBackendRows(clients, projects, invoices, reminderRows);
+    } catch (error) {
+      setBackendMessage(error instanceof Error ? error.message : "Unable to load reminder backend data.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    let isMounted = true;
+    fetchBackendRows()
+      .then(([clients, projects, invoices, reminderRows]) => {
+        if (!isMounted) return;
+        applyBackendRows(clients, projects, invoices, reminderRows);
+      })
+      .catch((error) => {
+        if (!isMounted) return;
+        setBackendMessage(error instanceof Error ? error.message : "Unable to load reminder backend data.");
+      })
+      .finally(() => {
+        if (isMounted) setIsLoading(false);
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const filteredReminders = useMemo(() => reminders.filter((reminder) => {
     const query = searchTerm.trim().toLowerCase();
@@ -322,6 +397,7 @@ export default function Step6Reminders() {
   const openForm = () => {
     reset(defaultFormValues);
     setSuccessMsg("");
+    setBackendMessage("");
     setShowForm(true);
   };
 
@@ -333,7 +409,7 @@ export default function Step6Reminders() {
 
   const selectInvoice = (invoiceId: string) => {
     setValue("invoiceId", invoiceId, { shouldValidate: true });
-    const invoice = invoiceOptions.find((item) => item.id === invoiceId);
+    const invoice = invoiceOptions.find((item) => item.backendId === invoiceId);
     if (!invoice) return;
     const scheduleDate = scheduleForRule(invoice.dueDate, watchedRule);
     setValue("scheduleDate", scheduleDate || new Date().toISOString().split("T")[0], { shouldValidate: true });
@@ -355,8 +431,8 @@ export default function Step6Reminders() {
     }
   };
 
-  const persistReminder = (data: ReminderFormData, sendImmediately: boolean) => {
-    const invoice = invoiceOptions.find((item) => item.id === data.invoiceId);
+  const persistReminder = async (data: ReminderFormData, sendImmediately: boolean) => {
+    const invoice = invoiceOptions.find((item) => item.backendId === data.invoiceId);
     if (!invoice) return;
     const effectiveDate = sendImmediately ? new Date().toISOString().split("T")[0] : data.scheduleDate;
     const duplicate = reminders.some((reminder) =>
@@ -372,56 +448,65 @@ export default function Step6Reminders() {
     }
 
     const now = new Date().toISOString();
-    const nextNumber = Math.max(3, ...reminders.map((reminder) => Number(reminder.id.split("-").pop()) || 0)) + 1;
     const status: ReminderStatus = sendImmediately ? "Sent" : effectiveDate <= new Date().toISOString().split("T")[0] ? "Ready" : "Scheduled";
-    const record: ReminderRecord = {
-      id: `REM-${new Date().getFullYear()}-${String(nextNumber).padStart(3, "0")}`,
-      invoiceId: invoice.id,
-      clientId: invoice.clientId,
-      clientName: invoice.clientName,
-      projectName: invoice.projectName,
-      dueDate: invoice.dueDate,
-      outstandingAmount: invoice.outstandingAmount,
-      currency: invoice.currency,
-      rule: data.rule,
-      channel: data.channel,
-      scheduleDate: effectiveDate,
-      recipientEmail: data.recipientEmail?.trim() ?? "",
-      recipientPhone: data.recipientPhone?.trim() ?? "",
-      cc: data.cc?.trim() ?? "",
-      subject: data.subject.trim(),
-      message: data.message.trim(),
-      internalNote: data.internalNote.trim(),
-      status,
-      attemptCount: sendImmediately ? 1 : 0,
-      lastSentAt: sendImmediately ? now : "",
-      nextActionAt: sendImmediately ? "" : effectiveDate,
-      createdBy: "Accountant",
-      createdAt: now,
-      updatedAt: now,
-      events: [{
-        at: now,
-        action: sendImmediately ? "Sent" : status,
-        detail: sendImmediately ? `${data.channel} reminder queued immediately.` : `Reminder scheduled for ${formatDate(effectiveDate)}.`,
-      }],
+    const event = {
+      at: now,
+      action: sendImmediately ? "Sent" : status,
+      detail: sendImmediately ? `${data.channel} reminder queued immediately.` : `Reminder scheduled for ${formatDate(effectiveDate)}.`,
     };
-    setReminders((current) => [record, ...current]);
-    setSuccessMsg(sendImmediately ? "Reminder queued for immediate delivery" : "Reminder scheduled");
-    setTimeout(closeForm, 900);
+    try {
+      setIsSaving(true);
+      setBackendMessage("");
+      await createFinanceResource<BackendReminderRecord, ReturnType<typeof reminderPayload>>("reminders", reminderPayload({ ...data, scheduleDate: effectiveDate }, status, event));
+      await loadData();
+      setSuccessMsg(sendImmediately ? "Reminder queued for immediate delivery" : "Reminder scheduled");
+      setTimeout(closeForm, 900);
+    } catch (error) {
+      setBackendMessage(error instanceof Error ? error.message : "Unable to save reminder.");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const scheduleReminder = handleSubmit((data) => persistReminder(data, false));
   const sendInstantly = handleSubmit((data) => persistReminder(data, true));
 
-  const addEvent = (reminder: ReminderRecord, status: ReminderStatus, action: string, detail: string, extra?: Partial<ReminderRecord>) => {
+  const addEvent = async (reminder: ReminderRecord, status: ReminderStatus, action: string, detail: string, extra?: Partial<ReminderRecord>) => {
     const now = new Date().toISOString();
-    setReminders((current) => current.map((item) => item.id === reminder.id ? {
-      ...item,
+    const updated = {
+      ...reminder,
       ...extra,
       status,
       updatedAt: now,
-      events: [...item.events, { at: now, action, detail }],
-    } : item));
+      events: [...reminder.events, { at: now, action, detail }],
+    };
+    const meta: ReminderNoteMeta = {
+      rule: updated.rule,
+      channelLabel: updated.channel,
+      recipientEmail: updated.recipientEmail,
+      recipientPhone: updated.recipientPhone,
+      cc: updated.cc,
+      subject: updated.subject,
+      message: updated.message,
+      internalNote: updated.internalNote,
+      attemptCount: updated.attemptCount,
+      lastSentAt: updated.lastSentAt,
+      nextActionAt: updated.nextActionAt,
+      uiStatus: updated.status,
+      events: updated.events,
+    };
+    try {
+      setBackendMessage("");
+      await updateFinanceResource<BackendReminderRecord, { channel: string; due_at: string; status: string; note: string }>("reminders", reminder.backendId, {
+        channel: updated.channel.toLowerCase().replaceAll(" ", "_").replaceAll("+", "and").slice(0, 30),
+        due_at: `${updated.scheduleDate}T09:00:00`,
+        status: backendStatus(updated.status),
+        note: notePayload(meta),
+      });
+      await loadData();
+    } catch (error) {
+      setBackendMessage(error instanceof Error ? error.message : "Unable to update reminder.");
+    }
   };
 
   const sendReminder = (reminder: ReminderRecord) => {
@@ -453,7 +538,7 @@ export default function Step6Reminders() {
     const rows = [
       ["Reminder", "Invoice", "Client", "Outstanding", "Due Date", "Rule", "Channel", "Schedule Date", "Recipient Email", "Recipient Phone", "Attempts", "Status", "Last Sent"],
       ...filteredReminders.map((reminder) => [
-        reminder.id, reminder.invoiceId, reminder.clientName, reminder.outstandingAmount,
+        reminder.id, reminder.invoiceCode, reminder.clientName, reminder.outstandingAmount,
         reminder.dueDate, reminder.rule, reminder.channel, reminder.scheduleDate,
         reminder.recipientEmail, reminder.recipientPhone, reminder.attemptCount,
         reminder.status, reminder.lastSentAt,
@@ -466,7 +551,7 @@ export default function Step6Reminders() {
   const downloadLog = (reminder: ReminderRecord) => {
     const content = [
       `Reminder: ${reminder.id}`,
-      `Invoice: ${reminder.invoiceId}`,
+      `Invoice: ${reminder.invoiceCode}`,
       `Client: ${reminder.clientName}`,
       `Outstanding: ${money(reminder.outstandingAmount, reminder.currency)}`,
       `Rule: ${reminder.rule}`,
@@ -507,6 +592,18 @@ export default function Step6Reminders() {
         <MetricCard label="Escalations" value={String(escalations)} helper="Management follow-up queue" icon={Users} tone="purple" />
       </div>
 
+      {backendMessage ? (
+        <div className="rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-sm font-bold text-red-700">
+          {backendMessage}
+        </div>
+      ) : null}
+
+      {isLoading ? (
+        <div className="rounded-2xl border border-border bg-white px-5 py-4 text-sm font-bold text-slate-500">
+          Loading backend reminder queue...
+        </div>
+      ) : null}
+
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
         <Panel title="Reminder Rules" description="Schedule dates are derived from each invoice due date unless Custom Date is selected.">
           <div className="max-h-[420px] space-y-3 overflow-y-auto pr-2">
@@ -536,7 +633,7 @@ export default function Step6Reminders() {
               <div key={reminder.id} className="rounded-xl border border-border p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <p className="font-black text-primary">{reminder.invoiceId}</p>
+                    <p className="font-black text-primary">{reminder.invoiceCode}</p>
                     <p className="text-xs font-semibold text-slate-500">{reminder.clientName}</p>
                   </div>
                   <StatusBadge tone={reminder.status === "Failed" || reminder.status === "Escalated" ? "red" : reminder.status === "Ready" ? "amber" : "blue"}>{reminder.status}</StatusBadge>
@@ -578,7 +675,7 @@ export default function Step6Reminders() {
                           <select {...register("invoiceId")} onChange={(event) => selectInvoice(event.target.value)} className={`h-11 w-full rounded-xl border bg-white px-3 text-sm font-semibold text-primary outline-none ${errors.invoiceId ? "border-red-500" : "border-border focus:border-primary"}`}>
                             <option value="">Select invoice...</option>
                             {invoiceOptions.filter((invoice) => invoice.outstandingAmount > 0).map((invoice) => (
-                              <option key={invoice.id} value={invoice.id}>{invoice.id} - {invoice.clientName} - Due {money(invoice.outstandingAmount, invoice.currency)}</option>
+                              <option key={invoice.backendId} value={invoice.backendId}>{invoice.id} - {invoice.clientName} - Due {money(invoice.outstandingAmount, invoice.currency)}</option>
                             ))}
                           </select>
                           {errors.invoiceId ? <p className="text-[10px] font-black uppercase tracking-widest text-red-500">{errors.invoiceId.message}</p> : null}
@@ -625,8 +722,8 @@ export default function Step6Reminders() {
                           </div>
                           <p className="mt-4 whitespace-pre-wrap text-xs font-semibold leading-5 text-slate-600">{watchedMessage || "Select an invoice to generate the reminder message."}</p>
                         </div>
-                        <ActionButton icon={CalendarClock} label="Schedule Reminder" variant="accent" type="submit" />
-                        <ActionButton icon={Send} label="Send Instantly" variant="outline" onClick={sendInstantly} />
+                        <ActionButton icon={CalendarClock} label={isSaving ? "Saving..." : "Schedule Reminder"} variant="accent" type="submit" />
+                        <ActionButton icon={Send} label={isSaving ? "Saving..." : "Send Instantly"} variant="outline" onClick={sendInstantly} />
                       </div>
                     </Panel>
                   </div>
@@ -660,7 +757,7 @@ export default function Step6Reminders() {
             <tr key={reminder.id} className="text-sm transition-colors hover:bg-slate-50">
               <td className="px-4 py-4">
                 <p className="font-black text-primary">{reminder.id}</p>
-                <p className="text-xs font-semibold text-slate-500">{reminder.invoiceId}</p>
+                <p className="text-xs font-semibold text-slate-500">{reminder.invoiceCode}</p>
               </td>
               <td className="px-4 py-4">
                 <p className="font-black text-primary">{reminder.clientName}</p>

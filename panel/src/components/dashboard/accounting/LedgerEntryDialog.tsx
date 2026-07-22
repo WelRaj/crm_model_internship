@@ -20,8 +20,8 @@ export interface LedgerEntryData {
 
 interface LedgerEntryDialogProps {
   onClose: () => void;
-  onSave: (entry: LedgerEntryData) => void;
-  onDelete?: () => void;
+  onSave: (entry: LedgerEntryData) => void | Promise<boolean | void>;
+  onDelete?: () => void | Promise<boolean | void>;
   initialEntry?: LedgerEntryData;
   mode?: "add" | "edit";
   existingVoucherNos?: string[];
@@ -49,6 +49,7 @@ export default function LedgerEntryDialog({
   existingVoucherNos = [],
 }: LedgerEntryDialogProps) {
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
   const [entry, setEntry] = useState<LedgerEntryData>({
     date: today(),
@@ -127,16 +128,20 @@ export default function LedgerEntryDialog({
     return nextErrors.length === 0;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!validate()) return;
-    onSave(entry);
-    onClose();
+    setIsSaving(true);
+    const result = await onSave(entry);
+    setIsSaving(false);
+    if (result !== false) onClose();
   };
 
-  const handleDelete = () => {
-    onDelete?.();
-    onClose();
+  const handleDelete = async () => {
+    setIsSaving(true);
+    const result = await onDelete?.();
+    setIsSaving(false);
+    if (result !== false) onClose();
   };
 
   const requestDelete = () => setConfirmingDelete(true);
@@ -350,11 +355,12 @@ export default function LedgerEntryDialog({
                   ) : null}
                   <button
                     type="submit"
+                    disabled={isSaving}
                     title={mode === "edit" ? "Save entry" : "Add entry"}
                     style={{
                       background: "transparent",
                       border: "none",
-                      cursor: "pointer",
+                      cursor: isSaving ? "not-allowed" : "pointer",
                       color: "#10b981",
                       padding: 4,
                       borderRadius: 6,
@@ -389,7 +395,7 @@ export default function LedgerEntryDialog({
             <ActionButton label="Delete Entry" variant="outline" icon={Trash2} onClick={requestDelete} />
           ) : null}
           <ActionButton label="Cancel" variant="outline" onClick={onClose} />
-          <ActionButton type="submit" variant="accent" icon={mode === "edit" ? Save : Plus} label={mode === "edit" ? "Save Entry" : "Add Entry"} />
+          <ActionButton type="submit" variant="accent" icon={mode === "edit" ? Save : Plus} label={isSaving ? "Saving..." : mode === "edit" ? "Save Entry" : "Add Entry"} />
         </div>
 
         {confirmingDelete ? (

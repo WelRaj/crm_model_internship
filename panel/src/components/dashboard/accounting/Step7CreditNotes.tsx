@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -12,6 +12,16 @@ import {
   AccountingPage, ActionButton, DataTable, Field,
   MetricCard, Panel, StatusBadge, WorkflowSteps,
 } from "./AccountingComponents";
+import {
+  createFinanceResource,
+  listFinanceClients,
+  listFinanceResource,
+  listInvoices,
+  updateFinanceResource,
+  type FinanceClientRecord,
+  type InvoiceRecord as BackendInvoiceRecord,
+} from "@/services/finance-api";
+import { listDeliveryProjects, type DeliveryProjectRecord } from "@/services/projects-api";
 
 const INR = "\u20b9";
 const reasons = ["Scope Reduction", "Billing Correction", "Service Cancellation", "Rate Difference", "GST Correction", "Quality Dispute", "Refund Adjustment"] as const;
@@ -21,6 +31,7 @@ const gstRates = [0, 5, 12, 18, 28] as const;
 
 type InvoiceSnapshot = {
   id: string;
+  backendId: string;
   clientId: string;
   clientName: string;
   projectName: string;
@@ -36,57 +47,6 @@ type InvoiceSnapshot = {
   status: "Sent" | "Approved";
 };
 
-const invoiceOptions: InvoiceSnapshot[] = [
-  {
-    id: "INV-2026-088",
-    clientId: "CL-24002",
-    clientName: "Nexa Retail Cloud",
-    projectName: "E-commerce Mobile App",
-    invoiceDate: "2026-06-06",
-    currency: "INR",
-    taxableAmount: 1080508,
-    gstRate: 18,
-    gstAmount: 194492,
-    totalAmount: 1275000,
-    cashReceived: 472000,
-    tdsAdjusted: 28000,
-    outstandingAmount: 775000,
-    status: "Sent",
-  },
-  {
-    id: "INV-2026-086",
-    clientId: "CL-24003",
-    clientName: "Bluebird Logistics",
-    projectName: "Logistics Control Tower",
-    invoiceDate: "2026-06-01",
-    currency: "INR",
-    taxableAmount: 305084.75,
-    gstRate: 18,
-    gstAmount: 54915.25,
-    totalAmount: 360000,
-    cashReceived: 120000,
-    tdsAdjusted: 0,
-    outstandingAmount: 240000,
-    status: "Sent",
-  },
-  {
-    id: "INV-2026-085",
-    clientId: "CL-24001",
-    clientName: "Apex Finserve Pvt Ltd",
-    projectName: "Loan Automation Platform",
-    invoiceDate: "2026-05-28",
-    currency: "INR",
-    taxableAmount: 500000,
-    gstRate: 18,
-    gstAmount: 90000,
-    totalAmount: 590000,
-    cashReceived: 590000,
-    tdsAdjusted: 0,
-    outstandingAmount: 0,
-    status: "Sent",
-  },
-];
-
 const creditNoteSchema = z.object({
   invoiceId: z.string().min(1, "Select original invoice"),
   date: z.string().min(1, "Issue date required"),
@@ -96,21 +56,6 @@ const creditNoteSchema = z.object({
   gstRate: z.coerce.number().refine((value) => gstRates.includes(value as typeof gstRates[number]), "Select a valid GST rate"),
   customerReference: z.string().optional(),
   remarks: z.string().trim().min(5, "Detailed audit remarks required"),
-}).superRefine((data, ctx) => {
-  const invoice = invoiceOptions.find((item) => item.id === data.invoiceId);
-  if (!invoice) return;
-  if (data.date < invoice.invoiceDate) {
-    ctx.addIssue({ code: "custom", path: ["date"], message: "Credit note date cannot be before invoice date" });
-  }
-  if (data.gstRate > invoice.gstRate && data.reason !== "GST Correction") {
-    ctx.addIssue({ code: "custom", path: ["gstRate"], message: "GST reversal cannot exceed the original invoice rate" });
-  }
-  if (data.disposition === "Adjust Invoice Outstanding" && invoice.outstandingAmount <= 0) {
-    ctx.addIssue({ code: "custom", path: ["disposition"], message: "Fully settled invoice requires refund or future credit" });
-  }
-  if (data.disposition === "Customer Refund" && invoice.cashReceived <= 0) {
-    ctx.addIssue({ code: "custom", path: ["disposition"], message: "Customer refund requires an amount already received" });
-  }
 });
 
 type CreditNoteFormInput = z.input<typeof creditNoteSchema>;
@@ -119,7 +64,9 @@ type CreditStatus = typeof creditStatuses[number];
 
 type CreditNoteRecord = {
   id: string;
+  backendId: string;
   invoiceId: string;
+  invoiceCode: string;
   clientId: string;
   clientName: string;
   projectName: string;
@@ -143,83 +90,46 @@ type CreditNoteRecord = {
   updatedAt: string;
 };
 
-const initialCreditNotes: CreditNoteRecord[] = [
-  {
-    id: "CN-2026-014",
-    invoiceId: "INV-2026-086",
-    clientId: "CL-24003",
-    clientName: "Bluebird Logistics",
-    projectName: "Logistics Control Tower",
-    date: "2026-06-12",
-    currency: "INR",
-    reason: "Scope Reduction",
-    disposition: "Adjust Invoice Outstanding",
-    creditBaseAmount: 30000,
-    gstRate: 18,
-    gstAmount: 5400,
-    totalCredit: 35400,
-    outstandingAdjusted: 35400,
-    refundLiability: 0,
-    futureCredit: 0,
-    customerReference: "EMAIL-120626",
-    remarks: "Warehouse analytics scope removed before final delivery.",
-    status: "Issued",
-    approvedBy: "Finance Manager",
-    createdBy: "Accountant",
-    createdAt: "2026-06-12T10:00:00.000Z",
-    updatedAt: "2026-06-13T10:00:00.000Z",
-  },
-  {
-    id: "CN-2026-015",
-    invoiceId: "INV-2026-088",
-    clientId: "CL-24002",
-    clientName: "Nexa Retail Cloud",
-    projectName: "E-commerce Mobile App",
-    date: "2026-06-18",
-    currency: "INR",
-    reason: "Billing Correction",
-    disposition: "Adjust Invoice Outstanding",
-    creditBaseAmount: 18500,
-    gstRate: 18,
-    gstAmount: 3330,
-    totalCredit: 21830,
-    outstandingAdjusted: 0,
-    refundLiability: 0,
-    futureCredit: 0,
-    customerReference: "NEXA-DISPUTE-18",
-    remarks: "Duplicate support line item identified during client reconciliation.",
-    status: "Pending Approval",
-    approvedBy: "",
-    createdBy: "Accountant",
-    createdAt: "2026-06-18T10:00:00.000Z",
-    updatedAt: "2026-06-18T10:00:00.000Z",
-  },
-  {
-    id: "CN-2026-016",
-    invoiceId: "INV-2026-085",
-    clientId: "CL-24001",
-    clientName: "Apex Finserve Pvt Ltd",
-    projectName: "Loan Automation Platform",
-    date: "2026-06-20",
-    currency: "INR",
-    reason: "Refund Adjustment",
-    disposition: "Customer Refund",
-    creditBaseAmount: 42000,
-    gstRate: 18,
-    gstAmount: 7560,
-    totalCredit: 49560,
-    outstandingAdjusted: 0,
-    refundLiability: 0,
-    futureCredit: 0,
-    customerReference: "APEX-REFUND-REQ",
-    remarks: "Refund requested for a cancelled integration add-on.",
-    status: "Draft",
-    approvedBy: "",
-    createdBy: "Accountant",
-    createdAt: "2026-06-20T10:00:00.000Z",
-    updatedAt: "2026-06-20T10:00:00.000Z",
-  },
-];
+type BackendCreditNoteRecord = {
+  id: string;
+  credit_note_number: string;
+  invoice: string;
+  reason: string;
+  taxable_amount: string;
+  gst_amount: string;
+  total_amount: string;
+  status: "draft" | "pending_approval" | "approved" | "applied" | "rejected" | "archived";
+  status_label: string;
+  created_at: string;
+  updated_at: string;
+};
+
+type CreditNotePayload = {
+  invoice: string;
+  reason: string;
+  taxable_amount: string;
+  gst_amount: string;
+  total_amount: string;
+  status: BackendCreditNoteRecord["status"];
+};
+
+const apiToStatus: Record<BackendCreditNoteRecord["status"], CreditStatus> = {
+  draft: "Draft",
+  pending_approval: "Pending Approval",
+  approved: "Approved",
+  applied: "Issued",
+  rejected: "Rejected",
+  archived: "Archived",
+};
+
+const statusToApi: Record<CreditStatus, BackendCreditNoteRecord["status"]> = {
+  Draft: "draft",
+  "Pending Approval": "pending_approval",
+  Approved: "approved",
+  Issued: "applied",
+  Rejected: "rejected",
+  Archived: "archived",
+};
 
 const defaultFormValues: CreditNoteFormInput = {
   invoiceId: "",
@@ -258,11 +168,84 @@ function downloadFile(filename: string, content: string, type: string) {
   URL.revokeObjectURL(url);
 }
 
+function invoiceFromBackend(row: BackendInvoiceRecord, clients: FinanceClientRecord[], projects: DeliveryProjectRecord[]): InvoiceSnapshot {
+  const client = clients.find((item) => item.id === row.client);
+  const project = projects.find((item) => item.id === row.project);
+  return {
+    id: row.invoice_number,
+    backendId: row.id,
+    clientId: row.client,
+    clientName: client?.company_name || "Finance client",
+    projectName: project?.name || "Direct / Milestone",
+    invoiceDate: row.invoice_date,
+    currency: row.currency,
+    taxableAmount: Number(row.taxable_amount),
+    gstRate: Number(row.gst_rate),
+    gstAmount: Number(row.gst_amount),
+    totalAmount: Number(row.total_amount),
+    cashReceived: Number(row.paid_amount),
+    tdsAdjusted: Number(row.tds_amount),
+    outstandingAmount: Math.max(0, Number(row.total_amount) - Number(row.paid_amount) - Number(row.tds_amount)),
+    status: row.status === "sent" ? "Sent" : "Approved",
+  };
+}
+
+function creditFromBackend(row: BackendCreditNoteRecord, invoices: InvoiceSnapshot[]): CreditNoteRecord {
+  const invoice = invoices.find((item) => item.backendId === row.invoice);
+  const gstAmount = Number(row.gst_amount);
+  const totalCredit = Number(row.total_amount);
+  const creditBaseAmount = Number(row.taxable_amount);
+  const status = apiToStatus[row.status];
+  return {
+    id: row.credit_note_number,
+    backendId: row.id,
+    invoiceId: row.invoice,
+    invoiceCode: invoice?.id || row.invoice,
+    clientId: invoice?.clientId || "",
+    clientName: invoice?.clientName || "Finance client",
+    projectName: invoice?.projectName || "Direct / Milestone",
+    date: row.created_at.split("T")[0],
+    currency: invoice?.currency || "INR",
+    reason: reasons.includes(row.reason as typeof reasons[number]) ? row.reason as typeof reasons[number] : "Billing Correction",
+    disposition: "Adjust Invoice Outstanding",
+    creditBaseAmount,
+    gstRate: creditBaseAmount ? Math.round((gstAmount / creditBaseAmount) * 100) : 0,
+    gstAmount,
+    totalCredit,
+    outstandingAdjusted: status === "Issued" ? Math.min(totalCredit, invoice?.outstandingAmount || totalCredit) : 0,
+    refundLiability: 0,
+    futureCredit: 0,
+    customerReference: "",
+    remarks: row.reason,
+    status,
+    approvedBy: status === "Approved" || status === "Issued" ? "Finance" : "",
+    createdBy: "Finance",
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function creditPayload(data: CreditNoteFormData, status: CreditStatus): CreditNotePayload {
+  const calculated = calculateCredit(data.creditBaseAmount, data.gstRate);
+  return {
+    invoice: data.invoiceId,
+    reason: data.reason,
+    taxable_amount: String(calculated.creditBaseAmount),
+    gst_amount: String(calculated.gstAmount),
+    total_amount: String(calculated.totalCredit),
+    status: statusToApi[status],
+  };
+}
+
 export default function Step7CreditNotes() {
-  const [creditNotes, setCreditNotes] = useState<CreditNoteRecord[]>(initialCreditNotes);
+  const [invoiceOptions, setInvoiceOptions] = useState<InvoiceSnapshot[]>([]);
+  const [creditNotes, setCreditNotes] = useState<CreditNoteRecord[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState("");
+  const [backendMessage, setBackendMessage] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
   const [dispositionFilter, setDispositionFilter] = useState("All");
@@ -284,11 +267,62 @@ export default function Step7CreditNotes() {
   const watchedBaseAmount = useWatch({ control, name: "creditBaseAmount" });
   const watchedGstRate = useWatch({ control, name: "gstRate" });
   const watchedDisposition = useWatch({ control, name: "disposition" });
-  const selectedInvoice = invoiceOptions.find((invoice) => invoice.id === watchedInvoiceId) ?? null;
+  const selectedInvoice = invoiceOptions.find((invoice) => invoice.backendId === watchedInvoiceId) ?? null;
   const totals = useMemo(() => calculateCredit(watchedBaseAmount, watchedGstRate), [watchedBaseAmount, watchedGstRate]);
 
+  const applyBackendRows = (
+    clients: FinanceClientRecord[],
+    projects: DeliveryProjectRecord[],
+    invoices: BackendInvoiceRecord[],
+    credits: BackendCreditNoteRecord[],
+  ) => {
+    const invoiceRows = invoices
+      .filter((invoice) => ["approved", "sent"].includes(invoice.status))
+      .map((invoice) => invoiceFromBackend(invoice, clients, projects));
+    setInvoiceOptions(invoiceRows);
+    setCreditNotes(credits.map((credit) => creditFromBackend(credit, invoiceRows)));
+  };
+
+  const fetchBackendRows = async () => Promise.all([
+    listFinanceClients({ status: "active" }),
+    listDeliveryProjects(),
+    listInvoices(),
+    listFinanceResource<BackendCreditNoteRecord>("credit-notes"),
+  ]);
+
+  const loadData = async () => {
+    try {
+      setIsLoading(true);
+      const [clients, projects, invoices, credits] = await fetchBackendRows();
+      applyBackendRows(clients, projects, invoices, credits);
+    } catch (error) {
+      setBackendMessage(error instanceof Error ? error.message : "Unable to load credit note backend data.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    let isMounted = true;
+    fetchBackendRows()
+      .then(([clients, projects, invoices, credits]) => {
+        if (!isMounted) return;
+        applyBackendRows(clients, projects, invoices, credits);
+      })
+      .catch((error) => {
+        if (!isMounted) return;
+        setBackendMessage(error instanceof Error ? error.message : "Unable to load credit note backend data.");
+      })
+      .finally(() => {
+        if (isMounted) setIsLoading(false);
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   const activeCreditTotal = (invoiceId: string, excludeId?: string | null) => creditNotes
-    .filter((note) => note.invoiceId === invoiceId && note.id !== excludeId && !["Rejected", "Archived"].includes(note.status))
+    .filter((note) => note.invoiceId === invoiceId && note.backendId !== excludeId && !["Rejected", "Archived"].includes(note.status))
     .reduce((sum, note) => sum + note.totalCredit, 0);
 
   const reservedByDisposition = (
@@ -298,7 +332,7 @@ export default function Step7CreditNotes() {
   ) => creditNotes
     .filter((note) =>
       note.invoiceId === invoiceId
-      && note.id !== excludeId
+      && note.backendId !== excludeId
       && note.disposition === disposition
       && !["Rejected", "Archived"].includes(note.status),
     )
@@ -322,14 +356,16 @@ export default function Step7CreditNotes() {
   const openCreateForm = () => {
     setEditingId(null);
     setSuccessMsg("");
+    setBackendMessage("");
     reset(defaultFormValues);
     setShowForm(true);
   };
 
   const openEditForm = (note: CreditNoteRecord) => {
     if (!["Draft", "Pending Approval"].includes(note.status)) return;
-    setEditingId(note.id);
+    setEditingId(note.backendId);
     setSuccessMsg("");
+    setBackendMessage("");
     reset({
       invoiceId: note.invoiceId,
       date: note.date,
@@ -352,24 +388,40 @@ export default function Step7CreditNotes() {
 
   const selectInvoice = (invoiceId: string) => {
     setValue("invoiceId", invoiceId, { shouldValidate: true });
-    const invoice = invoiceOptions.find((item) => item.id === invoiceId);
+    const invoice = invoiceOptions.find((item) => item.backendId === invoiceId);
     if (!invoice) return;
     setValue("gstRate", invoice.gstRate, { shouldValidate: true });
     setValue("disposition", invoice.outstandingAmount > 0 ? "Adjust Invoice Outstanding" : "Customer Refund", { shouldValidate: true });
   };
 
-  const persistCreditNote = (data: CreditNoteFormData, status: CreditStatus) => {
-    const invoice = invoiceOptions.find((item) => item.id === data.invoiceId);
+  const persistCreditNote = async (data: CreditNoteFormData, status: CreditStatus) => {
+    const invoice = invoiceOptions.find((item) => item.backendId === data.invoiceId);
     if (!invoice) return;
+    if (data.date < invoice.invoiceDate) {
+      setError("date", { message: "Credit note date cannot be before invoice date" });
+      return;
+    }
+    if (data.gstRate > invoice.gstRate && data.reason !== "GST Correction") {
+      setError("gstRate", { message: "GST reversal cannot exceed the original invoice rate" });
+      return;
+    }
+    if (data.disposition === "Adjust Invoice Outstanding" && invoice.outstandingAmount <= 0) {
+      setError("disposition", { message: "Fully settled invoice requires refund or future credit" });
+      return;
+    }
+    if (data.disposition === "Customer Refund" && invoice.cashReceived <= 0) {
+      setError("disposition", { message: "Customer refund requires an amount already received" });
+      return;
+    }
     const calculated = calculateCredit(data.creditBaseAmount, data.gstRate);
-    const remainingAvailable = Math.max(0, invoice.totalAmount - activeCreditTotal(invoice.id, editingId));
+    const remainingAvailable = Math.max(0, invoice.totalAmount - activeCreditTotal(invoice.backendId, editingId));
     if (calculated.totalCredit > remainingAvailable) {
       setError("creditBaseAmount", { message: `Credit exceeds available invoice value ${money(remainingAvailable, invoice.currency)}` });
       return;
     }
     const remainingOutstanding = Math.max(
       0,
-      invoice.outstandingAmount - reservedByDisposition(invoice.id, "Adjust Invoice Outstanding", editingId),
+      invoice.outstandingAmount - reservedByDisposition(invoice.backendId, "Adjust Invoice Outstanding", editingId),
     );
     if (data.disposition === "Adjust Invoice Outstanding" && calculated.totalCredit > remainingOutstanding) {
       setError("creditBaseAmount", { message: `Outstanding adjustment cannot exceed ${money(remainingOutstanding, invoice.currency)}` });
@@ -377,80 +429,59 @@ export default function Step7CreditNotes() {
     }
     const remainingRefundable = Math.max(
       0,
-      invoice.cashReceived - reservedByDisposition(invoice.id, "Customer Refund", editingId),
+      invoice.cashReceived - reservedByDisposition(invoice.backendId, "Customer Refund", editingId),
     );
     if (data.disposition === "Customer Refund" && calculated.totalCredit > remainingRefundable) {
       setError("creditBaseAmount", { message: `Refund cannot exceed remaining refundable value ${money(remainingRefundable, invoice.currency)}` });
       return;
     }
 
-    const now = new Date().toISOString();
-    const common = {
-      invoiceId: invoice.id,
-      clientId: invoice.clientId,
-      clientName: invoice.clientName,
-      projectName: invoice.projectName,
-      date: data.date,
-      currency: invoice.currency,
-      reason: data.reason,
-      disposition: data.disposition,
-      creditBaseAmount: calculated.creditBaseAmount,
-      gstRate: calculated.gstRate,
-      gstAmount: calculated.gstAmount,
-      totalCredit: calculated.totalCredit,
-      customerReference: data.customerReference?.trim() ?? "",
-      remarks: data.remarks.trim(),
-      status,
-      updatedAt: now,
-    };
-
-    if (editingId) {
-      setCreditNotes((current) => current.map((note) => note.id === editingId ? {
-        ...note,
-        ...common,
-        outstandingAdjusted: 0,
-        refundLiability: 0,
-        futureCredit: 0,
-      } : note));
-      setSuccessMsg(status === "Draft" ? "Credit note draft updated" : "Credit note submitted for approval");
-    } else {
-      const nextNumber = Math.max(16, ...creditNotes.map((note) => Number(note.id.split("-").pop()) || 0)) + 1;
-      setCreditNotes((current) => [{
-        id: `CN-${new Date().getFullYear()}-${String(nextNumber).padStart(3, "0")}`,
-        ...common,
-        outstandingAdjusted: 0,
-        refundLiability: 0,
-        futureCredit: 0,
-        approvedBy: "",
-        createdBy: "Accountant",
-        createdAt: now,
-      }, ...current]);
-      setSuccessMsg(status === "Draft" ? "Credit note draft saved" : "Credit note submitted for approval");
+    void calculated;
+    try {
+      setIsSaving(true);
+      setBackendMessage("");
+      if (editingId) {
+        await updateFinanceResource<BackendCreditNoteRecord, CreditNotePayload>("credit-notes", editingId, creditPayload(data, status));
+      } else {
+        await createFinanceResource<BackendCreditNoteRecord, CreditNotePayload>("credit-notes", creditPayload(data, status));
+      }
+      await loadData();
+      setSuccessMsg(editingId
+        ? (status === "Draft" ? "Credit note draft updated" : "Credit note submitted for approval")
+        : (status === "Draft" ? "Credit note draft saved" : "Credit note submitted for approval"));
+      setTimeout(closeForm, 900);
+    } catch (error) {
+      setBackendMessage(error instanceof Error ? error.message : "Unable to save credit note.");
+    } finally {
+      setIsSaving(false);
     }
-    setTimeout(closeForm, 900);
   };
 
   const saveDraft = handleSubmit((data) => persistCreditNote(data, "Draft"));
   const submitForApproval = handleSubmit((data) => persistCreditNote(data, "Pending Approval"));
 
-  const updateStatus = (note: CreditNoteRecord, status: CreditStatus) => {
-    const now = new Date().toISOString();
-    setCreditNotes((current) => current.map((item) => item.id === note.id ? {
-      ...item,
-      status,
-      approvedBy: status === "Approved" ? "Finance Manager" : item.approvedBy,
-      outstandingAdjusted: status === "Issued" && item.disposition === "Adjust Invoice Outstanding" ? item.totalCredit : item.outstandingAdjusted,
-      refundLiability: status === "Issued" && item.disposition === "Customer Refund" ? item.totalCredit : item.refundLiability,
-      futureCredit: status === "Issued" && item.disposition === "Future Client Credit" ? item.totalCredit : item.futureCredit,
-      updatedAt: now,
-    } : item));
+  const updateStatus = async (note: CreditNoteRecord, status: CreditStatus) => {
+    try {
+      setBackendMessage("");
+      await updateFinanceResource<BackendCreditNoteRecord, CreditNotePayload>("credit-notes", note.backendId, {
+        invoice: note.invoiceId,
+        reason: note.reason,
+        taxable_amount: String(note.creditBaseAmount),
+        gst_amount: String(note.gstAmount),
+        total_amount: String(note.totalCredit),
+        status: statusToApi[status],
+      });
+      await loadData();
+    } catch (error) {
+      setBackendMessage(error instanceof Error ? error.message : "Unable to update credit note status.");
+    }
   };
 
   const exportCreditNotes = () => {
     const rows = [
       ["Credit Note", "Invoice", "Client", "Issue Date", "Reason", "Disposition", "Base Credit", "GST Rate", "GST Reversal", "Total Credit", "Outstanding Adjusted", "Refund Liability", "Future Credit", "Status", "Approved By"],
       ...filteredCreditNotes.map((note) => [
-        note.id, note.invoiceId, note.clientName, note.date, note.reason, note.disposition,
+      note.id, note.invoiceCode, note.clientName, note.date, note.reason, note.disposition,
         note.creditBaseAmount, note.gstRate, note.gstAmount, note.totalCredit,
         note.outstandingAdjusted, note.refundLiability, note.futureCredit, note.status, note.approvedBy,
       ]),
@@ -462,7 +493,7 @@ export default function Step7CreditNotes() {
   const downloadCreditNote = (note: CreditNoteRecord) => {
     const content = [
       `Credit Note: ${note.id}`,
-      `Original Invoice: ${note.invoiceId}`,
+      `Original Invoice: ${note.invoiceCode}`,
       `Client: ${note.clientName} (${note.clientId})`,
       `Project: ${note.projectName}`,
       `Issue Date: ${formatDate(note.date)}`,
@@ -507,6 +538,18 @@ export default function Step7CreditNotes() {
         <MetricCard label="Refund Liability" value={money(refundRisk)} helper="Approved or issued refunds" icon={Ban} tone="red" />
       </div>
 
+      {backendMessage ? (
+        <div className="rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-sm font-bold text-red-700">
+          {backendMessage}
+        </div>
+      ) : null}
+
+      {isLoading ? (
+        <div className="rounded-2xl border border-border bg-white px-5 py-4 text-sm font-bold text-slate-500">
+          Loading backend credit note register...
+        </div>
+      ) : null}
+
       {showForm ? (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-sm animate-in fade-in">
           <div className="relative max-h-[90vh] w-full max-w-6xl overflow-y-auto rounded-[2rem] border border-slate-100 bg-white p-8 shadow-2xl animate-in zoom-in-95">
@@ -533,7 +576,7 @@ export default function Step7CreditNotes() {
                           <span className="text-xs font-black uppercase tracking-widest text-slate-500">Invoice Reference <span className="text-red-500">*</span></span>
                           <select {...register("invoiceId")} onChange={(event) => selectInvoice(event.target.value)} className={`h-11 w-full rounded-xl border bg-white px-3 text-sm font-semibold text-primary outline-none ${errors.invoiceId ? "border-red-500" : "border-border focus:border-primary"}`}>
                             <option value="">Select invoice...</option>
-                            {invoiceOptions.map((invoice) => <option key={invoice.id} value={invoice.id}>{invoice.id} - {invoice.clientName} - {money(invoice.totalAmount, invoice.currency)}</option>)}
+                            {invoiceOptions.map((invoice) => <option key={invoice.backendId} value={invoice.backendId}>{invoice.id} - {invoice.clientName} - {money(invoice.totalAmount, invoice.currency)}</option>)}
                           </select>
                           {errors.invoiceId ? <p className="text-[10px] font-black uppercase tracking-widest text-red-500">{errors.invoiceId.message}</p> : null}
                         </label>
@@ -579,8 +622,8 @@ export default function Step7CreditNotes() {
                           <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Disposition</p>
                           <p className="mt-1 text-sm font-black text-primary">{watchedDisposition}</p>
                         </div>
-                        <ActionButton icon={ShieldCheck} label="Submit for Approval" variant="accent" type="submit" />
-                        <ActionButton icon={FileMinus2} label="Save Draft" variant="outline" onClick={saveDraft} />
+                        <ActionButton icon={ShieldCheck} label={isSaving ? "Saving..." : "Submit for Approval"} variant="accent" type="submit" />
+                        <ActionButton icon={FileMinus2} label={isSaving ? "Saving..." : "Save Draft"} variant="outline" onClick={saveDraft} />
                       </div>
                     </Panel>
                   </div>
@@ -614,7 +657,7 @@ export default function Step7CreditNotes() {
             <tr key={note.id} className="text-sm transition-colors hover:bg-slate-50">
               <td className="px-4 py-4">
                 <p className="font-black text-primary">{note.id}</p>
-                <p className="text-xs font-semibold text-slate-500">{note.invoiceId} | {formatDate(note.date)}</p>
+                <p className="text-xs font-semibold text-slate-500">{note.invoiceCode} | {formatDate(note.date)}</p>
               </td>
               <td className="px-4 py-4">
                 <p className="font-black text-primary">{note.clientName}</p>

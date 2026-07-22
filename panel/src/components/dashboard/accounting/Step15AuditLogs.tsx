@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -13,13 +13,27 @@ import {
   AccountingPage, ActionButton, DataTable, Field,
   MetricCard, Panel, StatusBadge, WorkflowSteps,
 } from "./AccountingComponents";
+import {
+  listAuditLogs,
+  updateAuditInvestigation,
+  type AuditLogRecord,
+} from "@/services/audit-api";
 
-const modules = ["Client", "Vendor", "Quotation", "Invoice", "Payment", "Reminder", "Credit Note", "Expense", "Budget", "Payroll", "GST", "TDS", "Report", "Approval", "Access", "Bank"] as const;
-const actions = ["Created", "Updated", "Submitted", "Approved", "Rejected", "Paid", "Filed", "Deposited", "Archived", "Restored", "Login", "Permission Changed"] as const;
-const severities = ["Info", "Review", "Critical"] as const;
+type Snapshot = Record<string, unknown>;
+
+const modules = ["All", "finance", "accounts", "crm", "projects", "hrms", "audit"] as const;
+const actions = ["All", "create", "update", "delete", "status", "sync_client", "attendance_save", "permission_changed"] as const;
+const severities = ["All", "Info", "Review", "Critical"] as const;
 const investigationStatuses = ["Clear", "Flagged", "Investigating", "Resolved"] as const;
+const investigationStatusMap = {
+  Clear: "clear",
+  Flagged: "flagged",
+  Investigating: "investigating",
+  Resolved: "resolved",
+} as const;
 
-type Snapshot = Record<string, string | number | boolean | null>;
+type Severity = Exclude<typeof severities[number], "All">;
+type InvestigationStatus = typeof investigationStatuses[number];
 
 type AuditEvent = {
   id: string;
@@ -27,8 +41,8 @@ type AuditEvent = {
   actorId: string;
   actorName: string;
   actorRole: string;
-  module: typeof modules[number];
-  action: typeof actions[number];
+  module: string;
+  action: string;
   recordId: string;
   requestId: string;
   sessionId: string;
@@ -39,91 +53,18 @@ type AuditEvent = {
   after: Snapshot;
   changedFields: string[];
   reason: string;
-  severity: typeof severities[number];
-  investigationStatus: typeof investigationStatuses[number];
+  severity: Severity;
+  investigationStatus: InvestigationStatus;
   investigationNote: string;
   previousHash: string;
   hash: string;
 };
 
-function stableSnapshot(value: Snapshot) {
-  return Object.keys(value).sort().map((key) => `${key}:${String(value[key])}`).join("|");
-}
-
-function hashText(value: string) {
-  let hash = 2166136261;
-  for (let index = 0; index < value.length; index += 1) {
-    hash ^= value.charCodeAt(index);
-    hash = Math.imul(hash, 16777619);
-  }
-  return (hash >>> 0).toString(16).padStart(8, "0");
-}
-
-function eventHash(event: Omit<AuditEvent, "hash">) {
-  return hashText([
-    event.id, event.sequence, event.actorId, event.actorName, event.actorRole,
-    event.module, event.action, event.recordId, event.requestId, event.sessionId,
-    event.ipAddress, event.userAgent, event.timestamp,
-    stableSnapshot(event.before), stableSnapshot(event.after),
-    event.changedFields.join("|"), event.reason, event.severity, event.previousHash,
-  ].join("::"));
-}
-
-const rawEvents: Array<Omit<AuditEvent, "previousHash" | "hash">> = [
-  {
-    id: "LOG-2026-9001", sequence: 1, actorId: "USR-010", actorName: "Rajkumar Rathore", actorRole: "Finance Manager",
-    module: "Invoice", action: "Approved", recordId: "INV-2026-088", requestId: "REQ-INV-088",
-    sessionId: "SES-A1B2", ipAddress: "103.87.44.12", userAgent: "Chrome 126 / Windows 11",
-    timestamp: "2026-06-11T10:14:00.000Z", before: { status: "Pending Approval" }, after: { status: "Approved" },
-    changedFields: ["status"], reason: "Commercial and tax validation completed.", severity: "Info", investigationStatus: "Clear", investigationNote: "",
-  },
-  {
-    id: "LOG-2026-9002", sequence: 2, actorId: "USR-022", actorName: "Sunita Sharma", actorRole: "HR Manager",
-    module: "Payroll", action: "Updated", recordId: "SAL-2026-002", requestId: "REQ-SAL-002",
-    sessionId: "SES-C3D4", ipAddress: "103.87.44.18", userAgent: "Edge 126 / Windows 11",
-    timestamp: "2026-06-11T10:28:00.000Z", before: { tds: 12000, netPayable: 101200 }, after: { tds: 13400, netPayable: 99800 },
-    changedFields: ["tds", "netPayable"], reason: "Employee tax declaration reconciliation.", severity: "Review", investigationStatus: "Clear", investigationNote: "",
-  },
-  {
-    id: "LOG-2026-9003", sequence: 3, actorId: "USR-010", actorName: "Rajkumar Rathore", actorRole: "Finance Manager",
-    module: "Expense", action: "Rejected", recordId: "EXP-2026-424", requestId: "APP-2026-902",
-    sessionId: "SES-A1B2", ipAddress: "103.87.44.12", userAgent: "Chrome 126 / Windows 11",
-    timestamp: "2026-06-11T11:02:00.000Z", before: { status: "Pending", amount: 65000 }, after: { status: "Review Required", amount: 65000 },
-    changedFields: ["status"], reason: "Vendor GST document missing.", severity: "Review", investigationStatus: "Flagged", investigationNote: "Awaiting supporting invoice.",
-  },
-  {
-    id: "LOG-2026-9004", sequence: 4, actorId: "USR-031", actorName: "Amit Accountant", actorRole: "Accountant",
-    module: "Client", action: "Created", recordId: "CL-24005", requestId: "REQ-CL-24005",
-    sessionId: "SES-E5F6", ipAddress: "103.87.44.16", userAgent: "Chrome 126 / macOS 15",
-    timestamp: "2026-06-11T11:45:00.000Z", before: {}, after: { name: "New Client Pvt Ltd", status: "Active", gstin: "27ABCDE1234F1Z5" },
-    changedFields: ["name", "status", "gstin"], reason: "New client onboarding.", severity: "Info", investigationStatus: "Clear", investigationNote: "",
-  },
-  {
-    id: "LOG-2026-9005", sequence: 5, actorId: "USR-001", actorName: "System Admin", actorRole: "Admin",
-    module: "Access", action: "Permission Changed", recordId: "ROLE-ACCOUNTANT", requestId: "REQ-ACL-005",
-    sessionId: "SES-ADMIN", ipAddress: "10.0.0.5", userAgent: "Chrome 126 / Windows Server",
-    timestamp: "2026-06-12T09:00:00.000Z", before: { canDeleteExpense: false }, after: { canDeleteExpense: true },
-    changedFields: ["canDeleteExpense"], reason: "Temporary month-end access.", severity: "Critical", investigationStatus: "Investigating", investigationNote: "Validate approval evidence and expiry.",
-  },
-];
-
-function buildChain(events: typeof rawEvents): AuditEvent[] {
-  let previousHash = "GENESIS";
-  return events.map((event) => {
-    const withoutHash = { ...event, previousHash };
-    const hash = eventHash(withoutHash);
-    previousHash = hash;
-    return { ...withoutHash, hash };
-  });
-}
-
-const initialLogs = buildChain(rawEvents);
-
 const filterSchema = z.object({
   query: z.string().optional(),
-  module: z.enum(["All", ...modules]),
-  action: z.enum(["All", ...actions]),
-  severity: z.enum(["All", ...severities]),
+  module: z.string(),
+  action: z.string(),
+  severity: z.enum(severities),
   investigationStatus: z.enum(["All", ...investigationStatuses]),
   actorRole: z.string(),
   fromDate: z.string().optional(),
@@ -148,6 +89,82 @@ type FilterFormData = z.output<typeof filterSchema>;
 type InvestigationFormInput = z.input<typeof investigationSchema>;
 type InvestigationFormData = z.output<typeof investigationSchema>;
 
+function stableSnapshot(value: Snapshot) {
+  return Object.keys(value).sort().map((key) => `${key}:${String(value[key])}`).join("|");
+}
+
+function hashText(value: string) {
+  let hash = 2166136261;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(16).padStart(8, "0");
+}
+
+function eventHash(event: Omit<AuditEvent, "hash">) {
+  return hashText([
+    event.id, event.sequence, event.actorId, event.actorName, event.actorRole,
+    event.module, event.action, event.recordId, event.requestId, event.sessionId,
+    event.ipAddress, event.userAgent, event.timestamp,
+    stableSnapshot(event.before), stableSnapshot(event.after),
+    event.changedFields.join("|"), event.reason, event.severity, event.previousHash,
+  ].join("::"));
+}
+
+function severityFor(log: AuditLogRecord): Severity {
+  const sensitiveAction = ["delete", "archive", "revoke_sessions", "update_role", "permission_changed"];
+  if (sensitiveAction.some((action) => log.action.includes(action)) || log.module === "accounts") return "Critical";
+  if (log.action.includes("reject") || log.action.includes("status") || log.action.includes("update")) return "Review";
+  return "Info";
+}
+
+function titleCase(value: string) {
+  return value.replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function changedFields(before: Snapshot, after: Snapshot) {
+  const keys = new Set([...Object.keys(before), ...Object.keys(after)]);
+  return [...keys].filter((key) => JSON.stringify(before[key]) !== JSON.stringify(after[key]));
+}
+
+function reasonFor(log: AuditLogRecord) {
+  const newValues = Object.keys(log.new_values || {}).join(", ");
+  return newValues ? `${titleCase(log.action)} changed ${newValues}.` : `${titleCase(log.action)} event captured.`;
+}
+
+function buildChain(records: AuditLogRecord[]): AuditEvent[] {
+  let previousHash = "GENESIS";
+  return [...records].reverse().map((log, index) => {
+    const eventWithoutHash: Omit<AuditEvent, "hash"> = {
+      id: log.id,
+      sequence: index + 1,
+      actorId: log.actor_id,
+      actorName: log.actor_name,
+      actorRole: log.actor_role,
+      module: log.module,
+      action: log.action,
+      recordId: log.entity_id,
+      requestId: `${log.entity_type}-${log.entity_id}`,
+      sessionId: `AUD-${log.id.slice(0, 8).toUpperCase()}`,
+      ipAddress: log.ip_address || "Not captured",
+      userAgent: log.user_agent || "Not captured",
+      timestamp: log.created_at,
+      before: log.old_values || {},
+      after: log.new_values || {},
+      changedFields: changedFields(log.old_values || {}, log.new_values || {}),
+      reason: reasonFor(log),
+      severity: severityFor(log),
+      investigationStatus: log.investigation_status_label,
+      investigationNote: log.investigation_note || "",
+      previousHash,
+    };
+    const hash = eventHash(eventWithoutHash);
+    previousHash = hash;
+    return { ...eventWithoutHash, hash };
+  }).reverse();
+}
+
 function verifyChain(events: AuditEvent[]) {
   let previousHash = "GENESIS";
   for (const event of [...events].sort((a, b) => a.sequence - b.sequence)) {
@@ -170,9 +187,11 @@ function downloadFile(filename: string, content: string, type: string) {
 }
 
 export default function Step15AuditLogs() {
-  const [logs, setLogs] = useState<AuditEvent[]>(initialLogs);
+  const [records, setRecords] = useState<AuditLogRecord[]>([]);
   const [selectedLog, setSelectedLog] = useState<AuditEvent | null>(null);
   const [showFilters, setShowFilters] = useState(false);
+  const [notice, setNotice] = useState("");
+  const [loading, setLoading] = useState(true);
   const [appliedFilters, setAppliedFilters] = useState<FilterFormData>({
     query: "", module: "All", action: "All", severity: "All",
     investigationStatus: "All", actorRole: "All", fromDate: "", toDate: "",
@@ -188,13 +207,35 @@ export default function Step15AuditLogs() {
 
   const {
     register: registerInvestigation, handleSubmit: handleInvestigationSubmit, reset: resetInvestigation,
-    formState: { errors: investigationErrors },
+    formState: { errors: investigationErrors, isSubmitting },
   } = useForm<InvestigationFormInput, unknown, InvestigationFormData>({
     resolver: zodResolver(investigationSchema),
     defaultValues: { status: "Investigating", note: "" },
   });
 
+  const loadLogs = useCallback(async () => {
+    setLoading(true);
+    setNotice("");
+    try {
+      const response = await listAuditLogs({ limit: 200, search: appliedFilters.query, module: appliedFilters.module, action: appliedFilters.action });
+      setRecords(response.data);
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Unable to load audit logs.");
+    } finally {
+      setLoading(false);
+    }
+  }, [appliedFilters.action, appliedFilters.module, appliedFilters.query]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void loadLogs();
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [loadLogs]);
+
+  const logs = useMemo(() => buildChain(records), [records]);
   const chainValid = useMemo(() => verifyChain(logs), [logs]);
+  const actorRoles = useMemo(() => ["All", ...Array.from(new Set(logs.map((log) => log.actorRole))).sort()], [logs]);
   const filteredLogs = useMemo(() => logs.filter((log) => {
     const query = appliedFilters.query?.trim().toLowerCase() ?? "";
     const matchesQuery = !query || [
@@ -228,14 +269,20 @@ export default function Step15AuditLogs() {
     resetInvestigation({ status: log.investigationStatus, note: log.investigationNote || "" });
   };
 
-  const updateInvestigation = (data: InvestigationFormData) => {
+  const updateInvestigation = async (data: InvestigationFormData) => {
     if (!selectedLog) return;
-    setLogs((current) => current.map((log) => log.id === selectedLog.id ? {
-      ...log,
-      investigationStatus: data.status,
-      investigationNote: data.note,
-    } : log));
-    setSelectedLog((current) => current ? { ...current, investigationStatus: data.status, investigationNote: data.note } : current);
+    setNotice("");
+    try {
+      const response = await updateAuditInvestigation(selectedLog.id, {
+        investigation_status: investigationStatusMap[data.status],
+        investigation_note: data.note,
+      });
+      setRecords((current) => current.map((record) => record.id === response.data.id ? response.data : record));
+      setSelectedLog((current) => current ? { ...current, investigationStatus: response.data.investigation_status_label, investigationNote: response.data.investigation_note } : current);
+      setNotice("Investigation metadata saved.");
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Investigation update failed.");
+    }
   };
 
   const exportCsv = () => {
@@ -275,6 +322,8 @@ export default function Step15AuditLogs() {
     >
       <WorkflowSteps steps={["Event Capture", "Identity Metadata", "Hash Chain", "Investigation", "Forensic Export"]} />
 
+      {notice ? <div className="rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-800">{notice}</div> : null}
+
       <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-4">
         <MetricCard label="Logs Captured" value={String(logs.length)} helper={`${uniqueSessions} authenticated sessions`} icon={FileClock} tone="blue" />
         <MetricCard label="Chain Integrity" value={chainValid ? "Verified" : "Broken"} helper="Deterministic append-order check" icon={Fingerprint} tone={chainValid ? "green" : "red"} />
@@ -289,11 +338,11 @@ export default function Step15AuditLogs() {
             <form onSubmit={handleSubmit(applyFilters)} className="space-y-4">
               <Field label="Search" placeholder="Record, IP, actor, session, hash..." register={register("query")} />
               <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                <Field label="Module" options={["All", ...modules]} register={register("module")} />
-                <Field label="Action" options={["All", ...actions]} register={register("action")} />
-                <Field label="Severity" options={["All", ...severities]} register={register("severity")} />
+                <Field label="Module" options={[...modules]} register={register("module")} />
+                <Field label="Action" options={[...actions]} register={register("action")} />
+                <Field label="Severity" options={[...severities]} register={register("severity")} />
                 <Field label="Investigation" options={["All", ...investigationStatuses]} register={register("investigationStatus")} />
-                <Field label="Actor Role" options={["All", "Admin", "Director", "Finance Manager", "Accountant", "HR Manager", "Sales"]} register={register("actorRole")} />
+                <Field label="Actor Role" options={actorRoles} register={register("actorRole")} />
                 <Field label="From Date" type="date" register={register("fromDate")} />
                 <Field label="To Date" type="date" register={register("toDate")} error={errors.toDate?.message} />
               </div>
@@ -307,7 +356,7 @@ export default function Step15AuditLogs() {
           )}
         </Panel>
 
-        <Panel title="Audit Controls" description="Current frontend integrity and retention model.">
+        <Panel title="Audit Controls" description="Current backend integrity and retention model.">
           <div className="space-y-4">
             <div className="flex gap-4 rounded-xl border border-slate-100 bg-slate-50 p-4"><Terminal size={18} className="mt-1 shrink-0 text-primary" /><div><p className="text-xs font-black uppercase tracking-widest text-primary">Structured Events</p><p className="mt-1 text-[11px] font-semibold leading-5 text-slate-500">Before/after snapshots, changed fields, actor, role, request, session, IP, and device metadata.</p></div></div>
             <div className="flex gap-4 rounded-xl border border-blue-100 bg-blue-50 p-4"><LockKeyhole size={18} className="mt-1 shrink-0 text-blue-600" /><div><p className="text-xs font-black uppercase tracking-widest text-blue-900">Append-Only Intent</p><p className="mt-1 text-[11px] font-semibold leading-5 text-blue-700">No delete/edit controls exist for event facts. Investigation metadata is maintained separately.</p></div></div>
@@ -321,7 +370,7 @@ export default function Step15AuditLogs() {
           {filteredLogs.map((log) => (
             <tr key={log.id} className="text-sm hover:bg-slate-50">
               <td className="px-4 py-4"><div className="flex items-center gap-3"><div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-400"><User size={14} /></div><div><p className="font-black text-primary">#{log.sequence} {log.actorName}</p><p className="text-[11px] font-semibold text-slate-400">{log.actorId} | {log.actorRole}</p></div></div></td>
-              <td className="px-4 py-4"><p className="font-black text-primary">{log.module}</p><StatusBadge tone={log.action === "Rejected" ? "red" : log.action === "Approved" || log.action === "Filed" || log.action === "Paid" ? "green" : "blue"}>{log.action}</StatusBadge></td>
+              <td className="px-4 py-4"><p className="font-black text-primary">{titleCase(log.module)}</p><StatusBadge tone={log.action.includes("reject") ? "red" : log.action.includes("approve") || log.action.includes("file") || log.action.includes("pay") ? "green" : "blue"}>{titleCase(log.action)}</StatusBadge></td>
               <td className="px-4 py-4"><p className="font-black text-primary">{log.recordId}</p><p className="text-[11px] font-semibold text-slate-400">{log.requestId}</p></td>
               <td className="px-4 py-4"><p className="max-w-[220px] truncate text-xs font-semibold text-slate-600">{log.changedFields.join(", ") || "No field diff"}</p><p className="mt-1 max-w-[220px] truncate text-[11px] text-slate-400">{log.reason}</p></td>
               <td className="px-4 py-4"><p className="font-mono text-[11px] text-slate-600">{log.sessionId}</p><p className="font-mono text-[10px] text-slate-400">{log.ipAddress}</p></td>
@@ -330,6 +379,9 @@ export default function Step15AuditLogs() {
               <td className="px-4 py-4"><button type="button" onClick={() => openLog(log)} className="rounded-lg border border-border p-2 text-slate-500 hover:text-primary" title="View audit event"><Eye size={15} /></button></td>
             </tr>
           ))}
+          {!filteredLogs.length && (
+            <tr><td colSpan={8} className="px-4 py-8 text-center text-xs font-bold text-slate-400">{loading ? "Loading audit logs..." : "No audit events match the selected filters."}</td></tr>
+          )}
         </DataTable>
       </Panel>
 
@@ -343,7 +395,7 @@ export default function Step15AuditLogs() {
               {[
                 ["Actor", `${selectedLog.actorName} (${selectedLog.actorRole})`],
                 ["Session / IP", `${selectedLog.sessionId} / ${selectedLog.ipAddress}`],
-                ["Record", `${selectedLog.module} / ${selectedLog.recordId}`],
+                ["Record", `${titleCase(selectedLog.module)} / ${selectedLog.recordId}`],
               ].map(([label, value]) => <div key={label} className="rounded-xl border border-slate-100 bg-slate-50 p-4"><p className="text-[10px] font-black uppercase text-slate-400">{label}</p><p className="mt-1 text-sm font-black text-primary">{value}</p></div>)}
             </div>
             <div className="mt-6 grid grid-cols-1 items-center gap-4 md:grid-cols-[1fr_auto_1fr]">
@@ -356,7 +408,7 @@ export default function Step15AuditLogs() {
               <h4 className="text-sm font-black uppercase tracking-widest text-primary">Investigation Metadata</h4>
               <Field label="Status" options={[...investigationStatuses]} register={registerInvestigation("status")} error={investigationErrors.status?.message} />
               <Field label="Investigation Note" multiline register={registerInvestigation("note")} error={investigationErrors.note?.message} />
-              <ActionButton icon={CheckCircle2} label="Update Investigation" variant="accent" type="submit" />
+              <ActionButton icon={CheckCircle2} label={isSubmitting ? "Saving..." : "Update Investigation"} variant="accent" type="submit" />
             </form>
           </div>
         </div>
