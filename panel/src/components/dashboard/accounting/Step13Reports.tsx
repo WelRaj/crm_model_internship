@@ -410,7 +410,7 @@ export default function Step13Reports() {
   const collectionHealth = invoiceValue ? collections / invoiceValue * 100 : 0;
 
   return (
-    <AccountingPage title="Reports & Analytics" description="Generate traceable finance reports from invoice, collection, expense, payroll, budget, GST, TDS, and receivable data." icon={LineChart} badge="Decision support" actions={<><ActionButton icon={Filter} label={showFilters ? "Close Builder" : "Custom Report"} variant="outline" onClick={() => setShowFilters((value) => !value)} /><ActionButton icon={Download} label="Executive Pack" variant="accent" onClick={exportExecutivePack} /></>}>
+    <AccountingPage title="Finance Reports" description="Generate traceable finance reports from invoice, collection, expense, payroll, budget, GST, TDS, and receivable data." icon={LineChart} badge="Decision support" actions={<><ActionButton icon={Filter} label={showFilters ? "Close Builder" : "Custom Report"} variant="outline" onClick={() => setShowFilters((value) => !value)} /><ActionButton icon={Download} label="Executive Pack" variant="accent" onClick={exportExecutivePack} /></>}>
       <WorkflowSteps steps={["Select Scope", "Aggregate Sources", "Validate Totals", "Generate Snapshot", "Export & Audit"]} />
       {backendMessage ? <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">{backendMessage}</div> : null}
       {isLoading ? <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-500">Loading backend finance report data...</div> : null}

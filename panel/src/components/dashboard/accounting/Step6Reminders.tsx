@@ -572,7 +572,7 @@ export default function Step6Reminders() {
 
   return (
     <AccountingPage
-      title="Payment Reminder System"
+      title="Reminders"
       description="Schedule and audit invoice collection reminders using current outstanding, due dates, recipient contacts, and escalation controls."
       icon={BellRing}
       badge="Cash flow control"

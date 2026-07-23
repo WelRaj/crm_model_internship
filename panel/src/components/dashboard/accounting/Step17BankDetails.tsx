@@ -399,7 +399,7 @@ export default function Step17BankDetails() {
 
   return (
     <AccountingPage
-      title="Bank Account Management"
+      title="Bank Details"
       description="Control verified treasury and client settlement instructions without exposing sensitive account data."
       icon={Landmark}
       badge="Restricted Treasury"

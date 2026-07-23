@@ -702,9 +702,9 @@ export default function Dashboard() {
                     const Icon = item.icon;
                     const isActive = activeTab === item.id;
                     return (
-                      <button key={item.id} onClick={() => openTab(item.id)} className={`w-full flex items-center gap-4 px-5 py-4 rounded-2xl transition-all ${isActive ? "bg-accent text-[#0F172A] font-black" : "text-slate-400 hover:text-white"}`}>
-                          <Icon size={20} />
-                          <span className="text-sm font-bold tracking-wide">{item.label}</span>
+                      <button key={item.id} onClick={() => openTab(item.id)} className={`w-full flex items-center gap-3 px-4 py-4 rounded-2xl transition-all ${isActive ? "bg-accent text-[#0F172A] font-black" : "text-slate-400 hover:text-white"}`}>
+                          <Icon size={20} className="shrink-0" />
+                          <span className="min-w-0 flex-1 text-left text-[13px] font-bold leading-snug tracking-wide">{item.label}</span>
                       </button>
                     );
                   })}

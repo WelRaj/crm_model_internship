@@ -579,7 +579,7 @@ export default function Step4Invoices() {
 
   return (
     <AccountingPage
-      title="Invoice Management"
+      title="Invoices"
       description="Generate controlled tax invoices from accepted quotations or project milestones and track approval, delivery, and outstanding balances."
       icon={Receipt}
       badge="Legal billing"

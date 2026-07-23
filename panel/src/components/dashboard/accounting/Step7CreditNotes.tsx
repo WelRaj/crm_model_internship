@@ -518,7 +518,7 @@ export default function Step7CreditNotes() {
 
   return (
     <AccountingPage
-      title="Credit Note Management"
+      title="Credit Notes"
       description="Create controlled invoice corrections with tax reversal, approval, outstanding adjustment, refund liability, and client credit tracking."
       icon={RotateCcw}
       badge="Invoice correction"

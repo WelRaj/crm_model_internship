@@ -483,7 +483,7 @@ export default function Step5Payments() {
 
   return (
     <AccountingPage
-      title="Payment Tracking"
+      title="Payments"
       description="Record invoice collections and client advances with TDS, proof, verification, bank reconciliation, and receivable updates."
       icon={Wallet}
       badge="Collections"

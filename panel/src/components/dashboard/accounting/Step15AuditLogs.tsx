@@ -309,7 +309,7 @@ export default function Step15AuditLogs() {
 
   return (
     <AccountingPage
-      title="Security & Activity Audit Logs"
+      title="Audit Logs"
       description="Append-only financial event history with actor identity, structured changes, session metadata, hash-chain integrity, and investigation tracking."
       icon={History}
       badge="Forensic audit"

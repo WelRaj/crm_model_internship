@@ -322,7 +322,7 @@ export default function Step14Approvals() {
 
   return (
     <AccountingPage
-      title="Approval Matrix & Workflow"
+      title="Finance Approvals"
       description="Route finance transactions by module, value, role, risk, budget, and compliance controls with permanent decision history."
       icon={ShieldCheck}
       badge={`Role: ${role}`}

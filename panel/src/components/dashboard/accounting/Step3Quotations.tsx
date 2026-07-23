@@ -464,7 +464,7 @@ export default function Step3Quotations() {
 
   return (
     <AccountingPage
-      title="Quotation Management"
+      title="Quotations"
       description="Create controlled commercial proposals linked to client, project, agreement, approval, and invoice workflows."
       icon={FileText}
       badge="Lead to billing"
