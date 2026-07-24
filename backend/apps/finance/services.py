@@ -25,6 +25,7 @@ from apps.finance.models import (
     TDSRecord,
     Vendor,
 )
+from apps.notifications.services import NotificationService
 from apps.projects.models import DeliveryProject, ProjectMilestone
 
 
@@ -99,6 +100,19 @@ class FinanceService:
             client.created_by = actor
             client.save(update_fields=["client_code", "created_by", "updated_at"])
         record_audit_log(actor=actor, module="finance", action="sync_client", entity_type="FinanceClient", entity_id=client.id, request=request)
+        if created:
+            NotificationService.create_event(
+                actor=actor,
+                title=f"Finance client synced from {project_client.client_number}",
+                message=f"{client.company_name} is now available in Finance Control.",
+                notification_type="Finance",
+                priority="Medium",
+                target_module="Finance Control",
+                entity_type="FinanceClient",
+                entity_id=client.id,
+                is_broadcast=True,
+                request=request,
+            )
         return client
 
     @staticmethod
@@ -109,6 +123,18 @@ class FinanceService:
             raise ValidationError({"project_client_id": "Finance client already exists for this project client."})
         client = FinanceClient.objects.create(client_code=_next_number("finance_client_number", "FCL", 5), created_by=actor, updated_by=actor, **data)
         record_audit_log(actor=actor, module="finance", action="create", entity_type="FinanceClient", entity_id=client.id, new_values={"client_code": client.client_code}, request=request)
+        NotificationService.create_event(
+            actor=actor,
+            title=f"Finance client created: {client.company_name}",
+            message="A new finance client record is ready for billing and collections.",
+            notification_type="Finance",
+            priority="Medium",
+            target_module="Finance Control",
+            entity_type="FinanceClient",
+            entity_id=client.id,
+            is_broadcast=True,
+            request=request,
+        )
         return client
 
     @staticmethod
@@ -141,6 +167,18 @@ class FinanceService:
     def create_vendor(*, data, actor, request=None):
         vendor = Vendor.objects.create(vendor_code=_next_number("vendor_number", "VEN", 5), created_by=actor, updated_by=actor, **data)
         record_audit_log(actor=actor, module="finance", action="create", entity_type="Vendor", entity_id=vendor.id, request=request)
+        NotificationService.create_event(
+            actor=actor,
+            title=f"Vendor created: {vendor.company_name}",
+            message="Vendor master is ready for purchase and payment workflows.",
+            notification_type="Finance",
+            priority="Low",
+            target_module="Finance Control",
+            entity_type="Vendor",
+            entity_id=vendor.id,
+            is_broadcast=True,
+            request=request,
+        )
         return vendor
 
     @staticmethod
@@ -252,6 +290,18 @@ class FinanceService:
         quotation.updated_by = actor
         quotation.save(update_fields=["status", "updated_by", "updated_at"])
         record_audit_log(actor=actor, module="finance", action="status", entity_type="Quotation", entity_id=quotation.id, old_values={"status": old_status}, new_values={"status": status}, request=request)
+        NotificationService.create_event(
+            actor=actor,
+            title=f"Quotation {quotation.quotation_number} {quotation.get_status_display()}",
+            message=f"{quotation.client.company_name} quotation moved to {quotation.get_status_display().lower()}.",
+            notification_type="Finance",
+            priority="Medium",
+            target_module="Finance Control",
+            entity_type="Quotation",
+            entity_id=quotation.id,
+            is_broadcast=True,
+            request=request,
+        )
         return quotation
 
     @staticmethod
@@ -362,6 +412,18 @@ class FinanceService:
         invoice.updated_by = actor
         invoice.save(update_fields=["status", "updated_by", "updated_at"])
         record_audit_log(actor=actor, module="finance", action="status", entity_type="Invoice", entity_id=invoice.id, old_values={"status": old_status}, new_values={"status": status}, request=request)
+        NotificationService.create_event(
+            actor=actor,
+            title=f"Invoice {invoice.invoice_number} {invoice.get_status_display()}",
+            message=f"{invoice.client.company_name} invoice is now {invoice.get_status_display().lower()}.",
+            notification_type="Finance",
+            priority="High",
+            target_module="Finance Control",
+            entity_type="Invoice",
+            entity_id=invoice.id,
+            is_broadcast=True,
+            request=request,
+        )
         return invoice
 
     @staticmethod
@@ -394,6 +456,18 @@ class FinanceService:
             _refresh_invoice_payment_status(invoice)
         LedgerEntry.objects.create(entry_number=_next_number("ledger_entry_number", "LED", 6), entry_type=LedgerEntry.EntryType.ADJUSTMENT, entry_date=payment.payment_date, client=client, description=f"Payment {payment.payment_number}", debit=0, credit=payment.amount, created_by=actor, updated_by=actor)
         record_audit_log(actor=actor, module="finance", action="create", entity_type="Payment", entity_id=payment.id, new_values={"payment_number": payment.payment_number, "amount": str(payment.amount)}, request=request)
+        NotificationService.create_event(
+            actor=actor,
+            title=f"Payment recorded: {payment.payment_number}",
+            message=f"{client.company_name} payment of {payment.amount} has been recorded.",
+            notification_type="Finance",
+            priority="High",
+            target_module="Finance Control",
+            entity_type="Payment",
+            entity_id=payment.id,
+            is_broadcast=True,
+            request=request,
+        )
         return payment
 
     @staticmethod
@@ -406,6 +480,18 @@ class FinanceService:
         for allocation in payment.allocations.select_related("invoice").filter(is_deleted=False):
             _refresh_invoice_payment_status(allocation.invoice)
         record_audit_log(actor=actor, module="finance", action="status", entity_type="Payment", entity_id=payment.id, old_values={"status": old_status}, new_values={"status": status}, request=request)
+        NotificationService.create_event(
+            actor=actor,
+            title=f"Payment {payment.payment_number} {payment.get_status_display()}",
+            message=f"Payment status updated to {payment.get_status_display().lower()} for {payment.client.company_name}.",
+            notification_type="Finance",
+            priority="High",
+            target_module="Finance Control",
+            entity_type="Payment",
+            entity_id=payment.id,
+            is_broadcast=True,
+            request=request,
+        )
         return payment
 
     @staticmethod
@@ -425,4 +511,17 @@ class FinanceService:
             data["requested_by"] = actor
         obj = model.objects.create(created_by=actor, updated_by=actor, **data)
         record_audit_log(actor=actor, module="finance", action="create", entity_type=model.__name__, entity_id=obj.id, request=request)
+        if model is ApprovalRequest:
+            NotificationService.create_event(
+                actor=actor,
+                title=f"Approval request queued: {obj.request_number}",
+                message="Finance approval workflow requires review.",
+                notification_type="Approval",
+                priority="High",
+                target_module="Finance Control",
+                entity_type="ApprovalRequest",
+                entity_id=obj.id,
+                is_broadcast=True,
+                request=request,
+            )
         return obj

@@ -35,6 +35,50 @@ def _job_payload(job: CommunicationJob):
 class NotificationService:
     @staticmethod
     @transaction.atomic
+    def create_event(
+        *,
+        actor,
+        title,
+        message,
+        notification_type,
+        priority,
+        target_module="",
+        entity_type="",
+        entity_id="",
+        action_url="",
+        metadata=None,
+        recipient_id=None,
+        is_broadcast=False,
+        request=None,
+    ):
+        notification = Notification.objects.create(
+            title=title,
+            message=message,
+            notification_type=notification_type,
+            priority=priority,
+            target_module=target_module,
+            entity_type=entity_type,
+            entity_id=str(entity_id) if entity_id else "",
+            action_url=action_url,
+            metadata=metadata or {},
+            recipient_id=recipient_id,
+            is_broadcast=is_broadcast,
+            created_by=actor,
+            updated_by=actor,
+        )
+        record_audit_log(
+            actor=actor,
+            module="notifications",
+            action="create",
+            entity_type="Notification",
+            entity_id=notification.id,
+            new_values=_notification_payload(notification),
+            request=request,
+        )
+        return notification
+
+    @staticmethod
+    @transaction.atomic
     def create_notification(*, data, actor, request=None):
         recipient_id = data.pop("recipient_id", None)
         notification = Notification.objects.create(

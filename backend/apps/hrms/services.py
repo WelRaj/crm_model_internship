@@ -8,6 +8,7 @@ from rest_framework.exceptions import ValidationError
 
 from apps.accounts.models import User, UserProfile
 from apps.audit.services import record_audit_log
+from apps.notifications.services import NotificationService
 from apps.hrms.models import AttendanceRecord, EmployeeHRProfile, ExitRequest, LeaveRequest, PayrollRecord
 
 
@@ -119,6 +120,18 @@ class HRMSService:
         profile.employee_status = "Inactive" if employee.status in {EmployeeHRProfile.Status.EXITED, EmployeeHRProfile.Status.ARCHIVED} else "Active"
         profile.save()
         record_audit_log(actor=actor, module="hrms", action="create", entity_type="EmployeeHRProfile", entity_id=employee.id, new_values={"employee_id": user.employee_id, "status": employee.status}, request=request)
+        NotificationService.create_event(
+            actor=actor,
+            title=f"Employee onboarded: {user.get_full_name() or user.email or user.mobile}",
+            message=f"{user.employee_id} added to HRMS as {employee.role} in {employee.team}.",
+            notification_type="HRMS",
+            priority="Medium",
+            target_module="People Operations",
+            entity_type="EmployeeHRProfile",
+            entity_id=employee.id,
+            is_broadcast=True,
+            request=request,
+        )
         return employee
 
     @staticmethod
@@ -160,6 +173,18 @@ class HRMSService:
         profile.employee_status = "Inactive" if employee.status in {EmployeeHRProfile.Status.EXITED, EmployeeHRProfile.Status.ARCHIVED} else "Active"
         profile.save()
         record_audit_log(actor=actor, module="hrms", action="update", entity_type="EmployeeHRProfile", entity_id=employee.id, old_values=old_values, new_values={"status": employee.status, "team": employee.team, "role": employee.role}, request=request)
+        NotificationService.create_event(
+            actor=actor,
+            title=f"Employee updated: {user.get_full_name() or user.email or user.mobile}",
+            message=f"HRMS profile changed for {user.employee_id}.",
+            notification_type="HRMS",
+            priority="Low",
+            target_module="People Operations",
+            entity_type="EmployeeHRProfile",
+            entity_id=employee.id,
+            is_broadcast=True,
+            request=request,
+        )
         return employee
 
     @staticmethod
@@ -167,6 +192,18 @@ class HRMSService:
     def archive_employee(*, employee, actor, request=None):
         _set_employee_status(employee, EmployeeHRProfile.Status.ARCHIVED, actor)
         record_audit_log(actor=actor, module="hrms", action="archive", entity_type="EmployeeHRProfile", entity_id=employee.id, request=request)
+        NotificationService.create_event(
+            actor=actor,
+            title=f"Employee archived: {employee.user.get_full_name() or employee.user.email or employee.user.mobile}",
+            message=f"{employee.user.employee_id} archived from active workforce.",
+            notification_type="HRMS",
+            priority="High",
+            target_module="People Operations",
+            entity_type="EmployeeHRProfile",
+            entity_id=employee.id,
+            is_broadcast=True,
+            request=request,
+        )
         return employee
 
     @staticmethod
@@ -298,6 +335,18 @@ class HRMSService:
         leave.updated_by = actor
         leave.save()
         record_audit_log(actor=actor, module="hrms", action=f"leave_{action}", entity_type="LeaveRequest", entity_id=leave.id, request=request)
+        NotificationService.create_event(
+            actor=actor,
+            title=f"Leave {action}: {leave.employee.user.get_full_name() or leave.employee.user.email or leave.employee.user.mobile}",
+            message=f"{leave.get_leave_type_display()} leave is now {leave.get_status_display().lower()}.",
+            notification_type="HRMS",
+            priority="Medium",
+            target_module="People Operations",
+            entity_type="LeaveRequest",
+            entity_id=leave.id,
+            is_broadcast=True,
+            request=request,
+        )
         return leave
 
     @staticmethod
@@ -372,6 +421,18 @@ class HRMSService:
             updated_by=actor,
         )
         record_audit_log(actor=actor, module="hrms", action="payroll_create", entity_type="PayrollRecord", entity_id=payroll.id, request=request)
+        NotificationService.create_event(
+            actor=actor,
+            title=f"Payroll created: {payroll.employee.user.get_full_name() or payroll.employee.user.email or payroll.employee.user.mobile}",
+            message=f"Payroll for {payroll.month} is {payroll.get_status_display().lower()}.",
+            notification_type="HRMS",
+            priority="Medium",
+            target_module="People Operations",
+            entity_type="PayrollRecord",
+            entity_id=payroll.id,
+            is_broadcast=True,
+            request=request,
+        )
         return payroll
 
     @staticmethod
@@ -414,6 +475,18 @@ class HRMSService:
         payroll.updated_by = actor
         payroll.save()
         record_audit_log(actor=actor, module="hrms", action=f"payroll_{action}", entity_type="PayrollRecord", entity_id=payroll.id, request=request)
+        NotificationService.create_event(
+            actor=actor,
+            title=f"Payroll {action}: {payroll.employee.user.get_full_name() or payroll.employee.user.email or payroll.employee.user.mobile}",
+            message=f"Payroll {payroll.month} moved to {payroll.get_status_display().lower()}.",
+            notification_type="HRMS",
+            priority="High" if payroll.status == PayrollRecord.Status.PAID else "Medium",
+            target_module="People Operations",
+            entity_type="PayrollRecord",
+            entity_id=payroll.id,
+            is_broadcast=True,
+            request=request,
+        )
         return payroll
 
     @staticmethod
@@ -455,6 +528,18 @@ class HRMSService:
         )
         _set_employee_status(employee, EmployeeHRProfile.Status.ON_NOTICE, actor)
         record_audit_log(actor=actor, module="hrms", action="exit_create", entity_type="ExitRequest", entity_id=exit_case.id, request=request)
+        NotificationService.create_event(
+            actor=actor,
+            title=f"Exit started: {employee.user.get_full_name() or employee.user.email or employee.user.mobile}",
+            message=f"{employee.user.employee_id} moved to notice period.",
+            notification_type="HRMS",
+            priority="High",
+            target_module="People Operations",
+            entity_type="ExitRequest",
+            entity_id=exit_case.id,
+            is_broadcast=True,
+            request=request,
+        )
         return exit_case
 
     @staticmethod
@@ -469,6 +554,18 @@ class HRMSService:
         exit_case.updated_by = actor
         exit_case.save()
         record_audit_log(actor=actor, module="hrms", action="exit_update", entity_type="ExitRequest", entity_id=exit_case.id, request=request)
+        NotificationService.create_event(
+            actor=actor,
+            title=f"Exit updated: {exit_case.employee.user.get_full_name() or exit_case.employee.user.email or exit_case.employee.user.mobile}",
+            message=f"Exit checklist updated for {exit_case.employee.user.employee_id}.",
+            notification_type="HRMS",
+            priority="Medium",
+            target_module="People Operations",
+            entity_type="ExitRequest",
+            entity_id=exit_case.id,
+            is_broadcast=True,
+            request=request,
+        )
         return exit_case
 
     @staticmethod
@@ -494,4 +591,16 @@ class HRMSService:
         exit_case.updated_by = actor
         exit_case.save()
         record_audit_log(actor=actor, module="hrms", action=f"exit_{action}", entity_type="ExitRequest", entity_id=exit_case.id, request=request)
+        NotificationService.create_event(
+            actor=actor,
+            title=f"Exit {action}: {exit_case.employee.user.get_full_name() or exit_case.employee.user.email or exit_case.employee.user.mobile}",
+            message=f"Exit for {exit_case.employee.user.employee_id} is now {exit_case.lifecycle_status}.",
+            notification_type="HRMS",
+            priority="High",
+            target_module="People Operations",
+            entity_type="ExitRequest",
+            entity_id=exit_case.id,
+            is_broadcast=True,
+            request=request,
+        )
         return exit_case

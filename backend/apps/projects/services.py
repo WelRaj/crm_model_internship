@@ -5,6 +5,7 @@ from rest_framework.exceptions import ValidationError
 from apps.audit.services import record_audit_log
 from apps.core.models import Sequence
 from apps.crm.models import ProjectAgreement
+from apps.notifications.services import NotificationService
 from apps.projects.models import DeliveryProject, EmployeePerformanceReview, ProjectDeadline, ProjectMilestone, ProjectTask, ProjectTeamAssignment
 
 
@@ -96,6 +97,18 @@ class DeliveryProjectService:
                 "source_handoff_id": str(project.source_handoff_id) if project.source_handoff_id else None,
                 "status": project.status,
             },
+            request=request,
+        )
+        NotificationService.create_event(
+            actor=actor,
+            title=f"Project {project.project_number} created",
+            message=f"{project.name} is ready for delivery team setup.",
+            notification_type="Project",
+            priority="High",
+            target_module="Delivery Projects",
+            entity_type="DeliveryProject",
+            entity_id=project.id,
+            is_broadcast=True,
             request=request,
         )
         return project
@@ -227,6 +240,18 @@ class DeliveryProjectService:
             },
             request=request,
         )
+        NotificationService.create_event(
+            actor=actor,
+            title=f"Team assigned to {project.project_number}",
+            message=f"{assignment.user.get_full_name() or assignment.user.email or assignment.user.mobile or assignment.user_id} assigned as {assignment.get_role_display()} on {project.name}.",
+            notification_type="Assignment",
+            priority="Medium",
+            target_module="Delivery Projects",
+            entity_type="ProjectTeamAssignment",
+            entity_id=assignment.id,
+            is_broadcast=True,
+            request=request,
+        )
         return assignment
 
     @staticmethod
@@ -325,6 +350,19 @@ class DeliveryProjectService:
             },
             request=request,
         )
+        if milestone.status == ProjectMilestone.Status.COMPLETED and old_values["status"] != milestone.status:
+            NotificationService.create_event(
+                actor=actor,
+                title=f"Milestone completed for {milestone.project.project_number}",
+                message=f"{milestone.title} was marked complete.",
+                notification_type="Project",
+                priority="Medium",
+                target_module="Delivery Projects",
+                entity_type="ProjectMilestone",
+                entity_id=milestone.id,
+                is_broadcast=True,
+                request=request,
+            )
         return milestone
 
     @staticmethod
@@ -402,6 +440,19 @@ class DeliveryProjectService:
             },
             request=request,
         )
+        if task.status == ProjectTask.Status.DONE and old_values["status"] != task.status:
+            NotificationService.create_event(
+                actor=actor,
+                title=f"Task completed for {task.project.project_number}",
+                message=f"{task.title} is now marked done.",
+                notification_type="Project",
+                priority="Medium",
+                target_module="Delivery Projects",
+                entity_type="ProjectTask",
+                entity_id=task.id,
+                is_broadcast=True,
+                request=request,
+            )
         return task
 
     @staticmethod
@@ -486,6 +537,19 @@ class DeliveryProjectService:
             },
             request=request,
         )
+        if deadline.status in {ProjectDeadline.Status.MET, ProjectDeadline.Status.MISSED} and old_values["status"] != deadline.status:
+            NotificationService.create_event(
+                actor=actor,
+                title=f"Deadline {deadline.status.lower()} for {deadline.project.project_number}",
+                message=f"{deadline.title} moved to {deadline.get_status_display().lower()}.",
+                notification_type="Project",
+                priority="High" if deadline.status == ProjectDeadline.Status.MISSED else "Medium",
+                target_module="Delivery Projects",
+                entity_type="ProjectDeadline",
+                entity_id=deadline.id,
+                is_broadcast=True,
+                request=request,
+            )
         return deadline
 
 
@@ -506,6 +570,18 @@ class EmployeePerformanceReviewService:
                 "status": review.status,
                 "rating": str(review.rating),
             },
+            request=request,
+        )
+        NotificationService.create_event(
+            actor=actor,
+            title=f"Performance review created for {review.employee.get_full_name() or review.employee.email or review.employee.mobile}",
+            message=f"{review.review_cycle} review opened for delivery performance tracking.",
+            notification_type="Project",
+            priority="Low",
+            target_module="Delivery Projects",
+            entity_type="EmployeePerformanceReview",
+            entity_id=review.id,
+            is_broadcast=True,
             request=request,
         )
         return review
