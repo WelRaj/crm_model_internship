@@ -22,6 +22,15 @@ import SupportHub from "@/components/dashboard/support/SupportHub";
 import AccountingWizard, { ACCOUNTING_MODULES, type AccountingModuleId } from "@/components/dashboard/accounting/AccountingWizard";
 import { changePassword, clearAuthSession, getCurrentUser, logout, type AuthUser } from "@/services/auth-api";
 import { getStoredAuthTokens } from "@/lib/api-client";
+import {
+  listNotificationOverview,
+  listNotifications,
+  markNotificationRead,
+  type NotificationOverview,
+  type NotificationRecord,
+  type NotificationPriority,
+  type NotificationType,
+} from "@/services/notifications-api";
 import { getCurrentProfile, updateCurrentProfile, type BackendUserProfile } from "@/services/profile-api";
 import { useRouter } from "next/navigation";
 
@@ -36,11 +45,56 @@ const accountingModuleIds = ACCOUNTING_MODULES.map((module) => module.id);
 const isAccountingModule = (tab: string): tab is AccountingModuleId =>
   accountingModuleIds.includes(tab as AccountingModuleId);
 
-const notifications = [
-  { id: "NOT-01", title: "Critical support ticket", detail: "Finance invoice approval needs action", tab: "support", tone: "bg-rose-500" },
-  { id: "NOT-02", title: "Follow-up due today", detail: "12 client callbacks are scheduled", tab: "followups", tone: "bg-amber-500" },
-  { id: "NOT-03", title: "Payroll review", detail: "June payroll draft is ready", tab: "payroll", tone: "bg-blue-500" },
-];
+type DashboardNotification = {
+  id: string;
+  title: string;
+  detail: string;
+  tab: string;
+  tone: string;
+  isRead: boolean;
+  createdAt: string;
+};
+
+const notificationTabMap: Record<string, string> = {
+  "Lead Desk": "leads",
+  "Lead Assignment": "lead-assign",
+  "Calling Desk": "telecaller",
+  "Follow-ups": "followups",
+  "Lead Outcomes": "lead-outcomes",
+  "Project Clients": "clients",
+  "Legal Agreements": "agreements",
+  "People Operations": "employees",
+  "HRMS": "employees",
+  "Finance Control": "accounting",
+  "Delivery Projects": "projects",
+  "Growth Marketing": "marketing",
+  "Admin Control": "administration",
+  "Support Desk": "support",
+  "System": "overview",
+};
+
+function notificationTone(priority: NotificationPriority, type: NotificationType) {
+  if (priority === "Critical" || type === "Error") return "bg-rose-500";
+  if (type === "Warning" || type === "Reminder") return "bg-amber-500";
+  if (type === "Success" || type === "Assignment") return "bg-emerald-500";
+  if (type === "Approval" || type === "Project" || type === "Finance") return "bg-blue-500";
+  if (type === "Security") return "bg-violet-500";
+  if (type === "Support") return "bg-cyan-500";
+  return "bg-slate-500";
+}
+
+function mapDashboardNotification(record: NotificationRecord): DashboardNotification {
+  const moduleKey = record.target_module || record.notification_type;
+  return {
+    id: record.id,
+    title: record.title,
+    detail: record.message,
+    tab: notificationTabMap[moduleKey] || "overview",
+    tone: notificationTone(record.priority, record.notification_type),
+    isRead: record.is_read,
+    createdAt: record.created_at_label || record.created_at,
+  };
+}
 
 const defaultUserProfile = {
   photoDataUrl: "",
@@ -583,8 +637,28 @@ export default function Dashboard() {
   const [showProfile, setShowProfile] = useState(false);
   const [showProfileDrawer, setShowProfileDrawer] = useState(false);
   const [userProfile, setUserProfile] = useState<UserProfile>(defaultUserProfile);
-  const [isAuthChecking, setIsAuthChecking] = useState(true);
+  const [dashboardNotifications, setDashboardNotifications] = useState<DashboardNotification[]>([]);
+  const [notificationSummary, setNotificationSummary] = useState<NotificationOverview | null>(null);
+  const [notificationsLoading, setNotificationsLoading] = useState(false);
+  const [isAuthChecking, setIsAuthChecking] = useState(false);
   const [isSidebarVisible, setIsSidebarVisible] = useState(true);
+
+  async function loadDashboardNotifications() {
+    try {
+      setNotificationsLoading(true);
+      const [overview, notifications] = await Promise.all([
+        listNotificationOverview(),
+        listNotifications({ status: "unread" }),
+      ]);
+      setNotificationSummary(overview);
+      setDashboardNotifications(notifications.slice(0, 5).map(mapDashboardNotification));
+    } catch {
+      setNotificationSummary(null);
+      setDashboardNotifications([]);
+    } finally {
+      setNotificationsLoading(false);
+    }
+  }
 
   useEffect(() => {
     let isMounted = true;
@@ -600,6 +674,7 @@ export default function Dashboard() {
         if (!isMounted) return;
         setUserProfile(userToProfile(user, profile));
         setIsAuthChecking(false);
+        void loadDashboardNotifications();
       } catch {
         clearAuthSession();
         router.replace("/auth/signin");
@@ -721,6 +796,9 @@ export default function Dashboard() {
               <div className="relative">
                 <button
                   onClick={() => {
+                    if (!showNotif) {
+                      void loadDashboardNotifications();
+                    }
                     setShowNotif((current) => !current);
                     setShowProfile(false);
                   }}
@@ -729,32 +807,52 @@ export default function Dashboard() {
                   aria-label="Notifications"
                 >
                   <Bell size={22} />
-                  <span className="absolute right-2 top-2 h-2.5 w-2.5 rounded-full bg-rose-500 ring-2 ring-white" />
+                  {(notificationSummary?.unread_notifications ?? dashboardNotifications.length) > 0 ? (
+                    <span className="absolute right-2 top-2 h-2.5 w-2.5 rounded-full bg-rose-500 ring-2 ring-white" />
+                  ) : null}
                 </button>
                 {showNotif ? (
                   <div className="absolute right-0 top-14 w-[22rem] max-w-[calc(100vw-2rem)] rounded-2xl border border-slate-100 bg-white p-4 shadow-2xl">
                     <div className="mb-3 flex items-center justify-between">
                       <div>
                         <p className="text-sm font-black text-primary">Notifications</p>
-                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Live frontend queue</p>
+                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Live backend queue</p>
                       </div>
-                      <span className="rounded-full bg-slate-50 px-3 py-1 text-[10px] font-black text-slate-500">{notifications.length} New</span>
+                      <span className="rounded-full bg-slate-50 px-3 py-1 text-[10px] font-black text-slate-500">
+                        {notificationsLoading ? "..." : `${notificationSummary?.unread_notifications ?? dashboardNotifications.length} New`}
+                      </span>
                     </div>
                     <div className="space-y-2">
-                      {notifications.map((item) => (
+                      {notificationsLoading ? (
+                        <div className="rounded-xl border border-dashed border-slate-200 p-4 text-center text-xs font-bold text-slate-400">
+                          Loading notifications...
+                        </div>
+                      ) : null}
+                      {!notificationsLoading && dashboardNotifications.map((item) => (
                         <button
                           key={item.id}
                           type="button"
-                          onClick={() => openTab(item.tab)}
+                          onClick={() => {
+                            void markNotificationRead(item.id).finally(() => {
+                              void loadDashboardNotifications();
+                              openTab(item.tab);
+                            });
+                          }}
                           className="flex w-full items-start gap-3 rounded-xl p-3 text-left hover:bg-slate-50"
                         >
                           <span className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${item.tone}`} />
                           <span className="min-w-0">
                             <span className="block text-sm font-black text-primary">{item.title}</span>
                             <span className="mt-1 block text-xs font-semibold leading-5 text-slate-500">{item.detail}</span>
+                            <span className="mt-1 block text-[10px] font-black uppercase tracking-widest text-slate-400">{item.createdAt}</span>
                           </span>
                         </button>
                       ))}
+                      {!notificationsLoading && dashboardNotifications.length === 0 ? (
+                        <div className="rounded-xl border border-dashed border-slate-200 p-4 text-center text-xs font-bold text-slate-400">
+                          No unread notifications.
+                        </div>
+                      ) : null}
                     </div>
                     <button
                       type="button"

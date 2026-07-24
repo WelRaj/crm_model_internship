@@ -26,6 +26,7 @@ import {
   type SupportTicketRecord,
   type SupportTicketStatus,
 } from "@/services/support-api";
+import { createNotification } from "@/services/notifications-api";
 
 type SupportTicket = {
   id: string;
@@ -215,7 +216,17 @@ export default function SupportHub() {
 
     try {
       setError("");
-      await createSupportTicket(form);
+      const createdTicket = await createSupportTicket(form);
+      void createNotification({
+        title: `Support ticket ${createdTicket.ticket_number} created`,
+        message: `${createdTicket.module} ticket created for ${createdTicket.requester}.`,
+        notification_type: "Support",
+        priority: createdTicket.priority === "Critical" ? "Critical" : "Medium",
+        target_module: createdTicket.module,
+        entity_type: "SupportTicket",
+        entity_id: createdTicket.id,
+        is_broadcast: true,
+      });
       setForm(blankTicket);
       setShowForm(false);
       await loadOverview();
@@ -228,7 +239,17 @@ export default function SupportHub() {
   const updateStatus = async (ticketId: string, status: SupportTicketStatus) => {
     try {
       setError("");
-      await updateSupportTicket(ticketId, { status });
+      const updatedTicket = await updateSupportTicket(ticketId, { status });
+      void createNotification({
+        title: `Support ticket ${updatedTicket.ticket_number} moved to ${updatedTicket.status}`,
+        message: `${updatedTicket.module} ticket for ${updatedTicket.requester} is now ${updatedTicket.status}.`,
+        notification_type: "Support",
+        priority: updatedTicket.priority,
+        target_module: updatedTicket.module,
+        entity_type: "SupportTicket",
+        entity_id: updatedTicket.id,
+        is_broadcast: true,
+      });
       await loadOverview();
       await loadTickets();
     } catch (updateError) {
