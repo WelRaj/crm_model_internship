@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Archive,
   BadgeIndianRupee,
@@ -28,15 +28,27 @@ import {
   X,
 } from "lucide-react";
 
+import {
+  createMarketingCampaign,
+  createMarketingSource,
+  listMarketingCampaigns,
+  listMarketingSources,
+  updateMarketingCampaign,
+  updateMarketingSource,
+  type CampaignChannel,
+  type CampaignStatus,
+  type LeadSourcePayload,
+  type SourceQuality,
+  type SourceStatus,
+  type SourceType,
+  type MarketingCampaignPayload,
+} from "@/services/marketing-api";
+
 type MarketingView = "campaigns" | "roi" | "sources";
 type Tone = "blue" | "green" | "amber" | "red" | "purple" | "slate" | "cyan";
-type CampaignStatus = "Draft" | "Active" | "Review" | "Scale" | "Archived";
-type CampaignChannel = "Google Search" | "LinkedIn Ads" | "Meta Ads" | "WhatsApp" | "Email" | "Webinar" | "Marketplace";
-type SourceType = "Organic" | "Paid" | "Referral" | "Outbound" | "Event" | "Partner" | "Offline";
-type SourceStatus = "Active" | "Review" | "Paused" | "Archived";
-type SourceQuality = "High" | "High Intent" | "Enterprise" | "Warm" | "Mixed" | "Nurture" | "Low";
 
 type CampaignRecord = {
+  backendId: string;
   id: string;
   name: string;
   channel: CampaignChannel;
@@ -57,9 +69,12 @@ type CampaignRecord = {
   owner: string;
   status: CampaignStatus;
   nextAction: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
 };
 
-type CampaignFormState = Omit<CampaignRecord, "id">;
+type CampaignFormState = Omit<CampaignRecord, "backendId" | "id" | "isActive" | "createdAt" | "updatedAt">;
 type RoiChannelRow = {
   channel: CampaignChannel;
   spendAmount: number;
@@ -73,6 +88,7 @@ type RoiChannelRow = {
 };
 
 type LeadSourceRecord = {
+  backendId: string;
   id: string;
   source: string;
   type: SourceType;
@@ -88,9 +104,12 @@ type LeadSourceRecord = {
   last30Change: number;
   status: SourceStatus;
   nextAction: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
 };
 
-type LeadSourceFormState = Omit<LeadSourceRecord, "id">;
+type LeadSourceFormState = Omit<LeadSourceRecord, "backendId" | "id" | "isActive" | "createdAt" | "updatedAt">;
 
 const toneClasses: Record<Tone, string> = {
   blue: "border-blue-200 bg-blue-50 text-blue-700",
@@ -107,97 +126,6 @@ const campaignStatuses: CampaignStatus[] = ["Draft", "Active", "Review", "Scale"
 const sourceTypes: SourceType[] = ["Organic", "Paid", "Referral", "Outbound", "Event", "Partner", "Offline"];
 const sourceStatuses: SourceStatus[] = ["Active", "Review", "Paused", "Archived"];
 const sourceQualities: SourceQuality[] = ["High", "High Intent", "Enterprise", "Warm", "Mixed", "Nurture", "Low"];
-
-const initialCampaigns: CampaignRecord[] = [
-  {
-    id: "CMP-2026-041",
-    name: "Algo Trading Automation Launch",
-    channel: "LinkedIn Ads",
-    objective: "Strategy automation demo bookings",
-    audienceSegment: "Traders, founders, and fintech operators",
-    budgetAmount: 240000,
-    spentAmount: 162000,
-    leads: 184,
-    mql: 71,
-    pipelineAmount: 1860000,
-    startDate: "2026-06-01",
-    endDate: "2026-06-30",
-    utmSource: "linkedin",
-    utmMedium: "paid-social",
-    utmCampaign: "algo-trading-automation-launch",
-    landingPage: "/landing/algo-trading-automation",
-    leadForm: "Demo booking form",
-    owner: "B2B Growth",
-    status: "Active",
-    nextAction: "Increase founder audience if CPL remains below target",
-  },
-  {
-    id: "CMP-2026-042",
-    name: "WhatsApp Lead Nurture",
-    channel: "WhatsApp",
-    objective: "Revive warm leads",
-    audienceSegment: "Old enquiries and proposal drop-offs",
-    budgetAmount: 90000,
-    spentAmount: 54000,
-    leads: 128,
-    mql: 43,
-    pipelineAmount: 720000,
-    startDate: "2026-06-05",
-    endDate: "2026-07-05",
-    utmSource: "whatsapp",
-    utmMedium: "nurture",
-    utmCampaign: "whatsapp-lead-nurture",
-    landingPage: "/trading-software/demo",
-    leadForm: "WhatsApp quick reply",
-    owner: "Marketing Ops",
-    status: "Active",
-    nextAction: "Split sequence by lead score",
-  },
-  {
-    id: "CMP-2026-043",
-    name: "Trading Software Automation Webinar",
-    channel: "Webinar",
-    objective: "Webinar registrations",
-    audienceSegment: "Active traders and fintech founders",
-    budgetAmount: 65000,
-    spentAmount: 61000,
-    leads: 312,
-    mql: 56,
-    pipelineAmount: 540000,
-    startDate: "2026-05-20",
-    endDate: "2026-06-20",
-    utmSource: "webinar",
-    utmMedium: "event",
-    utmCampaign: "trading-software-automation-webinar",
-    landingPage: "/webinars/trading-software-automation",
-    leadForm: "Webinar registration",
-    owner: "Content Marketing",
-    status: "Review",
-    nextAction: "Qualify attendees before next webinar spend",
-  },
-  {
-    id: "CMP-2026-044",
-    name: "Founder Search Intent",
-    channel: "Google Search",
-    objective: "High-intent enquiries",
-    audienceSegment: "Founders searching trading software vendors",
-    budgetAmount: 180000,
-    spentAmount: 178000,
-    leads: 96,
-    mql: 52,
-    pipelineAmount: 1420000,
-    startDate: "2026-06-01",
-    endDate: "2026-06-28",
-    utmSource: "google",
-    utmMedium: "cpc",
-    utmCampaign: "founder-search-intent",
-    landingPage: "/landing/trading-software-for-founders",
-    leadForm: "Consultation form",
-    owner: "Performance Marketing",
-    status: "Scale",
-    nextAction: "Increase exact match budget",
-  },
-];
 
 const blankCampaignForm: CampaignFormState = {
   name: "",
@@ -220,15 +148,6 @@ const blankCampaignForm: CampaignFormState = {
   status: "Draft",
   nextAction: "",
 };
-
-const initialSources: LeadSourceRecord[] = [
-  { id: "SRC-001", source: "Website Organic", type: "Organic", normalizedKey: "website_organic", defaultUtmSource: "website", defaultUtmMedium: "organic", leads: 214, mql: 86, sql: 39, won: 12, quality: "High", owner: "SEO Team", last30Change: 22, status: "Active", nextAction: "Add service pages" },
-  { id: "SRC-002", source: "Google Ads", type: "Paid", normalizedKey: "google_ads", defaultUtmSource: "google", defaultUtmMedium: "cpc", leads: 226, mql: 98, sql: 51, won: 15, quality: "High Intent", owner: "Performance", last30Change: 14, status: "Active", nextAction: "Scale exact-match keywords" },
-  { id: "SRC-003", source: "LinkedIn", type: "Paid", normalizedKey: "linkedin_ads", defaultUtmSource: "linkedin", defaultUtmMedium: "paid-social", leads: 148, mql: 61, sql: 29, won: 8, quality: "Enterprise", owner: "B2B Growth", last30Change: 31, status: "Active", nextAction: "Increase founder audience" },
-  { id: "SRC-004", source: "WhatsApp Referral", type: "Referral", normalizedKey: "whatsapp_referral", defaultUtmSource: "whatsapp", defaultUtmMedium: "referral", leads: 86, mql: 42, sql: 24, won: 9, quality: "Warm", owner: "Client Growth", last30Change: 9, status: "Active", nextAction: "Launch referral incentive" },
-  { id: "SRC-005", source: "Meta Ads", type: "Paid", normalizedKey: "meta_ads", defaultUtmSource: "meta", defaultUtmMedium: "paid-social", leads: 205, mql: 54, sql: 16, won: 3, quality: "Mixed", owner: "Performance", last30Change: -6, status: "Review", nextAction: "Tighten retargeting" },
-  { id: "SRC-006", source: "Events / Webinar", type: "Event", normalizedKey: "events_webinar", defaultUtmSource: "webinar", defaultUtmMedium: "event", leads: 312, mql: 76, sql: 31, won: 7, quality: "Nurture", owner: "Marketing", last30Change: 48, status: "Active", nextAction: "Segment by intent score" },
-];
 
 const blankSourceForm: LeadSourceFormState = {
   source: "",
@@ -307,10 +226,6 @@ function campaignStatusTone(status: CampaignStatus): Tone {
   return "purple";
 }
 
-function makeCampaignId(count: number) {
-  return `CMP-2026-${String(45 + count).padStart(3, "0")}`;
-}
-
 function csvEscape(value: string | number) {
   return `"${String(value).replace(/"/g, '""')}"`;
 }
@@ -333,10 +248,6 @@ function sourceStatusTone(status: SourceStatus): Tone {
   if (status === "Review") return "amber";
   if (status === "Paused") return "blue";
   return "slate";
-}
-
-function makeSourceId(count: number) {
-  return `SRC-${String(count + 1).padStart(3, "0")}`;
 }
 
 function normalizeSourceKey(value: string) {
@@ -432,11 +343,7 @@ function ProgressBar({ value, tone = "green" }: { value: number; tone?: "green" 
   );
 }
 
-function CampaignsView({
-  campaigns,
-}: {
-  campaigns: CampaignRecord[];
-}) {
+function CampaignsView({ campaigns }: { campaigns: CampaignRecord[] }) {
   const [campaignItems, setCampaignItems] = useState<CampaignRecord[]>(campaigns);
   const [form, setForm] = useState<CampaignFormState>(blankCampaignForm);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -529,7 +436,7 @@ function CampaignsView({
   };
 
   const handleEdit = (campaign: CampaignRecord) => {
-    const formState: CampaignFormState = {
+    setForm({
       name: campaign.name,
       channel: campaign.channel,
       objective: campaign.objective,
@@ -549,24 +456,26 @@ function CampaignsView({
       owner: campaign.owner,
       status: campaign.status,
       nextAction: campaign.nextAction,
-    };
-    setForm(formState);
-    setEditingId(campaign.id);
+    });
+    setEditingId(campaign.backendId);
     setValidationError("");
     setShowForm(true);
   };
 
-  const handleArchiveToggle = (campaignId: string) => {
-    setCampaignItems((current) =>
-      current.map((campaign) =>
-        campaign.id === campaignId
-          ? { ...campaign, status: campaign.status === "Archived" ? "Review" : "Archived", nextAction: campaign.status === "Archived" ? "Review restored campaign before scaling" : "Archived from active campaign view" }
-          : campaign
-      )
-    );
+  const handleArchiveToggle = async (campaign: CampaignRecord) => {
+    try {
+      const nextStatus: CampaignStatus = campaign.status === "Archived" ? "Review" : "Archived";
+      const saved = await updateMarketingCampaign(campaign.backendId, {
+        status: nextStatus,
+        next_action: nextStatus === "Archived" ? "Archived from active campaign view" : "Review restored campaign before scaling",
+      });
+      setCampaignItems((current) => current.map((item) => (item.backendId === saved.backendId ? saved : item)));
+    } catch (error) {
+      setValidationError(error instanceof Error ? error.message : "Something went wrong");
+    }
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     const requiredFields = [form.name, form.objective, form.audienceSegment, form.owner, form.utmSource, form.utmMedium, form.utmCampaign, form.landingPage, form.leadForm, form.nextAction];
     if (requiredFields.some((field) => !field.trim())) {
       setValidationError("Campaign name, objective, audience, owner, UTM, landing page, lead form and next action are required.");
@@ -589,15 +498,38 @@ function CampaignsView({
       return;
     }
 
-    if (editingId) {
-      setCampaignItems((current) => current.map((campaign) => campaign.id === editingId ? { ...form, id: editingId } : campaign));
-    } else {
-      const newCampaign: CampaignRecord = { ...form, id: makeCampaignId(campaignItems.length) };
-      setCampaignItems((current) => [newCampaign, ...current]);
-    }
+    const payload: MarketingCampaignPayload = {
+      name: form.name,
+      channel: form.channel,
+      objective: form.objective,
+      audience_segment: form.audienceSegment,
+      budget_amount: String(form.budgetAmount),
+      spent_amount: String(form.spentAmount),
+      leads: form.leads,
+      mql: form.mql,
+      pipeline_amount: String(form.pipelineAmount),
+      start_date: form.startDate,
+      end_date: form.endDate,
+      utm_source: form.utmSource,
+      utm_medium: form.utmMedium,
+      utm_campaign: form.utmCampaign,
+      landing_page: form.landingPage,
+      lead_form: form.leadForm,
+      owner: form.owner,
+      status: form.status,
+      next_action: form.nextAction,
+    };
 
-    resetForm();
-    setShowForm(false);
+    try {
+      const saved = editingId ? await updateMarketingCampaign(editingId, payload) : await createMarketingCampaign(payload);
+      setCampaignItems((current) =>
+        editingId ? current.map((item) => (item.backendId === saved.backendId ? saved : item)) : [saved, ...current]
+      );
+      resetForm();
+      setShowForm(false);
+    } catch (error) {
+      setValidationError(error instanceof Error ? error.message : "Something went wrong");
+    }
   };
 
   return (
@@ -718,7 +650,7 @@ function CampaignsView({
                       <button type="button" onClick={() => handleEdit(campaign)} className="inline-flex h-9 items-center gap-2 rounded-xl border border-border bg-white px-3 text-[10px] font-black uppercase tracking-widest text-primary hover:bg-slate-50">
                         <Edit3 size={14} /> Edit
                       </button>
-                      <button type="button" onClick={() => handleArchiveToggle(campaign.id)} className="inline-flex h-9 items-center gap-2 rounded-xl border border-border bg-white px-3 text-[10px] font-black uppercase tracking-widest text-slate-600 hover:bg-slate-50">
+                      <button type="button" onClick={() => void handleArchiveToggle(campaign)} className="inline-flex h-9 items-center gap-2 rounded-xl border border-border bg-white px-3 text-[10px] font-black uppercase tracking-widest text-slate-600 hover:bg-slate-50">
                         <Archive size={14} /> {campaign.status === "Archived" ? "Restore" : "Archive"}
                       </button>
                     </div>
@@ -1013,7 +945,7 @@ function SourcesView({ sources }: { sources: LeadSourceRecord[] }) {
   };
 
   const handleEdit = (source: LeadSourceRecord) => {
-    const formState: LeadSourceFormState = {
+    setForm({
       source: source.source,
       type: source.type,
       normalizedKey: source.normalizedKey,
@@ -1028,24 +960,26 @@ function SourcesView({ sources }: { sources: LeadSourceRecord[] }) {
       last30Change: source.last30Change,
       status: source.status,
       nextAction: source.nextAction,
-    };
-    setForm(formState);
-    setEditingId(source.id);
+    });
+    setEditingId(source.backendId);
     setValidationError("");
     setShowForm(true);
   };
 
-  const handleArchiveToggle = (sourceId: string) => {
-    setSourceItems((current) =>
-      current.map((source) =>
-        source.id === sourceId
-          ? { ...source, status: source.status === "Archived" ? "Review" : "Archived", nextAction: source.status === "Archived" ? "Review restored source mapping" : "Archived from active source attribution" }
-          : source
-      )
-    );
+  const handleArchiveToggle = async (source: LeadSourceRecord) => {
+    try {
+      const nextStatus: SourceStatus = source.status === "Archived" ? "Review" : "Archived";
+      const saved = await updateMarketingSource(source.backendId, {
+        status: nextStatus,
+        next_action: nextStatus === "Archived" ? "Archived from active source attribution" : "Review restored source mapping",
+      });
+      setSourceItems((current) => current.map((item) => (item.backendId === saved.backendId ? saved : item)));
+    } catch (error) {
+      setValidationError(error instanceof Error ? error.message : "Something went wrong");
+    }
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     const normalizedKey = form.normalizedKey.trim() || normalizeSourceKey(form.source);
     const requiredFields = [form.source, normalizedKey, form.defaultUtmSource, form.defaultUtmMedium, form.owner, form.nextAction];
     if (requiredFields.some((field) => !field.trim())) {
@@ -1056,20 +990,34 @@ function SourcesView({ sources }: { sources: LeadSourceRecord[] }) {
       setValidationError("Lead counts must follow Leads >= MQL >= SQL >= Won.");
       return;
     }
-    const duplicate = sourceItems.some((source) => source.normalizedKey === normalizedKey && source.id !== editingId);
-    if (duplicate) {
-      setValidationError("Normalized source key must be unique.");
-      return;
-    }
 
-    const payload = { ...form, normalizedKey };
-    if (editingId) {
-      setSourceItems((current) => current.map((source) => source.id === editingId ? { ...payload, id: editingId } : source));
-    } else {
-      setSourceItems((current) => [{ ...payload, id: makeSourceId(current.length) }, ...current]);
+    const payload: LeadSourcePayload = {
+      source: form.source,
+      source_type: form.type,
+      normalized_key: normalizedKey,
+      default_utm_source: form.defaultUtmSource,
+      default_utm_medium: form.defaultUtmMedium,
+      owner: form.owner,
+      quality: form.quality,
+      leads: form.leads,
+      mql: form.mql,
+      sql: form.sql,
+      won: form.won,
+      last_30_change: form.last30Change,
+      status: form.status,
+      next_action: form.nextAction,
+    };
+
+    try {
+      const saved = editingId ? await updateMarketingSource(editingId, payload) : await createMarketingSource(payload);
+      setSourceItems((current) =>
+        editingId ? current.map((item) => (item.backendId === saved.backendId ? saved : item)) : [saved, ...current]
+      );
+      resetForm();
+      setShowForm(false);
+    } catch (error) {
+      setValidationError(error instanceof Error ? error.message : "Something went wrong");
     }
-    resetForm();
-    setShowForm(false);
   };
 
   const handleExport = () => {
@@ -1237,7 +1185,7 @@ function SourcesView({ sources }: { sources: LeadSourceRecord[] }) {
                 <button type="button" onClick={() => handleEdit(source)} className="inline-flex h-9 items-center gap-2 rounded-xl border border-border bg-white px-3 text-[10px] font-black uppercase tracking-widest text-primary hover:bg-slate-50">
                   <Edit3 size={14} /> Edit
                 </button>
-                <button type="button" onClick={() => handleArchiveToggle(source.id)} className="inline-flex h-9 items-center gap-2 rounded-xl border border-border bg-white px-3 text-[10px] font-black uppercase tracking-widest text-slate-600 hover:bg-slate-50">
+                <button type="button" onClick={() => void handleArchiveToggle(source)} className="inline-flex h-9 items-center gap-2 rounded-xl border border-border bg-white px-3 text-[10px] font-black uppercase tracking-widest text-slate-600 hover:bg-slate-50">
                   <Archive size={14} /> {source.status === "Archived" ? "Restore" : "Archive"}
                 </button>
               </div>
@@ -1277,6 +1225,35 @@ function SourcesView({ sources }: { sources: LeadSourceRecord[] }) {
 }
 
 export default function MarketingHub({ activeView }: { activeView: MarketingView }) {
+  const [campaigns, setCampaigns] = useState<CampaignRecord[]>([]);
+  const [sources, setSources] = useState<LeadSourceRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+
+  /* eslint-disable react-hooks/set-state-in-effect */
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setLoadError("");
+    Promise.all([listMarketingCampaigns(), listMarketingSources()])
+      .then(([campaignRows, sourceRows]) => {
+        if (cancelled) return;
+        setCampaigns(campaignRows);
+        setSources(sourceRows);
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        setLoadError(error instanceof Error ? error.message : "Something went wrong");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  /* eslint-enable react-hooks/set-state-in-effect */
+
   const title = activeView === "campaigns" ? "Growth Campaigns" : activeView === "roi" ? "Marketing ROI" : "Acquisition Sources";
   const description =
     activeView === "campaigns"
@@ -1302,9 +1279,11 @@ export default function MarketingHub({ activeView }: { activeView: MarketingView
         </div>
       </div>
 
-      {activeView === "campaigns" && <CampaignsView campaigns={initialCampaigns} />}
-      {activeView === "roi" && <RoiView campaigns={initialCampaigns} />}
-      {activeView === "sources" && <SourcesView sources={initialSources} />}
+      {loadError ? <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">{loadError}</div> : null}
+      {loading ? <div className="rounded-2xl border border-border bg-white px-4 py-8 text-center text-sm font-bold text-slate-500">Loading marketing data...</div> : null}
+      {!loading && activeView === "campaigns" && <CampaignsView campaigns={campaigns} />}
+      {!loading && activeView === "roi" && <RoiView campaigns={campaigns} />}
+      {!loading && activeView === "sources" && <SourcesView sources={sources} />}
     </div>
   );
 }
