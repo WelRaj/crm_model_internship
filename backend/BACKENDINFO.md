@@ -1,6 +1,6 @@
 # Backend Information
 
-Last updated: 2026-07-13
+Last updated: 2026-07-24
 
 ## 1. Purpose
 
@@ -67,6 +67,7 @@ Current status:
 - MySQL database `crmproduct` is created.
 - Foundation migrations are applied to MySQL.
 - Database currently has 36 tables after CRM and Projects foundation migrations.
+- Support Desk backend is now mounted at `/api/v1/support/` with ticket overview, list/create/update, and comment endpoints backed by `SupportTicket`, comment, status-history, and assignment tables, plus the centralized `support-api.ts` wrapper.
 - Login, refresh, logout, current user, profile, and login history API views are implemented.
 - Health and database health endpoints return 200 locally.
 - First local admin/user is created.
@@ -953,3 +954,4 @@ Session continuity rule:
 | 2026-07-23 | Standardized Finance Control page naming across frontend menus, dashboard cards, page headers, backend access-control module names, and BACKENDINFO records. Canonical names now match for Finance Overview, Client Master, Vendor Master, Quotations, Invoices, Payments, Reminders, Credit Notes, Sales/Purchases/Expenses, Budget Control, Payroll Register, GST Compliance, TDS Compliance, Finance Reports, Finance Approvals, Audit Logs, Access Control, and Bank Details. Verified no old descriptive aliases remain in finance UI/docs scan; frontend TypeScript and lint passed. |
 | 2026-07-23 | Completed Finance Control manual browser verification with real backend data. Seeded traceable local verification records for missing finance areas (bank account, budget, payroll register, GST return, TDS record, approval policy/request, and finance access policy), reset local admin login for verification, and checked all Finance Control pages in Chrome against the running frontend/backend. Verified page visibility, canonical names, search/filter controls, export/download controls, safe detail/edit/open buttons, filled form fields, and currently visible state-changing buttons for Finance Overview, Client Master, Vendor Master, Quotations, Invoices, Payments, Reminders, Credit Notes, Sales/Purchases/Expenses, Budget Control, Payroll Register, GST Compliance, TDS Compliance, Finance Reports, Finance Approvals, Audit Logs, Access Control, and Bank Details. Fixed Bank Details page header mismatch from `Bank Account Management` to `Bank Details`. Frontend TypeScript, frontend lint, and Django check passed. |
 | 2026-07-24 | Implemented Growth Marketing backend foundation and live frontend wiring: added `apps.marketing` with UUID marketing campaign and lead-source models, sequence-based readable codes (`CMP-2026-###` and `SRC-###`), audit logging, search/filter/list/create/update/archive APIs, ROI and overview endpoints, migration `marketing.0001_initial`, tests, and registered `/api/v1/marketing/`. Connected `MarketingHub.tsx` to centralized `marketing-api.ts` so campaigns and sources now load, create, edit, archive, and export from backend data instead of hardcoded arrays. Seeded 4 marketing campaigns and 6 lead sources for local verification; `manage.py check`, marketing tests, frontend TypeScript, and frontend lint passed. |
+| 2026-07-24 | Implemented Support Desk backend foundation and live frontend wiring: added `apps.support` with `SupportTicket`, comments, status history, and assignment tables, mounted `/api/v1/support/`, created overview/list/create/update/comment APIs, added sequence-based ticket numbers (`SUP-####`), audit logging, and centralized `support-api.ts`. Connected `SupportHub.tsx` to backend search/filter/load/update flows instead of local-only data, fixed the support URL mount, and verified backend smoke plus frontend TypeScript and lint passed. |

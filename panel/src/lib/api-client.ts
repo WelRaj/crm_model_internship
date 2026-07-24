@@ -182,6 +182,8 @@ export const api = {
     apiClient<T>(endpoint, { ...config, method: "POST", body }),
   put: <T>(endpoint: string, body: unknown, config?: ApiRequestConfig) =>
     apiClient<T>(endpoint, { ...config, method: "PUT", body }),
+  patch: <T>(endpoint: string, body: unknown, config?: ApiRequestConfig) =>
+    apiClient<T>(endpoint, { ...config, method: "PATCH", body }),
   delete: <T>(endpoint: string, config?: ApiRequestConfig) =>
     apiClient<T>(endpoint, { ...config, method: "DELETE" }),
 };

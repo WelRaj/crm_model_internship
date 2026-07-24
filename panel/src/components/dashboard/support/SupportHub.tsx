@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -14,145 +14,226 @@ import {
   ShieldCheck,
 } from "lucide-react";
 
-type TicketPriority = "Low" | "Medium" | "High" | "Critical";
-type TicketStatus = "Open" | "In Progress" | "Waiting" | "Resolved";
+import {
+  createSupportTicket,
+  listSupportOverview,
+  listSupportTickets,
+  updateSupportTicket,
+  type SupportOverview,
+  type SupportTicketChannel,
+  type SupportTicketModule,
+  type SupportTicketPriority,
+  type SupportTicketRecord,
+  type SupportTicketStatus,
+} from "@/services/support-api";
+
 type SupportTicket = {
   id: string;
+  ticketNumber: string;
   subject: string;
-  module: string;
+  module: SupportTicketModule;
   requester: string;
-  priority: TicketPriority;
-  status: TicketStatus;
-  channel: string;
+  priority: SupportTicketPriority;
+  status: SupportTicketStatus;
+  channel: SupportTicketChannel;
   owner: string;
   createdAt: string;
   responseDue: string;
   description: string;
+  resolutionSummary: string;
 };
 
-const initialTickets: SupportTicket[] = [
-  {
-    id: "SUP-2401",
-    subject: "Lead assignment rule review",
-    module: "Client Operations",
-    requester: "Lead Desk",
-    priority: "High",
-    status: "In Progress",
-    channel: "Internal",
-    owner: "Admin Desk",
-    createdAt: "2026-07-01 10:20",
-    responseDue: "Today 05:00 PM",
-    description: "Need to verify calling owner routing and follow-up ownership for new project enquiries.",
-  },
-  {
-    id: "SUP-2402",
-    subject: "Payroll export format",
-    module: "People Operations",
-    requester: "Finance Control",
-    priority: "Medium",
-    status: "Waiting",
-    channel: "Email",
-    owner: "People Ops",
-    createdAt: "2026-07-02 12:15",
-    responseDue: "Tomorrow 11:00 AM",
-    description: "Confirm column order before sending payroll CSV to Finance Control.",
-  },
-  {
-    id: "SUP-2403",
-    subject: "Invoice approval clarification",
-    module: "Finance Control",
-    requester: "Accounts Executive",
-    priority: "Critical",
-    status: "Open",
-    channel: "Phone",
-    owner: "Finance Admin",
-    createdAt: "2026-07-03 09:40",
-    responseDue: "Today 12:00 PM",
-    description: "Approval owner needs confirmation before invoice can move to sent state.",
-  },
+type SupportTicketForm = {
+  subject: string;
+  module: SupportTicketModule;
+  requester: string;
+  priority: SupportTicketPriority;
+  channel: SupportTicketChannel;
+  description: string;
+};
+
+const ticketModules: SupportTicketModule[] = [
+  "Client Operations",
+  "Lead Desk",
+  "Delivery Projects",
+  "People Operations",
+  "Finance Control",
+  "Growth Marketing",
+  "Admin Control",
+  "Support Desk",
 ];
 
-const blankTicket = {
+const blankTicket: SupportTicketForm = {
   subject: "",
   module: "Client Operations",
   requester: "",
-  priority: "Medium" as TicketPriority,
+  priority: "Medium",
   channel: "Internal",
   description: "",
 };
 
-function statusTone(status: TicketStatus) {
+function statusTone(status: SupportTicketStatus) {
   if (status === "Resolved") return "border-emerald-100 bg-emerald-50 text-emerald-700";
   if (status === "In Progress") return "border-blue-100 bg-blue-50 text-blue-700";
   if (status === "Waiting") return "border-amber-100 bg-amber-50 text-amber-700";
   return "border-rose-100 bg-rose-50 text-rose-700";
 }
 
-function priorityTone(priority: TicketPriority) {
+function priorityTone(priority: SupportTicketPriority) {
   if (priority === "Critical") return "bg-rose-500";
   if (priority === "High") return "bg-orange-500";
   if (priority === "Medium") return "bg-amber-500";
   return "bg-emerald-500";
 }
 
+function mapTicket(record: SupportTicketRecord): SupportTicket {
+  return {
+    id: record.id,
+    ticketNumber: record.ticket_number,
+    subject: record.subject,
+    module: record.module,
+    requester: record.requester,
+    priority: record.priority,
+    status: record.status,
+    channel: record.channel,
+    owner: record.owner_name,
+    createdAt: record.created_at_label || record.created_at,
+    responseDue: record.response_due_label || "",
+    description: record.description,
+    resolutionSummary: record.resolution_summary || "",
+  };
+}
+
 export default function SupportHub() {
-  const [tickets, setTickets] = useState<SupportTicket[]>(initialTickets);
+  const [tickets, setTickets] = useState<SupportTicket[]>([]);
+  const [overview, setOverview] = useState<SupportOverview | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [query, setQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"All" | TicketStatus>("All");
+  const [statusFilter, setStatusFilter] = useState<"All" | SupportTicketStatus>("All");
   const [form, setForm] = useState(blankTicket);
   const [error, setError] = useState("");
+  const [loadingTickets, setLoadingTickets] = useState(true);
+  const [loadingOverview, setLoadingOverview] = useState(true);
 
-  const filteredTickets = useMemo(() => {
-    const normalizedQuery = query.trim().toLowerCase();
-
-    return tickets.filter((ticket) => {
-      const matchesStatus = statusFilter === "All" || ticket.status === statusFilter;
-      const matchesSearch =
-        !normalizedQuery ||
-        [ticket.id, ticket.subject, ticket.module, ticket.requester, ticket.owner, ticket.description]
-          .join(" ")
-          .toLowerCase()
-          .includes(normalizedQuery);
-
-      return matchesStatus && matchesSearch;
-    });
-  }, [tickets, query, statusFilter]);
-
-  const metrics = {
-    open: tickets.filter((ticket) => ticket.status !== "Resolved").length,
-    critical: tickets.filter((ticket) => ticket.priority === "Critical").length,
-    resolved: tickets.filter((ticket) => ticket.status === "Resolved").length,
+  const loadOverview = async () => {
+    try {
+      setLoadingOverview(true);
+      const data = await listSupportOverview();
+      setOverview(data);
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : "Unable to load support overview.");
+      setOverview(null);
+    } finally {
+      setLoadingOverview(false);
+    }
   };
 
-  const saveTicket = () => {
+  const loadTickets = async (searchValue = query, statusValue = statusFilter) => {
+    try {
+      setLoadingTickets(true);
+      const data = await listSupportTickets({
+        search: searchValue.trim() || undefined,
+        status: statusValue === "All" ? undefined : statusValue,
+      });
+      setTickets(data.map(mapTicket));
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : "Unable to load support tickets.");
+    } finally {
+      setLoadingTickets(false);
+    }
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const run = async () => {
+      try {
+        if (!cancelled) setLoadingOverview(true);
+        const data = await listSupportOverview();
+        if (!cancelled) setOverview(data);
+      } catch (loadError) {
+        if (!cancelled) {
+          setError(loadError instanceof Error ? loadError.message : "Unable to load support overview.");
+          setOverview(null);
+        }
+      } finally {
+        if (!cancelled) setLoadingOverview(false);
+      }
+    };
+
+    void run();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const timeout = window.setTimeout(() => {
+      const run = async () => {
+        try {
+          if (!cancelled) setLoadingTickets(true);
+          const data = await listSupportTickets({
+            search: query.trim() || undefined,
+            status: statusFilter === "All" ? undefined : statusFilter,
+          });
+          if (!cancelled) setTickets(data.map(mapTicket));
+        } catch (loadError) {
+          if (!cancelled) setError(loadError instanceof Error ? loadError.message : "Unable to load support tickets.");
+        } finally {
+          if (!cancelled) setLoadingTickets(false);
+        }
+      };
+
+      void run();
+    }, 180);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeout);
+    };
+  }, [query, statusFilter]);
+
+  const metrics = useMemo(() => {
+    if (overview) {
+      return overview;
+    }
+
+    return {
+      open_tickets: tickets.filter((ticket) => ticket.status !== "Resolved").length,
+      critical_tickets: tickets.filter((ticket) => ticket.priority === "Critical").length,
+      resolved_tickets: tickets.filter((ticket) => ticket.status === "Resolved").length,
+      waiting_tickets: tickets.filter((ticket) => ticket.status === "Waiting").length,
+    };
+  }, [overview, tickets]);
+
+  const saveTicket = async () => {
     if (!form.subject.trim() || !form.requester.trim() || !form.description.trim()) {
       setError("Subject, requester and issue detail are required.");
       return;
     }
 
-    const newTicket: SupportTicket = {
-      id: `SUP-${Math.floor(3000 + Math.random() * 6000)}`,
-      subject: form.subject,
-      module: form.module,
-      requester: form.requester,
-      priority: form.priority,
-      status: "Open",
-      channel: form.channel,
-      owner: "Support Desk",
-      createdAt: new Date().toLocaleString("en-IN"),
-      responseDue: form.priority === "Critical" ? "Within 2 hours" : "Next business day",
-      description: form.description,
-    };
-
-    setTickets((current) => [newTicket, ...current]);
-    setForm(blankTicket);
-    setShowForm(false);
-    setError("");
+    try {
+      setError("");
+      await createSupportTicket(form);
+      setForm(blankTicket);
+      setShowForm(false);
+      await loadOverview();
+      await loadTickets();
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : "Unable to create support ticket.");
+    }
   };
 
-  const updateStatus = (ticketId: string, status: TicketStatus) => {
-    setTickets((current) => current.map((ticket) => (ticket.id === ticketId ? { ...ticket, status } : ticket)));
+  const updateStatus = async (ticketId: string, status: SupportTicketStatus) => {
+    try {
+      setError("");
+      await updateSupportTicket(ticketId, { status });
+      await loadOverview();
+      await loadTickets();
+    } catch (updateError) {
+      setError(updateError instanceof Error ? updateError.message : "Unable to update support ticket.");
+    }
   };
 
   return (
@@ -178,9 +259,9 @@ export default function SupportHub() {
       </div>
 
       <div className="grid gap-5 md:grid-cols-3">
-        <Metric label="Open Tickets" value={String(metrics.open)} icon={Clock} tone="bg-blue-50 text-blue-700" />
-        <Metric label="Critical" value={String(metrics.critical)} icon={AlertTriangle} tone="bg-rose-50 text-rose-700" />
-        <Metric label="Resolved" value={String(metrics.resolved)} icon={CheckCircle2} tone="bg-emerald-50 text-emerald-700" />
+        <Metric label="Open Tickets" value={loadingOverview ? "..." : String(metrics.open_tickets)} icon={Clock} tone="bg-blue-50 text-blue-700" />
+        <Metric label="Critical" value={loadingOverview ? "..." : String(metrics.critical_tickets)} icon={AlertTriangle} tone="bg-rose-50 text-rose-700" />
+        <Metric label="Resolved" value={loadingOverview ? "..." : String(metrics.resolved_tickets)} icon={CheckCircle2} tone="bg-emerald-50 text-emerald-700" />
       </div>
 
       <div className="grid gap-5 xl:grid-cols-[1.2fr_0.8fr]">
@@ -188,7 +269,7 @@ export default function SupportHub() {
           <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div>
               <h3 className="text-lg font-black text-primary">Ticket Queue</h3>
-              <p className="mt-1 text-xs font-semibold text-slate-500">Track frontend-support requests without backend dependency.</p>
+              <p className="mt-1 text-xs font-semibold text-slate-500">Backend-driven ticket queue with live search and status updates.</p>
             </div>
             <div className="flex flex-col gap-3 md:flex-row">
               <div className="relative">
@@ -202,7 +283,7 @@ export default function SupportHub() {
               </div>
               <select
                 value={statusFilter}
-                onChange={(event) => setStatusFilter(event.target.value as "All" | TicketStatus)}
+                onChange={(event) => setStatusFilter(event.target.value as "All" | SupportTicketStatus)}
                 className="h-11 rounded-xl border border-border bg-white px-3 text-sm font-semibold text-primary outline-none"
               >
                 <option>All</option>
@@ -214,13 +295,18 @@ export default function SupportHub() {
             </div>
           </div>
 
+          {error ? <div className="mb-4 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-xs font-black text-red-600">{error}</div> : null}
+
           <div className="space-y-3">
-            {filteredTickets.map((ticket) => (
+            {loadingTickets ? (
+              <div className="rounded-2xl border border-dashed border-slate-200 p-8 text-center text-sm font-bold text-slate-400">Loading support tickets...</div>
+            ) : null}
+            {!loadingTickets && tickets.map((ticket) => (
               <div key={ticket.id} className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-xs font-black text-primary">{ticket.id}</span>
+                      <span className="text-xs font-black text-primary">{ticket.ticketNumber}</span>
                       <span className={`rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-widest ${statusTone(ticket.status)}`}>
                         {ticket.status}
                       </span>
@@ -235,7 +321,9 @@ export default function SupportHub() {
                       <span>{ticket.module}</span>
                       <span>{ticket.requester}</span>
                       <span>{ticket.channel}</span>
-                      <span>Due: {ticket.responseDue}</span>
+                      <span>{ticket.owner}</span>
+                      <span>{ticket.responseDue ? `Due: ${ticket.responseDue}` : "Due: Next business day"}</span>
+                      <span>{ticket.createdAt}</span>
                     </div>
                   </div>
                   <div className="flex shrink-0 flex-wrap gap-2">
@@ -246,7 +334,7 @@ export default function SupportHub() {
                 </div>
               </div>
             ))}
-            {filteredTickets.length === 0 ? (
+            {!loadingTickets && tickets.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-slate-200 p-8 text-center text-sm font-bold text-slate-400">
                 No support tickets match the current filters.
               </div>
@@ -262,16 +350,16 @@ export default function SupportHub() {
               <div className="mt-5 grid gap-4">
                 <Input label="Subject" value={form.subject} onChange={(value) => setForm((current) => ({ ...current, subject: value }))} />
                 <Input label="Requester" value={form.requester} onChange={(value) => setForm((current) => ({ ...current, requester: value }))} />
-                <Select label="Module" value={form.module} options={["Client Operations", "Lead Desk", "Delivery Projects", "People Operations", "Finance Control", "Growth Marketing", "Admin Control"]} onChange={(value) => setForm((current) => ({ ...current, module: value }))} />
-                <Select label="Priority" value={form.priority} options={["Low", "Medium", "High", "Critical"]} onChange={(value) => setForm((current) => ({ ...current, priority: value as TicketPriority }))} />
-                <Select label="Channel" value={form.channel} options={["Internal", "Phone", "Email", "WhatsApp"]} onChange={(value) => setForm((current) => ({ ...current, channel: value }))} />
+                <Select label="Module" value={form.module} options={ticketModules} onChange={(value) => setForm((current) => ({ ...current, module: value as SupportTicketModule }))} />
+                <Select label="Priority" value={form.priority} options={["Low", "Medium", "High", "Critical"]} onChange={(value) => setForm((current) => ({ ...current, priority: value as SupportTicketPriority }))} />
+                <Select label="Channel" value={form.channel} options={["Internal", "Phone", "Email", "WhatsApp"]} onChange={(value) => setForm((current) => ({ ...current, channel: value as SupportTicketChannel }))} />
                 <Input label="Issue Detail" multiline value={form.description} onChange={(value) => setForm((current) => ({ ...current, description: value }))} />
               </div>
               <div className="mt-5 flex justify-end gap-3">
                 <button type="button" onClick={() => setShowForm(false)} className="h-11 rounded-xl border border-border bg-white px-4 text-xs font-black uppercase tracking-widest text-primary">
                   Cancel
                 </button>
-                <button type="button" onClick={saveTicket} className="h-11 rounded-xl bg-primary px-4 text-xs font-black uppercase tracking-widest text-white">
+                <button type="button" onClick={() => void saveTicket()} className="h-11 rounded-xl bg-primary px-4 text-xs font-black uppercase tracking-widest text-white">
                   Save Ticket
                 </button>
               </div>

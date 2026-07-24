@@ -28,6 +28,7 @@ urlpatterns = [
     path("api/v1/", include("apps.hrms.urls")),
     path("api/v1/", include("apps.finance.urls")),
     path("api/v1/", include("apps.marketing.urls")),
+    path("api/v1/support/", include("apps.support.urls")),
     path("api/v1/health/", health_check, name="health-check"),
     path("api/v1/health/db/", database_health_check, name="database-health-check"),
 ]
