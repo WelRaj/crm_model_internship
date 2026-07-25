@@ -7,7 +7,7 @@
 - Deadlines: Critical date alerts and urgent task monitoring.
 
 ## Components
-- src/components/dashboard/projects/ProjectsModule.tsx: Main entry point for the projects section.
+- src/components/dashboard/projects/ProjectHub.tsx: Main entry point for the projects section.
 
 ## Data Structure (Mock)
 - Projects: ID, Name, Client, Progress, Status, Priority, Deadline.

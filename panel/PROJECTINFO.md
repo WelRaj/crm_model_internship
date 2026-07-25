@@ -321,7 +321,6 @@ Folder:
 Files:
 
 - `LeadHub.tsx`
-- `LeadWizard.tsx`
 - `ProjectLeadStepWizard.tsx`
 - `TradingLeadCreate.tsx`
 - `Step1LeadInfo.tsx`
@@ -599,7 +598,6 @@ Folder:
 Files:
 
 - `ProjectHub.tsx`
-- `ProjectsModule.tsx`
 - `performance/EmployeePerformance.tsx`
 
 Views:

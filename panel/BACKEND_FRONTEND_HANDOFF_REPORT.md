@@ -374,7 +374,6 @@ Required APIs:
 Main files:
 
 - `src/components/dashboard/projects/ProjectHub.tsx`
-- `src/components/dashboard/projects/ProjectsModule.tsx`
 - `src/components/dashboard/projects/projectHandoff.ts`
 - `src/components/dashboard/projects/performance/EmployeePerformance.tsx`
 

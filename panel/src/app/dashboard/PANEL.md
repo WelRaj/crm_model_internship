@@ -11,16 +11,16 @@ Premium CRM Panel built with Next.js (App Router), TypeScript, and Tailwind CSS.
 - [x] Auth Screens (Signup & OTP Signin)
 - [x] Dashboard Layout & Navigation
 - [x] Projects Module UI (Projects, Tasks, Milestones, Deadlines)
-- [ ] Onboarding Module
-- [ ] Lead Module
-- [ ] Accounting Module
+- [x] Onboarding Module
+- [x] Lead Module
+- [x] Client Operations / CRM Module
+- [x] Accounting Module
 
 ## Components Added
 - src/components/ui/Input.tsx: Premium reusable input.
 - src/components/ui/Button.tsx: Premium reusable button.
 - src/components/auth/SignupForm.tsx: Registration flow.
 - src/components/auth/SigninForm.tsx: 2-step OTP flow.
-- src/components/dashboard/projects/ProjectsModule.tsx: Project management UI.
 
 ## Pages Created
 - /auth/signup: User registration.
