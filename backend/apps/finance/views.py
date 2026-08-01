@@ -8,6 +8,7 @@ from apps.core.responses import success_response
 from apps.crm.models import ProjectClient
 from apps.finance import models
 from apps.finance import selectors
+from apps.finance.permissions import FinanceAccessMixin
 from apps.finance.serializers import (
     ApprovalPolicySerializer,
     ApprovalPolicyWriteSerializer,
@@ -49,7 +50,9 @@ from apps.finance.serializers import (
 from apps.finance.services import FinanceService
 
 
-class FinanceOverviewView(APIView):
+class FinanceOverviewView(FinanceAccessMixin, APIView):
+    finance_page = "overview"
+
     def get(self, request):
         invoices = models.Invoice.objects.filter(is_deleted=False)
         payments = models.Payment.objects.filter(is_deleted=False).exclude(status=models.Payment.Status.REVERSED)
@@ -64,7 +67,9 @@ class FinanceOverviewView(APIView):
         return success_response(data=data)
 
 
-class FinanceClientListCreateView(APIView):
+class FinanceClientListCreateView(FinanceAccessMixin, APIView):
+    finance_page = "clients"
+
     def get(self, request):
         queryset = selectors.finance_clients_queryset()
         if request.query_params.get("status"):
@@ -79,14 +84,18 @@ class FinanceClientListCreateView(APIView):
         return success_response(data=FinanceClientSerializer(client).data, message="Finance client created successfully", status_code=status.HTTP_201_CREATED)
 
 
-class FinanceClientSyncView(APIView):
+class FinanceClientSyncView(FinanceAccessMixin, APIView):
+    finance_page = "clients"
+
     def post(self, request, project_client_id):
         project_client = get_object_or_404(ProjectClient.objects.filter(is_deleted=False), id=project_client_id)
         client = FinanceService.sync_client_from_project_client(project_client=project_client, actor=request.user, request=request)
         return success_response(data=FinanceClientSerializer(client).data, message="Finance client synced successfully")
 
 
-class FinanceClientDetailView(APIView):
+class FinanceClientDetailView(FinanceAccessMixin, APIView):
+    finance_page = "clients"
+
     def put(self, request, client_id):
         client = get_object_or_404(selectors.finance_clients_queryset(), id=client_id)
         serializer = FinanceClientWriteSerializer(data=request.data, context={"finance_client": client}, partial=True)
@@ -98,7 +107,7 @@ class FinanceClientDetailView(APIView):
         return success_response(data=FinanceClientSerializer(FinanceService.soft_archive(obj=client, actor=request.user, request=request)).data)
 
 
-class SimpleListCreateView(APIView):
+class SimpleListCreateView(FinanceAccessMixin, APIView):
     queryset_fn = None
     serializer_class = None
     write_serializer_class = None
@@ -122,7 +131,7 @@ class SimpleListCreateView(APIView):
         return success_response(data=self.serializer_class(obj).data, status_code=status.HTTP_201_CREATED)
 
 
-class SimpleDetailView(APIView):
+class SimpleDetailView(FinanceAccessMixin, APIView):
     queryset_fn = None
     serializer_class = None
     write_serializer_class = None
@@ -150,6 +159,8 @@ class SimpleDetailView(APIView):
 
 
 class VendorListCreateView(SimpleListCreateView):
+    finance_page = "vendors"
+
     queryset_fn = staticmethod(selectors.vendors_queryset)
     serializer_class = VendorSerializer
     write_serializer_class = VendorWriteSerializer
@@ -158,12 +169,16 @@ class VendorListCreateView(SimpleListCreateView):
 
 
 class VendorDetailView(SimpleDetailView):
+    finance_page = "vendors"
+
     queryset_fn = staticmethod(selectors.vendors_queryset)
     serializer_class = VendorSerializer
     write_serializer_class = VendorWriteSerializer
 
 
 class BankAccountListCreateView(SimpleListCreateView):
+    finance_page = "bank-accounts"
+
     queryset_fn = staticmethod(selectors.bank_accounts_queryset)
     serializer_class = BankAccountSerializer
     write_serializer_class = BankAccountWriteSerializer
@@ -172,12 +187,16 @@ class BankAccountListCreateView(SimpleListCreateView):
 
 
 class BankAccountDetailView(SimpleDetailView):
+    finance_page = "bank-accounts"
+
     queryset_fn = staticmethod(selectors.bank_accounts_queryset)
     serializer_class = BankAccountSerializer
     write_serializer_class = BankAccountWriteSerializer
 
 
-class QuotationListCreateView(APIView):
+class QuotationListCreateView(FinanceAccessMixin, APIView):
+    finance_page = "quotations"
+
     def get(self, request):
         queryset = selectors.quotations_queryset()
         if request.query_params.get("status"):
@@ -192,7 +211,9 @@ class QuotationListCreateView(APIView):
         return success_response(data=QuotationSerializer(quotation).data, status_code=status.HTTP_201_CREATED)
 
 
-class QuotationDetailView(APIView):
+class QuotationDetailView(FinanceAccessMixin, APIView):
+    finance_page = "quotations"
+
     def put(self, request, quotation_id):
         quotation = get_object_or_404(selectors.quotations_queryset(), id=quotation_id)
         serializer = QuotationWriteSerializer(data=request.data, partial=True)
@@ -201,14 +222,19 @@ class QuotationDetailView(APIView):
         return success_response(data=QuotationSerializer(quotation).data)
 
 
-class QuotationActionView(APIView):
+class QuotationActionView(FinanceAccessMixin, APIView):
+    finance_page = "quotations"
+    finance_action = "approve"
+
     def post(self, request, quotation_id):
         quotation = get_object_or_404(selectors.quotations_queryset(), id=quotation_id)
         quotation = FinanceService.update_quotation_status(quotation=quotation, status=request.data.get("status"), actor=request.user, request=request)
         return success_response(data=QuotationSerializer(quotation).data)
 
 
-class InvoiceListCreateView(APIView):
+class InvoiceListCreateView(FinanceAccessMixin, APIView):
+    finance_page = "invoices"
+
     def get(self, request):
         queryset = selectors.invoices_queryset()
         if request.query_params.get("status"):
@@ -225,7 +251,9 @@ class InvoiceListCreateView(APIView):
         return success_response(data=InvoiceSerializer(invoice).data, status_code=status.HTTP_201_CREATED)
 
 
-class InvoiceDetailView(APIView):
+class InvoiceDetailView(FinanceAccessMixin, APIView):
+    finance_page = "invoices"
+
     def put(self, request, invoice_id):
         invoice = get_object_or_404(selectors.invoices_queryset(), id=invoice_id)
         serializer = InvoiceWriteSerializer(data=request.data, partial=True)
@@ -234,14 +262,19 @@ class InvoiceDetailView(APIView):
         return success_response(data=InvoiceSerializer(invoice).data)
 
 
-class InvoiceActionView(APIView):
+class InvoiceActionView(FinanceAccessMixin, APIView):
+    finance_page = "invoices"
+    finance_action = "approve"
+
     def post(self, request, invoice_id):
         invoice = get_object_or_404(selectors.invoices_queryset(), id=invoice_id)
         invoice = FinanceService.update_invoice_status(invoice=invoice, status=request.data.get("status"), actor=request.user, request=request)
         return success_response(data=InvoiceSerializer(invoice).data)
 
 
-class PaymentListCreateView(APIView):
+class PaymentListCreateView(FinanceAccessMixin, APIView):
+    finance_page = "payments"
+
     def get(self, request):
         queryset = selectors.payments_queryset()
         if request.query_params.get("status"):
@@ -256,7 +289,10 @@ class PaymentListCreateView(APIView):
         return success_response(data=PaymentSerializer(payment).data, status_code=status.HTTP_201_CREATED)
 
 
-class PaymentActionView(APIView):
+class PaymentActionView(FinanceAccessMixin, APIView):
+    finance_page = "payments"
+    finance_action = "approve"
+
     def post(self, request, payment_id):
         payment = get_object_or_404(selectors.payments_queryset(), id=payment_id)
         payment = FinanceService.update_payment_status(payment=payment, status=request.data.get("status"), actor=request.user, request=request)
@@ -264,6 +300,8 @@ class PaymentActionView(APIView):
 
 
 class ReminderListCreateView(SimpleListCreateView):
+    finance_page = "reminders"
+
     queryset_fn = staticmethod(selectors.reminders_queryset)
     serializer_class = ReminderSerializer
     write_serializer_class = ReminderWriteSerializer
@@ -272,12 +310,16 @@ class ReminderListCreateView(SimpleListCreateView):
 
 
 class ReminderDetailView(SimpleDetailView):
+    finance_page = "reminders"
+
     queryset_fn = staticmethod(selectors.reminders_queryset)
     serializer_class = ReminderSerializer
     write_serializer_class = ReminderWriteSerializer
 
 
 class BudgetRevisionListCreateView(SimpleListCreateView):
+    finance_page = "budget-revisions"
+
     queryset_fn = staticmethod(selectors.budget_revisions_queryset)
     serializer_class = BudgetRevisionSerializer
     write_serializer_class = BudgetRevisionWriteSerializer
@@ -286,6 +328,8 @@ class BudgetRevisionListCreateView(SimpleListCreateView):
 
 
 class BudgetRevisionDetailView(SimpleDetailView):
+    finance_page = "budget-revisions"
+
     queryset_fn = staticmethod(selectors.budget_revisions_queryset)
     serializer_class = BudgetRevisionSerializer
     write_serializer_class = BudgetRevisionWriteSerializer
@@ -312,7 +356,7 @@ NUMBERED_SEARCH_FIELDS = {
 }
 
 
-class NumberedListCreateView(APIView):
+class NumberedListCreateView(FinanceAccessMixin, APIView):
     def get(self, request, resource):
         model, serializer_class, _, queryset_fn, _, _ = NUMBERED[resource]
         queryset = queryset_fn()
@@ -329,7 +373,7 @@ class NumberedListCreateView(APIView):
         return success_response(data=serializer_class(obj).data, status_code=status.HTTP_201_CREATED)
 
 
-class NumberedDetailView(APIView):
+class NumberedDetailView(FinanceAccessMixin, APIView):
     def put(self, request, resource, object_id):
         _, serializer_class, write_serializer_class, queryset_fn, _, _ = NUMBERED[resource]
         obj = get_object_or_404(queryset_fn(), id=object_id)
@@ -346,6 +390,8 @@ class NumberedDetailView(APIView):
 
 
 class GSTReturnListCreateView(SimpleListCreateView):
+    finance_page = "gst-returns"
+
     queryset_fn = staticmethod(selectors.gst_returns_queryset)
     serializer_class = GSTReturnSerializer
     write_serializer_class = GSTReturnWriteSerializer
@@ -354,12 +400,16 @@ class GSTReturnListCreateView(SimpleListCreateView):
 
 
 class GSTReturnDetailView(SimpleDetailView):
+    finance_page = "gst-returns"
+
     queryset_fn = staticmethod(selectors.gst_returns_queryset)
     serializer_class = GSTReturnSerializer
     write_serializer_class = GSTReturnWriteSerializer
 
 
 class ApprovalPolicyListCreateView(SimpleListCreateView):
+    finance_page = "approval-policies"
+
     queryset_fn = staticmethod(selectors.approval_policies_queryset)
     serializer_class = ApprovalPolicySerializer
     write_serializer_class = ApprovalPolicyWriteSerializer
@@ -368,12 +418,16 @@ class ApprovalPolicyListCreateView(SimpleListCreateView):
 
 
 class ApprovalPolicyDetailView(SimpleDetailView):
+    finance_page = "approval-policies"
+
     queryset_fn = staticmethod(selectors.approval_policies_queryset)
     serializer_class = ApprovalPolicySerializer
     write_serializer_class = ApprovalPolicyWriteSerializer
 
 
 class FinanceAccessPolicyListCreateView(SimpleListCreateView):
+    finance_page = "access-policies"
+
     queryset_fn = staticmethod(selectors.finance_access_policies_queryset)
     serializer_class = FinanceAccessPolicySerializer
     write_serializer_class = FinanceAccessPolicyWriteSerializer
@@ -382,6 +436,8 @@ class FinanceAccessPolicyListCreateView(SimpleListCreateView):
 
 
 class FinanceAccessPolicyDetailView(SimpleDetailView):
+    finance_page = "access-policies"
+
     queryset_fn = staticmethod(selectors.finance_access_policies_queryset)
     serializer_class = FinanceAccessPolicySerializer
     write_serializer_class = FinanceAccessPolicyWriteSerializer

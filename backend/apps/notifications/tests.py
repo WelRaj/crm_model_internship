@@ -8,6 +8,11 @@ User = get_user_model()
 
 class NotificationsApiTests(APITestCase):
     def setUp(self):
+        self.admin = User.objects.create_superuser(
+            email="notify.admin@example.com",
+            mobile="9111111000",
+            password="NotifyAdmin@12345",
+        )
         self.user = User.objects.create_user(
             email="notify.user@example.com",
             mobile="9111111111",
@@ -17,7 +22,7 @@ class NotificationsApiTests(APITestCase):
             is_active=True,
             is_verified=True,
         )
-        self.client.force_authenticate(self.user)
+        self.client.force_authenticate(self.admin)
 
     def test_notification_create_list_and_read_state(self):
         payload = {
@@ -33,6 +38,7 @@ class NotificationsApiTests(APITestCase):
         create_response = self.client.post("/api/v1/notifications/notifications/", payload, format="json")
         self.assertEqual(create_response.status_code, 201)
 
+        self.client.force_authenticate(self.user)
         overview_response = self.client.get("/api/v1/notifications/overview/")
         self.assertEqual(overview_response.status_code, 200)
         self.assertEqual(overview_response.data["data"]["total_notifications"], 1)
@@ -73,3 +79,35 @@ class NotificationsApiTests(APITestCase):
         list_response = self.client.get("/api/v1/notifications/communication-jobs/")
         self.assertEqual(list_response.status_code, 200)
         self.assertEqual(len(list_response.data["data"]), 1)
+
+    def test_non_admin_cannot_create_notifications_or_jobs(self):
+        self.client.force_authenticate(self.user)
+
+        notification_response = self.client.post(
+            "/api/v1/notifications/notifications/",
+            {
+                "title": "Blocked",
+                "message": "Blocked notification.",
+                "notification_type": "System",
+                "priority": "Low",
+                "target_module": "System",
+                "entity_type": "System",
+                "entity_id": "SYS-1",
+                "recipient_id": self.user.id,
+            },
+            format="json",
+        )
+        self.assertEqual(notification_response.status_code, 403)
+
+        job_response = self.client.post(
+            "/api/v1/notifications/communication-jobs/",
+            {
+                "channel": "Email",
+                "recipient_name": "Blocked",
+                "recipient_email": "blocked@example.com",
+                "subject": "Blocked",
+                "message": "Blocked",
+            },
+            format="json",
+        )
+        self.assertEqual(job_response.status_code, 403)

@@ -66,6 +66,7 @@ export function ActionButton({
   variant = "primary",
   onClick,
   type = "button",
+  disabled = false,
 }: {
   icon?: LucideIcon;
   children?: ReactNode;
@@ -73,6 +74,7 @@ export function ActionButton({
   variant?: "primary" | "outline" | "accent";
   onClick?: () => void;
   type?: "button" | "submit" | "reset";
+  disabled?: boolean;
 }) {
   const styles = {
     primary: "bg-primary text-white hover:bg-primary/90 border-primary",
@@ -84,7 +86,8 @@ export function ActionButton({
     <button
       type={type}
       onClick={onClick}
-      className={`inline-flex h-11 items-center justify-center gap-2 rounded-xl border px-4 text-xs font-black uppercase tracking-widest shadow-sm transition-all ${styles[variant]}`}
+      disabled={disabled}
+      className={`inline-flex h-11 items-center justify-center gap-2 rounded-xl border px-4 text-xs font-black uppercase tracking-widest shadow-sm transition-all disabled:cursor-not-allowed disabled:opacity-50 ${styles[variant]}`}
     >
       {Icon ? <Icon size={16} /> : null}
       {children || label}

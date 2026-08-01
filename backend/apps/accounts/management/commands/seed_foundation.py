@@ -9,11 +9,16 @@ from apps.accounts.models import Permission, Role, RolePermission, User, UserPro
 DEFAULT_ROLES = [
     ("super_admin", "Super Admin", "Full system access."),
     ("admin", "Admin", "Administrative access."),
+    ("crm_admin", "CRM Admin", "CRM management access."),
+    ("team_lead", "Team Lead", "Team and lead oversight access."),
+    ("sales", "Sales", "Sales lead access."),
     ("hr", "HR", "Human resources access."),
     ("finance", "Finance", "Finance module access."),
     ("marketing", "Marketing", "Marketing module access."),
     ("telecaller", "Telecaller", "Calling and lead follow-up access."),
     ("project_manager", "Project Manager", "Project delivery access."),
+    ("support", "Support", "Support desk access."),
+    ("read_only", "Read Only", "View-only CRM access."),
     ("employee", "Employee", "Standard employee access."),
 ]
 

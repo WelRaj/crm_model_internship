@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState } from 'react';
 import { Lock } from 'lucide-react';
 
 type UserRole = 'Admin' | 'Director' | 'Finance Manager' | 'Accountant' | 'HR Manager' | 'Sales';
@@ -16,13 +16,30 @@ const ROLE_PERMISSIONS: Record<UserRole, string[]> = {
 };
 
 const AuthContext = createContext<{ role: UserRole; setRole: (role: UserRole) => void }>({
-  role: 'Admin',
+  role: 'Accountant',
   setRole: () => {},
 });
 
-export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
-  const [role, setRole] = useState<UserRole>('Admin');
-  return <AuthContext.Provider value={{ role, setRole }}>{children}</AuthContext.Provider>;
+export function resolveAccountingRole(roleCodes?: string[] | null): UserRole | null {
+  const normalized = new Set((roleCodes || []).map((role) => role.trim().toLowerCase()));
+  if (normalized.has("super_admin") || normalized.has("admin")) return "Admin";
+  if (normalized.has("finance")) return "Finance Manager";
+  if (normalized.has("hr")) return "HR Manager";
+  if (normalized.has("sales")) return "Sales";
+  return null;
+}
+
+export function hasAccountingShellAccess(roleCodes?: string[] | null) {
+  const normalized = new Set((roleCodes || []).map((role) => role.trim().toLowerCase()));
+  return normalized.has("super_admin") || normalized.has("admin") || normalized.has("finance");
+}
+
+export const AuthProvider = ({ children, role }: { children: React.ReactNode; role: UserRole }) => {
+  const [currentRole, setRole] = useState<UserRole>(role);
+  useEffect(() => {
+    setRole(role);
+  }, [role]);
+  return <AuthContext.Provider value={{ role: currentRole, setRole }}>{children}</AuthContext.Provider>;
 };
 
 export const useAuth = () => useContext(AuthContext);

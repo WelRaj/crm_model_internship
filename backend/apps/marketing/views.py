@@ -5,6 +5,7 @@ from rest_framework.views import APIView
 
 from apps.core.responses import success_response
 from apps.marketing.models import LeadSource, MarketingCampaign
+from apps.marketing.permissions import require_marketing_access, require_marketing_action_access
 from apps.marketing.selectors import apply_search, campaigns_queryset, lead_sources_queryset
 from apps.marketing.serializers import (
     LeadSourceSerializer,
@@ -17,6 +18,8 @@ from apps.marketing.services import MarketingService
 
 class MarketingOverviewView(APIView):
     def get(self, request):
+        require_marketing_access(request.user)
+        require_marketing_action_access(request.user, "view")
         campaigns = campaigns_queryset()
         sources = lead_sources_queryset()
         if request.query_params.get("status"):
@@ -47,6 +50,8 @@ class MarketingOverviewView(APIView):
 
 class CampaignListCreateView(APIView):
     def get(self, request):
+        require_marketing_access(request.user)
+        require_marketing_action_access(request.user, "view")
         queryset = campaigns_queryset()
         if request.query_params.get("status"):
             queryset = queryset.filter(status=request.query_params["status"])
@@ -62,6 +67,8 @@ class CampaignListCreateView(APIView):
         return success_response(data=MarketingCampaignSerializer(queryset[:200], many=True).data)
 
     def post(self, request):
+        require_marketing_access(request.user)
+        require_marketing_action_access(request.user, "create")
         serializer = MarketingCampaignWriteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         campaign = MarketingService.create_campaign(data=serializer.validated_data, actor=request.user, request=request)
@@ -70,6 +77,8 @@ class CampaignListCreateView(APIView):
 
 class CampaignDetailView(APIView):
     def put(self, request, campaign_id):
+        require_marketing_access(request.user)
+        require_marketing_action_access(request.user, "edit")
         campaign = get_object_or_404(campaigns_queryset(), id=campaign_id)
         serializer = MarketingCampaignWriteSerializer(data=request.data, partial=True, context={"campaign": campaign})
         serializer.is_valid(raise_exception=True)
@@ -77,6 +86,8 @@ class CampaignDetailView(APIView):
         return success_response(data=MarketingCampaignSerializer(campaign).data, message="Marketing campaign updated successfully")
 
     def delete(self, request, campaign_id):
+        require_marketing_access(request.user)
+        require_marketing_action_access(request.user, "delete")
         campaign = get_object_or_404(campaigns_queryset(), id=campaign_id)
         campaign = MarketingService.archive_campaign(campaign=campaign, actor=request.user, request=request)
         return success_response(data=MarketingCampaignSerializer(campaign).data, message="Marketing campaign archived successfully")
@@ -84,6 +95,8 @@ class CampaignDetailView(APIView):
 
 class SourceListCreateView(APIView):
     def get(self, request):
+        require_marketing_access(request.user)
+        require_marketing_action_access(request.user, "view")
         queryset = lead_sources_queryset()
         if request.query_params.get("status"):
             queryset = queryset.filter(status=request.query_params["status"])
@@ -99,6 +112,8 @@ class SourceListCreateView(APIView):
         return success_response(data=LeadSourceSerializer(queryset[:200], many=True).data)
 
     def post(self, request):
+        require_marketing_access(request.user)
+        require_marketing_action_access(request.user, "create")
         serializer = LeadSourceWriteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         source = MarketingService.create_source(data=serializer.validated_data, actor=request.user, request=request)
@@ -107,6 +122,8 @@ class SourceListCreateView(APIView):
 
 class SourceDetailView(APIView):
     def put(self, request, source_id):
+        require_marketing_access(request.user)
+        require_marketing_action_access(request.user, "edit")
         source = get_object_or_404(lead_sources_queryset(), id=source_id)
         serializer = LeadSourceWriteSerializer(data=request.data, partial=True, context={"source": source})
         serializer.is_valid(raise_exception=True)
@@ -114,6 +131,8 @@ class SourceDetailView(APIView):
         return success_response(data=LeadSourceSerializer(source).data, message="Lead source updated successfully")
 
     def delete(self, request, source_id):
+        require_marketing_access(request.user)
+        require_marketing_action_access(request.user, "delete")
         source = get_object_or_404(lead_sources_queryset(), id=source_id)
         source = MarketingService.archive_source(source=source, actor=request.user, request=request)
         return success_response(data=LeadSourceSerializer(source).data, message="Lead source archived successfully")

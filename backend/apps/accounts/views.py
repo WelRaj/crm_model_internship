@@ -6,7 +6,7 @@ from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from apps.accounts.models import LoginHistory, Permission, Role, User, UserProfile
-from apps.accounts.permissions import IsAccountsAdmin
+from apps.accounts.permissions import IsAccountsAdmin, IsAccountsSuperAdmin
 from apps.accounts.serializers import (
     AdminUserCreateSerializer,
     AdminUserUpdateSerializer,
@@ -167,7 +167,7 @@ class LoginHistoryView(APIView):
 
 
 class RoleListView(APIView):
-    permission_classes = [IsAccountsAdmin]
+    permission_classes = [IsAccountsSuperAdmin]
 
     def get(self, request):
         roles = Role.objects.prefetch_related("user_roles", "role_permissions__permission").order_by("name")
@@ -189,7 +189,7 @@ class RoleListView(APIView):
 
 
 class RoleDetailView(APIView):
-    permission_classes = [IsAccountsAdmin]
+    permission_classes = [IsAccountsSuperAdmin]
 
     def put(self, request, role_id):
         role = get_object_or_404(Role, id=role_id)
@@ -205,7 +205,7 @@ class RoleDetailView(APIView):
 
 
 class PermissionListView(APIView):
-    permission_classes = [IsAccountsAdmin]
+    permission_classes = [IsAccountsSuperAdmin]
 
     def get(self, request):
         permissions = Permission.objects.order_by("module", "action")

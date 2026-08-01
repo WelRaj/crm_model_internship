@@ -2,7 +2,7 @@ from datetime import date, timedelta
 
 from rest_framework.test import APITestCase
 
-from apps.accounts.models import User
+from apps.accounts.models import Role, User, UserRole
 from apps.audit.models import AuditLog
 from apps.crm.models import ProjectAgreement, ProjectClient, ProjectHandoff
 from apps.hrms.models import EmployeeHRProfile
@@ -24,6 +24,8 @@ class DeliveryProjectModelTests(APITestCase):
             status=EmployeeHRProfile.Status.ACTIVE,
             kyc_status=EmployeeHRProfile.KycStatus.COMPLETE,
         )
+        project_role, _ = Role.objects.get_or_create(code="project_manager", defaults={"name": "Project Manager", "description": "Project delivery access."})
+        UserRole.objects.get_or_create(user=self.user, role=project_role, defaults={"assigned_by": self.user})
         self.client.force_authenticate(user=self.user)
         self.client_record = ProjectClient.objects.create(
             client_number="ACC-TEST-001",
@@ -421,3 +423,20 @@ class DeliveryProjectModelTests(APITestCase):
         self.assertEqual(len(list_response.data["data"]), 1)
         self.assertTrue(AuditLog.objects.filter(module="projects", entity_type="EmployeePerformanceReview", action="create").exists())
         self.assertTrue(AuditLog.objects.filter(module="projects", entity_type="EmployeePerformanceReview", action="update").exists())
+
+    def test_non_project_user_is_blocked_from_delivery_modules(self):
+        blocked_user = User.objects.create_user(email="blocked.project@example.com", mobile="9811111222", password="User@12345")
+        self.client.force_authenticate(user=blocked_user)
+
+        overview = self.client.get("/api/v1/projects/")
+        self.assertEqual(overview.status_code, 403)
+
+        create = self.client.post(
+            "/api/v1/projects/",
+            {
+                "project_handoff_id": str(self.handoff.id),
+                "name": "Blocked Project",
+            },
+            format="json",
+        )
+        self.assertEqual(create.status_code, 403)

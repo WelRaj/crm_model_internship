@@ -21,6 +21,7 @@ import {
   type ProjectAgreementRecord,
   type ProjectHandoffRecord,
 } from "@/services/leads-api";
+import { canCrmAction, useCrmAccess } from "./crm-access";
 
 // --- Validation Schema ---
 const agreementSchema = z.object({
@@ -131,6 +132,10 @@ function agreementFromBackend(agreement: ProjectAgreementRecord): AgreementRecor
 }
 
 export default function ProjectAgreement() {
+  const { roleCodes } = useCrmAccess();
+  const canCreateAgreement = canCrmAction(roleCodes, "create", "agreements");
+  const canExportAgreement = canCrmAction(roleCodes, "export", "agreements");
+  const canViewAgreement = canCrmAction(roleCodes, "view", "agreements");
   const [agreements, setAgreements] = useState<AgreementRecord[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [successMsg, setSuccessMsg] = useState(false);
@@ -208,6 +213,10 @@ export default function ProjectAgreement() {
 
   const onSubmit = async (data: AgreementFormData) => {
     setFormError("");
+    if (!canCreateAgreement) {
+      setFormError("You are not allowed to create or update agreements.");
+      return;
+    }
     const selectedBackendProject = backendProjects.find((project) => project.project_code === data.projectId);
     if (!selectedBackendProject) {
       setFormError("Select a backend project handoff before creating agreement.");
@@ -335,12 +344,13 @@ export default function ProjectAgreement() {
       badge="Legal Compliance"
       actions={
         <>
-          <ActionButton icon={Download} label="Export" variant="outline" onClick={handleExport} />
+          <ActionButton icon={Download} label="Export" variant="outline" onClick={handleExport} disabled={!canExportAgreement} />
           <ActionButton 
             icon={Plus} 
             label="New Agreement" 
             variant="accent" 
             onClick={() => setShowForm(true)}
+            disabled={!canCreateAgreement}
           />
         </>
       }
@@ -507,7 +517,7 @@ export default function ProjectAgreement() {
                         </div>
 
                         <div className="flex flex-col gap-3">
-                          <ActionButton label="Secure Record" variant="accent" type="submit" />
+                          <ActionButton label="Secure Record" variant="accent" type="submit" disabled={!canCreateAgreement} />
                           <ActionButton label="Save as Draft" variant="outline" onClick={() => { setShowForm(false); setSelectedFileName(""); setFileError(""); }} />
                         </div>
                       </div>
@@ -567,7 +577,7 @@ export default function ProjectAgreement() {
                 </p>
               </td>
               <td className="px-4 py-4 text-right">
-                <button type="button" onClick={() => handleDownloadAgreement(note)} className="text-primary hover:underline font-black text-[10px] uppercase tracking-widest flex items-center justify-end gap-2 ml-auto">
+                <button type="button" onClick={() => handleDownloadAgreement(note)} disabled={!canViewAgreement} className="text-primary hover:underline font-black text-[10px] uppercase tracking-widest flex items-center justify-end gap-2 ml-auto disabled:cursor-not-allowed disabled:opacity-50">
                    <Download size={14} /> Agreement
                 </button>
               </td>

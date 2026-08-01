@@ -34,6 +34,34 @@ class FinanceApiFlowTests(APITestCase):
             updated_by=self.actor,
         )
 
+    def test_non_finance_user_is_blocked_from_finance_control(self):
+        user = User.objects.create_user(
+            email="blocked-user@example.com",
+            mobile="9000012222",
+            password="User@12345",
+            first_name="Blocked",
+            employee_id="EMP-BLOCK-001",
+            department="Client Operations",
+            designation="Telecaller",
+        )
+        self.client.force_authenticate(user=user)
+
+        overview_response = self.client.get("/api/v1/finance/overview/")
+        self.assertEqual(overview_response.status_code, status.HTTP_403_FORBIDDEN)
+
+        client_response = self.client.post(
+            "/api/v1/finance/clients/",
+            {
+                "project_client_id": str(self.project_client.id),
+                "company_name": "Blocked Finance Co",
+                "contact_person": "Blocked Contact",
+                "email": "blocked@example.com",
+                "mobile": "9000012345",
+            },
+            format="json",
+        )
+        self.assertEqual(client_response.status_code, status.HTTP_403_FORBIDDEN)
+
     def test_project_client_sync_creates_single_finance_client(self):
         response = self.client.post(f"/api/v1/finance/clients/sync-project-client/{self.project_client.id}/", {}, format="json")
         self.assertEqual(response.status_code, status.HTTP_200_OK, response.content)

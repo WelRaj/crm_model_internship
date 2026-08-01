@@ -211,6 +211,13 @@ class AccountAdminApiTests(APITestCase):
             first_name="Admin",
         )
         UserRole.objects.create(user=self.admin, role=self.admin_role, assigned_by=self.admin)
+        self.staff_admin = User.objects.create_user(
+            email="staff.admin@example.com",
+            mobile="9876543209",
+            password="Admin@12345",
+            first_name="Staff",
+        )
+        UserRole.objects.create(user=self.staff_admin, role=self.admin_role, assigned_by=self.admin)
 
     def test_admin_can_manage_user_lifecycle(self):
         self.client.force_authenticate(user=self.admin)
@@ -277,6 +284,26 @@ class AccountAdminApiTests(APITestCase):
         response = self.client.get("/api/v1/accounts/users/")
 
         self.assertEqual(response.status_code, 403)
+
+    def test_admin_without_super_admin_cannot_manage_roles_or_permissions(self):
+        self.client.force_authenticate(user=self.staff_admin)
+
+        roles_response = self.client.get("/api/v1/accounts/roles/")
+        self.assertEqual(roles_response.status_code, 403)
+
+        permissions_response = self.client.get("/api/v1/accounts/permissions/")
+        self.assertEqual(permissions_response.status_code, 403)
+
+        role_detail_response = self.client.put(
+            f"/api/v1/accounts/roles/{self.admin_role.id}/",
+            {
+                "name": "Admin",
+                "description": "Updated",
+                "is_active": True,
+            },
+            format="json",
+        )
+        self.assertEqual(role_detail_response.status_code, 403)
 
     def test_admin_can_revoke_user_sessions(self):
         employee = User.objects.create_user(

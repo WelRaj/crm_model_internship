@@ -1,9 +1,11 @@
 from django.db.models import Q
 from rest_framework import status
 from rest_framework.generics import get_object_or_404
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 
 from apps.core.responses import success_response
+from apps.accounts.permissions import IsAccountsAdmin
 from apps.notifications.models import CommunicationJob, Notification, NotificationRead
 from apps.notifications.selectors import apply_search, communication_jobs_queryset, notifications_queryset
 from apps.notifications.serializers import (
@@ -27,6 +29,8 @@ def _visible_notifications(request):
 
 
 class NotificationOverviewView(APIView):
+    permission_classes = [IsAuthenticated]
+
     def get(self, request):
         queryset = _visible_notifications(request)
         unread_ids = NotificationRead.objects.filter(user=request.user).values_list("notification_id", flat=True)
@@ -42,6 +46,11 @@ class NotificationOverviewView(APIView):
 
 
 class NotificationListCreateView(APIView):
+    def get_permissions(self):
+        if self.request.method == "POST":
+            return [IsAccountsAdmin()]
+        return [IsAuthenticated()]
+
     def get(self, request):
         queryset = _visible_notifications(request)
         status_filter = request.query_params.get("status")
@@ -81,6 +90,11 @@ class NotificationListCreateView(APIView):
 
 
 class NotificationDetailView(APIView):
+    def get_permissions(self):
+        if self.request.method == "PATCH":
+            return [IsAccountsAdmin()]
+        return [IsAuthenticated()]
+
     def get(self, request, notification_id):
         notification = get_object_or_404(_visible_notifications(request), id=notification_id)
         return success_response(data=NotificationSerializer(notification, context={"request": request}).data)
@@ -94,6 +108,8 @@ class NotificationDetailView(APIView):
 
 
 class NotificationReadStateView(APIView):
+    permission_classes = [IsAuthenticated]
+
     def post(self, request, notification_id):
         notification = get_object_or_404(_visible_notifications(request), id=notification_id)
         NotificationService.mark_read(notification=notification, actor=request.user, request=request)
@@ -106,6 +122,8 @@ class NotificationReadStateView(APIView):
 
 
 class CommunicationJobListCreateView(APIView):
+    permission_classes = [IsAccountsAdmin]
+
     def get(self, request):
         queryset = communication_jobs_queryset()
         status_filter = request.query_params.get("status")
@@ -131,6 +149,8 @@ class CommunicationJobListCreateView(APIView):
 
 
 class CommunicationJobDetailView(APIView):
+    permission_classes = [IsAccountsAdmin]
+
     def get(self, request, job_id):
         job = get_object_or_404(communication_jobs_queryset(), id=job_id)
         return success_response(data=CommunicationJobSerializer(job).data)

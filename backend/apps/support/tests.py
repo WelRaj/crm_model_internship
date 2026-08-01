@@ -1,6 +1,7 @@
 from django.contrib.auth import get_user_model
 from rest_framework.test import APITestCase
 
+from apps.accounts.models import Role, UserRole
 from apps.audit.models import AuditLog
 from apps.support.models import SupportTicket
 
@@ -18,7 +19,38 @@ class SupportApiTests(APITestCase):
             is_active=True,
             is_verified=True,
         )
+        support_role, _ = Role.objects.get_or_create(code="support", defaults={"name": "Support", "description": "Support desk access."})
+        UserRole.objects.get_or_create(user=self.user, role=support_role, defaults={"assigned_by": self.user})
         self.client.force_authenticate(self.user)
+
+    def test_non_support_user_is_blocked_from_support_desk(self):
+        blocked = User.objects.create_user(
+            email="blocked.support@example.com",
+            mobile="9000000001",
+            first_name="Blocked",
+            last_name="User",
+            password="Support@12345",
+            is_active=True,
+            is_verified=True,
+        )
+        self.client.force_authenticate(blocked)
+
+        overview_response = self.client.get("/api/v1/support/overview/")
+        self.assertEqual(overview_response.status_code, 403)
+
+        create_response = self.client.post(
+            "/api/v1/support/tickets/",
+            {
+                "subject": "Blocked access",
+                "module": "Support Desk",
+                "requester": "Blocked User",
+                "priority": "Low",
+                "channel": "Internal",
+                "description": "This should not be allowed.",
+            },
+            format="json",
+        )
+        self.assertEqual(create_response.status_code, 403)
 
     def test_support_ticket_create_list_and_status_update(self):
         payload = {

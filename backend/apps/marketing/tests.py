@@ -3,12 +3,15 @@ from datetime import date
 from django.contrib.auth import get_user_model
 from rest_framework.test import APITestCase
 
+from apps.accounts.models import Role, UserRole
 from apps.marketing.models import LeadSource, MarketingCampaign
 
 
 class MarketingApiTests(APITestCase):
     def setUp(self):
         self.user = get_user_model().objects.create_user(email="marketing@test.local", password="testpass123")
+        marketing_role, _ = Role.objects.get_or_create(code="marketing", defaults={"name": "Marketing", "description": "Marketing module access."})
+        UserRole.objects.get_or_create(user=self.user, role=marketing_role, defaults={"assigned_by": self.user})
         self.client.force_authenticate(self.user)
 
     def test_create_campaign_and_source(self):
@@ -122,3 +125,40 @@ class MarketingApiTests(APITestCase):
         self.assertEqual(overview.status_code, 200)
         self.assertEqual(overview.data["data"]["active_campaigns"], 1)
 
+    def test_non_marketing_user_is_blocked_from_marketing_module(self):
+        blocked = get_user_model().objects.create_user(
+            email="blocked.marketing@test.local",
+            mobile="9811111333",
+            password="testpass123",
+        )
+        self.client.force_authenticate(blocked)
+
+        overview = self.client.get("/api/v1/marketing/overview/")
+        self.assertEqual(overview.status_code, 403)
+
+        create = self.client.post(
+            "/api/v1/marketing/campaigns/",
+            {
+                "name": "Blocked",
+                "channel": "Google Search",
+                "objective": "Demo bookings",
+                "audience_segment": "Founders",
+                "budget_amount": "100000",
+                "spent_amount": "25000",
+                "leads": 40,
+                "mql": 18,
+                "pipeline_amount": "350000",
+                "start_date": "2026-07-01",
+                "end_date": "2026-07-31",
+                "utm_source": "google",
+                "utm_medium": "cpc",
+                "utm_campaign": "blocked",
+                "landing_page": "/demo",
+                "lead_form": "Demo form",
+                "owner": "Growth",
+                "status": "Active",
+                "next_action": "Scale keywords",
+            },
+            format="json",
+        )
+        self.assertEqual(create.status_code, 403)

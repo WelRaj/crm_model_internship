@@ -9,6 +9,7 @@ import {
   type LeadFollowUpRecord,
   type LeadRecord,
 } from "@/services/leads-api";
+import { canCrmAction, useCrmAccess } from "./crm-access";
 
 type OutcomeFilter = "All" | "Final" | "Not Final" | "Ready";
 type ClosureStatus = "qualified" | "proposal" | "won" | "lost";
@@ -110,6 +111,9 @@ function latestDoneRows(followUps: LeadFollowUpRecord[]) {
 }
 
 export default function LeadOutcomes() {
+  const { roleCodes } = useCrmAccess();
+  const canApproveOutcome = canCrmAction(roleCodes, "approve", "lead-outcomes");
+  const canExportOutcomes = canCrmAction(roleCodes, "export", "lead-outcomes");
   const [activeFilter, setActiveFilter] = useState<OutcomeFilter>("All");
   const [search, setSearch] = useState("");
   const [rows, setRows] = useState<OutcomeRow[]>([]);
@@ -241,7 +245,7 @@ export default function LeadOutcomes() {
             Final decisions are saved to backend lead status and follow-up history. Won project leads continue into Project Clients.
           </p>
         </div>
-        <button onClick={exportRows} className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs font-black uppercase tracking-widest text-primary shadow-sm hover:border-primary">
+        <button onClick={exportRows} disabled={!canExportOutcomes} className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs font-black uppercase tracking-widest text-primary shadow-sm hover:border-primary disabled:cursor-not-allowed disabled:opacity-50">
           <Download size={16} /> Export
         </button>
       </div>
@@ -348,7 +352,7 @@ export default function LeadOutcomes() {
                           <button
                             type="button"
                             onClick={() => saveOutcome(row)}
-                            disabled={savingId === row.backendId}
+                            disabled={savingId === row.backendId || !canApproveOutcome}
                             className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-primary px-3 text-[10px] font-black uppercase tracking-widest text-white disabled:opacity-60"
                           >
                             <Save size={13} /> {savingId === row.backendId ? "Saving" : "Save"}

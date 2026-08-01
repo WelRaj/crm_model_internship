@@ -5,6 +5,7 @@ from rest_framework.views import APIView
 
 from apps.core.responses import success_response
 from apps.hrms.models import AttendanceRecord, EmployeeHRProfile, ExitRequest, LeaveRequest, PayrollRecord
+from apps.hrms.permissions import require_hrms_access, require_hrms_action_access
 from apps.hrms.selectors import get_attendance_queryset, get_employees_queryset, get_exit_queryset, get_leave_queryset, get_payroll_queryset
 from apps.hrms.serializers import (
     ActionSerializer,
@@ -25,6 +26,8 @@ from apps.hrms.services import HRMSService
 
 class EmployeeListCreateView(APIView):
     def get(self, request):
+        require_hrms_access(request.user)
+        require_hrms_action_access(request.user, "view")
         queryset = get_employees_queryset()
         search = request.query_params.get("search")
         status_filter = request.query_params.get("status")
@@ -44,6 +47,8 @@ class EmployeeListCreateView(APIView):
         return success_response(data=EmployeeHRProfileSerializer(queryset[:300], many=True).data)
 
     def post(self, request):
+        require_hrms_access(request.user)
+        require_hrms_action_access(request.user, "create")
         serializer = EmployeeHRProfileWriteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         employee = HRMSService.create_employee(data=serializer.validated_data, actor=request.user, request=request)
@@ -52,10 +57,14 @@ class EmployeeListCreateView(APIView):
 
 class EmployeeDetailView(APIView):
     def get(self, request, employee_id):
+        require_hrms_access(request.user)
+        require_hrms_action_access(request.user, "view")
         employee = get_object_or_404(get_employees_queryset(), id=employee_id)
         return success_response(data=EmployeeHRProfileSerializer(employee).data)
 
     def put(self, request, employee_id):
+        require_hrms_access(request.user)
+        require_hrms_action_access(request.user, "edit")
         employee = get_object_or_404(get_employees_queryset(), id=employee_id)
         serializer = EmployeeHRProfileWriteSerializer(data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
@@ -63,6 +72,8 @@ class EmployeeDetailView(APIView):
         return success_response(data=EmployeeHRProfileSerializer(employee).data, message="Employee updated successfully")
 
     def delete(self, request, employee_id):
+        require_hrms_access(request.user)
+        require_hrms_action_access(request.user, "delete")
         employee = get_object_or_404(get_employees_queryset(), id=employee_id)
         employee = HRMSService.archive_employee(employee=employee, actor=request.user, request=request)
         return success_response(data=EmployeeHRProfileSerializer(employee).data, message="Employee archived successfully")
@@ -70,6 +81,8 @@ class EmployeeDetailView(APIView):
 
 class AttendanceListCreateView(APIView):
     def get(self, request):
+        require_hrms_access(request.user)
+        require_hrms_action_access(request.user, "view")
         queryset = get_attendance_queryset()
         search = request.query_params.get("search")
         status_filter = request.query_params.get("status")
@@ -80,6 +93,8 @@ class AttendanceListCreateView(APIView):
         return success_response(data=AttendanceRecordSerializer(queryset[:300], many=True).data)
 
     def post(self, request):
+        require_hrms_access(request.user)
+        require_hrms_action_access(request.user, "create")
         serializer = AttendanceWriteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         attendance = HRMSService.save_attendance(data=serializer.validated_data, actor=request.user, request=request)
@@ -88,6 +103,8 @@ class AttendanceListCreateView(APIView):
 
 class AttendanceDetailView(APIView):
     def put(self, request, attendance_id):
+        require_hrms_access(request.user)
+        require_hrms_action_access(request.user, "edit")
         attendance = get_object_or_404(get_attendance_queryset(), id=attendance_id)
         serializer = AttendanceWriteSerializer(data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
@@ -97,6 +114,8 @@ class AttendanceDetailView(APIView):
 
 class AttendanceActionView(APIView):
     def post(self, request, attendance_id):
+        require_hrms_access(request.user)
+        require_hrms_action_access(request.user, "approve")
         attendance = get_object_or_404(AttendanceRecord.objects.filter(is_deleted=False).select_related("employee", "employee__user"), id=attendance_id)
         serializer = ActionSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -106,6 +125,8 @@ class AttendanceActionView(APIView):
 
 class LeaveListCreateView(APIView):
     def get(self, request):
+        require_hrms_access(request.user)
+        require_hrms_action_access(request.user, "view")
         queryset = get_leave_queryset()
         search = request.query_params.get("search")
         status_filter = request.query_params.get("status")
@@ -116,6 +137,8 @@ class LeaveListCreateView(APIView):
         return success_response(data=LeaveRequestSerializer(queryset[:300], many=True).data)
 
     def post(self, request):
+        require_hrms_access(request.user)
+        require_hrms_action_access(request.user, "create")
         serializer = LeaveRequestWriteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         leave = HRMSService.create_leave(data=serializer.validated_data, actor=request.user, request=request)
@@ -124,6 +147,8 @@ class LeaveListCreateView(APIView):
 
 class LeaveActionView(APIView):
     def post(self, request, leave_id):
+        require_hrms_access(request.user)
+        require_hrms_action_access(request.user, "approve")
         leave = get_object_or_404(get_leave_queryset(), id=leave_id)
         serializer = ActionSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -133,6 +158,8 @@ class LeaveActionView(APIView):
 
 class PayrollListCreateView(APIView):
     def get(self, request):
+        require_hrms_access(request.user)
+        require_hrms_action_access(request.user, "view")
         queryset = get_payroll_queryset()
         search = request.query_params.get("search")
         status_filter = request.query_params.get("status")
@@ -143,6 +170,8 @@ class PayrollListCreateView(APIView):
         return success_response(data=PayrollRecordSerializer(queryset[:300], many=True).data)
 
     def post(self, request):
+        require_hrms_access(request.user)
+        require_hrms_action_access(request.user, "create")
         serializer = PayrollRecordWriteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         payroll = HRMSService.create_payroll(data=serializer.validated_data, actor=request.user, request=request)
@@ -151,6 +180,8 @@ class PayrollListCreateView(APIView):
 
 class PayrollActionView(APIView):
     def post(self, request, payroll_id):
+        require_hrms_access(request.user)
+        require_hrms_action_access(request.user, "approve")
         payroll = get_object_or_404(PayrollRecord.objects.filter(is_deleted=False).select_related("employee", "employee__user"), id=payroll_id)
         serializer = ActionSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -160,6 +191,8 @@ class PayrollActionView(APIView):
 
 class ExitListCreateView(APIView):
     def get(self, request):
+        require_hrms_access(request.user)
+        require_hrms_action_access(request.user, "view")
         queryset = get_exit_queryset()
         search = request.query_params.get("search")
         status_filter = request.query_params.get("status")
@@ -170,6 +203,8 @@ class ExitListCreateView(APIView):
         return success_response(data=ExitRequestSerializer(queryset[:300], many=True).data)
 
     def post(self, request):
+        require_hrms_access(request.user)
+        require_hrms_action_access(request.user, "create")
         serializer = ExitRequestWriteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         exit_case = HRMSService.create_exit(data=serializer.validated_data, actor=request.user, request=request)
@@ -178,6 +213,8 @@ class ExitListCreateView(APIView):
 
 class ExitDetailView(APIView):
     def put(self, request, exit_id):
+        require_hrms_access(request.user)
+        require_hrms_action_access(request.user, "edit")
         exit_case = get_object_or_404(get_exit_queryset(), id=exit_id)
         serializer = ExitRequestUpdateSerializer(data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
@@ -187,6 +224,8 @@ class ExitDetailView(APIView):
 
 class ExitActionView(APIView):
     def post(self, request, exit_id):
+        require_hrms_access(request.user)
+        require_hrms_action_access(request.user, "approve")
         exit_case = get_object_or_404(get_exit_queryset(), id=exit_id)
         serializer = ActionSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)

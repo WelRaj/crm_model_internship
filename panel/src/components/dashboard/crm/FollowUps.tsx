@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { CalendarClock, CheckCircle2, Clock, Download, MessageCircle, PhoneCall, Search } from "lucide-react";
 import { listHrmsEmployees } from "@/services/hrms-api";
 import { createLeadFollowUp, listFollowUps, type LeadFollowUpRecord } from "@/services/leads-api";
+import { canCrmAction, useCrmAccess } from "./crm-access";
 
 type FollowUpStatus = "Due Today" | "Overdue" | "Scheduled" | "Done" | "No Date";
 type LeadType = "Project" | "Trading";
@@ -90,6 +91,9 @@ function priorityDot(priority: FollowUpRow["priority"]) {
 }
 
 export default function FollowUps() {
+  const { roleCodes } = useCrmAccess();
+  const canCreateFollowUp = canCrmAction(roleCodes, "create", "followups");
+  const canExportFollowUps = canCrmAction(roleCodes, "export", "followups");
   const [rows, setRows] = useState<FollowUpRow[]>([]);
   const [filter, setFilter] = useState<"All" | FollowUpStatus>("Due Today");
   const [search, setSearch] = useState("");
@@ -202,7 +206,7 @@ export default function FollowUps() {
             Backend callbacks, issue checks, proposal confirmations, and pending conversations from Calling Desk updates.
           </p>
         </div>
-        <button onClick={exportRows} className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs font-black uppercase tracking-widest text-primary shadow-sm hover:border-primary">
+        <button onClick={exportRows} disabled={!canExportFollowUps} className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs font-black uppercase tracking-widest text-primary shadow-sm hover:border-primary disabled:cursor-not-allowed disabled:opacity-50">
           <Download size={16} /> Export
         </button>
       </div>
@@ -301,7 +305,7 @@ export default function FollowUps() {
               <span className="text-xs font-black uppercase tracking-widest text-slate-400">New Note</span>
               <textarea value={note} onChange={(event) => setNote(event.target.value)} rows={6} placeholder="Summarize the completed follow-up..." className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm font-semibold outline-none focus:border-primary focus:bg-white" />
             </label>
-            <button onClick={saveQuickLog} disabled={!selected || isSaving} className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-xs font-black uppercase tracking-widest text-white disabled:cursor-not-allowed disabled:bg-slate-300">
+            <button onClick={saveQuickLog} disabled={!selected || isSaving || !canCreateFollowUp} className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-xs font-black uppercase tracking-widest text-white disabled:cursor-not-allowed disabled:bg-slate-300">
               <MessageCircle size={16} /> {isSaving ? "Saving" : "Save Follow-up Log"}
             </button>
           </div>

@@ -27,6 +27,7 @@ import {
   type SupportTicketStatus,
 } from "@/services/support-api";
 import { createNotification } from "@/services/notifications-api";
+import { canAccessSupport, canSupportAction, resolveSupportRoleCodes } from "./support-access";
 
 type SupportTicket = {
   id: string;
@@ -105,7 +106,11 @@ function mapTicket(record: SupportTicketRecord): SupportTicket {
   };
 }
 
-export default function SupportHub() {
+export default function SupportHub({ roleCodes }: { roleCodes?: string[] | null }) {
+  const supportRoleCodes = useMemo(() => resolveSupportRoleCodes(roleCodes), [roleCodes]);
+  const supportAccessible = canAccessSupport(supportRoleCodes);
+  const canCreateTicket = canSupportAction(supportRoleCodes, "create");
+  const canEditTicket = canSupportAction(supportRoleCodes, "edit");
   const [tickets, setTickets] = useState<SupportTicket[]>([]);
   const [overview, setOverview] = useState<SupportOverview | null>(null);
   const [showForm, setShowForm] = useState(false);
@@ -237,6 +242,10 @@ export default function SupportHub() {
   };
 
   const updateStatus = async (ticketId: string, status: SupportTicketStatus) => {
+    if (!canEditTicket) {
+      setError("You are not allowed to update support tickets.");
+      return;
+    }
     try {
       setError("");
       const updatedTicket = await updateSupportTicket(ticketId, { status });
@@ -259,6 +268,11 @@ export default function SupportHub() {
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
+      {!supportAccessible ? (
+        <div className="rounded-2xl border border-rose-100 bg-rose-50 px-5 py-4 text-sm font-black text-rose-700">
+          Access denied.
+        </div>
+      ) : null}
       <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
         <div>
           <p className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-400">Support Desk</p>
@@ -269,11 +283,12 @@ export default function SupportHub() {
         </div>
         <button
           type="button"
+          disabled={!canCreateTicket}
           onClick={() => {
             setShowForm((current) => !current);
             setError("");
           }}
-          className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-accent px-4 text-xs font-black uppercase tracking-widest text-slate-950 shadow-sm"
+          className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-accent px-4 text-xs font-black uppercase tracking-widest text-slate-950 shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
         >
           <Plus size={16} /> New Ticket
         </button>
@@ -348,9 +363,9 @@ export default function SupportHub() {
                     </div>
                   </div>
                   <div className="flex shrink-0 flex-wrap gap-2">
-                    <SmallButton onClick={() => updateStatus(ticket.id, "In Progress")}>Start</SmallButton>
-                    <SmallButton onClick={() => updateStatus(ticket.id, "Waiting")}>Wait</SmallButton>
-                    <SmallButton onClick={() => updateStatus(ticket.id, "Resolved")}>Resolve</SmallButton>
+                    <SmallButton disabled={!canEditTicket} onClick={() => updateStatus(ticket.id, "In Progress")}>Start</SmallButton>
+                    <SmallButton disabled={!canEditTicket} onClick={() => updateStatus(ticket.id, "Waiting")}>Wait</SmallButton>
+                    <SmallButton disabled={!canEditTicket} onClick={() => updateStatus(ticket.id, "Resolved")}>Resolve</SmallButton>
                   </div>
                 </div>
               </div>
@@ -380,7 +395,7 @@ export default function SupportHub() {
                 <button type="button" onClick={() => setShowForm(false)} className="h-11 rounded-xl border border-border bg-white px-4 text-xs font-black uppercase tracking-widest text-primary">
                   Cancel
                 </button>
-                <button type="button" onClick={() => void saveTicket()} className="h-11 rounded-xl bg-primary px-4 text-xs font-black uppercase tracking-widest text-white">
+                <button type="button" onClick={() => void saveTicket()} disabled={!canCreateTicket} className="h-11 rounded-xl bg-primary px-4 text-xs font-black uppercase tracking-widest text-white disabled:cursor-not-allowed disabled:opacity-50">
                   Save Ticket
                 </button>
               </div>
@@ -428,9 +443,9 @@ function Metric({ label, value, icon: Icon, tone }: { label: string; value: stri
   );
 }
 
-function SmallButton({ children, onClick }: { children: string; onClick: () => void }) {
+function SmallButton({ children, onClick, disabled = false }: { children: string; onClick: () => void; disabled?: boolean }) {
   return (
-    <button type="button" onClick={onClick} className="h-9 rounded-xl border border-border bg-white px-3 text-[10px] font-black uppercase tracking-widest text-primary hover:bg-slate-50">
+    <button type="button" onClick={onClick} disabled={disabled} className="h-9 rounded-xl border border-border bg-white px-3 text-[10px] font-black uppercase tracking-widest text-primary hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50">
       {children}
     </button>
   );

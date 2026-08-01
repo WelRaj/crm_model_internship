@@ -1,4 +1,15 @@
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
+function resolveBaseUrl() {
+  const configured = process.env.NEXT_PUBLIC_API_URL;
+  if (configured) return configured.replace(/\/$/, "");
+
+  if (typeof window !== "undefined") {
+    return `${window.location.protocol}//${window.location.hostname}:8000/api/v1`;
+  }
+
+  return "http://127.0.0.1:8000/api/v1";
+}
+
+const BASE_URL = resolveBaseUrl();
 const AUTH_STORAGE_KEY = "crm_auth_tokens";
 let refreshInFlight: Promise<string | null> | null = null;
 

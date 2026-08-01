@@ -1,7 +1,7 @@
 "use client";
 
 import EmployeePerformance from "@/components/dashboard/projects/performance/EmployeePerformance";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { LucideIcon } from "lucide-react";
 import { 
   LayoutDashboard, UserPlus, Target, Wallet, Speaker, Bell, Search, LogOut, TrendingUp, Users, Briefcase, Settings, Shield, ShieldCheck, Calendar, HelpCircle, MessageSquare, ChevronDown, User, Clock, SquareCheck, History, CheckCircle2, Menu, ChevronLeft, UserCheck, Headphones, X, Mail, Phone, MapPin, IdCard, KeyRound, Pencil
@@ -15,6 +15,9 @@ import LeadOutcomes from "@/components/dashboard/crm/LeadOutcomes";
 import ClientsContacts from "@/components/dashboard/crm/ClientsContacts";
 import FollowUps from "@/components/dashboard/crm/FollowUps";
 import ProjectAgreement from "@/components/dashboard/crm/ProjectAgreement";
+import { canAccessAdminView, getAllowedAdminViews, getDefaultAdminView, resolveAdminRoleCodes, type AdminView } from "@/components/dashboard/administration/admin-access";
+import { CrmAccessProvider, getAllowedCrmTabs, getDefaultCrmTab, isCrmTabId, resolveCrmRoleCodes } from "@/components/dashboard/crm/crm-access";
+import { getAllowedDashboardTabs, getDefaultDashboardTab, resolveDashboardRoleCodes } from "@/components/dashboard/dashboard-access";
 import HRMSHub from "@/components/dashboard/hrms/HRMSHub";
 import MarketingHub from "@/components/dashboard/marketing/MarketingHub";
 import ProjectHub from "@/components/dashboard/projects/ProjectHub";
@@ -35,10 +38,8 @@ import { getCurrentProfile, updateCurrentProfile, type BackendUserProfile } from
 import { useRouter } from "next/navigation";
 
 type MarketingView = "campaigns" | "roi" | "sources";
-type AdminView = "users" | "roles" | "logs" | "approvals" | "settings";
 
 const marketingTabs: MarketingView[] = ["campaigns", "roi", "sources"];
-const adminTabs: AdminView[] = ["users", "roles", "logs", "approvals", "settings"];
 const projectTabs = ["projects", "team-tracking", "tasks", "milestones", "deadlines", "performance"];
 const accountingModuleIds = ACCOUNTING_MODULES.map((module) => module.id);
 
@@ -131,7 +132,15 @@ const recentLoginHistory = [
   { id: "LOG-03", device: "Edge on Windows", location: "Jaipur, India", ip: "103.87.XX.18", time: "04 Jul 2026, 11:02 AM", result: "Successful" },
 ];
 
-function DashboardOverview({ activeModule, setActiveTab }: { activeModule: string; setActiveTab: (tab: string) => void }) {
+function DashboardOverview({
+  activeModule,
+  setActiveTab,
+  allowedTabs,
+}: {
+  activeModule: string;
+  setActiveTab: (tab: string) => void;
+  allowedTabs: Set<string>;
+}) {
   const INR = "\u20b9";
   const executiveStats = [
     { title: "Monthly Revenue", value: `${INR}45.2L`, detail: "+12.4% vs last month", icon: Wallet, tone: "bg-emerald-50 text-emerald-600" },
@@ -154,7 +163,7 @@ function DashboardOverview({ activeModule, setActiveTab }: { activeModule: strin
                 { name: "Delivery Projects", id: "projects" },
                 { name: "Admin Control", id: "administration" },
                 { name: "Support Desk", id: "support" },
-            ].map((dept) => (
+            ].filter((dept) => allowedTabs.has(dept.id)).map((dept) => (
               <button
                 key={dept.id}
                 onClick={() => setActiveTab(dept.id)}
@@ -637,11 +646,23 @@ export default function Dashboard() {
   const [showProfile, setShowProfile] = useState(false);
   const [showProfileDrawer, setShowProfileDrawer] = useState(false);
   const [userProfile, setUserProfile] = useState<UserProfile>(defaultUserProfile);
+  const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
   const [dashboardNotifications, setDashboardNotifications] = useState<DashboardNotification[]>([]);
   const [notificationSummary, setNotificationSummary] = useState<NotificationOverview | null>(null);
   const [notificationsLoading, setNotificationsLoading] = useState(false);
   const [isAuthChecking, setIsAuthChecking] = useState(false);
   const [isSidebarVisible, setIsSidebarVisible] = useState(true);
+  const dashboardRoleCodes = useMemo(() => resolveDashboardRoleCodes(currentUser?.roles), [currentUser]);
+  const allowedDashboardTabs = useMemo(() => getAllowedDashboardTabs(dashboardRoleCodes), [dashboardRoleCodes]);
+  const canAccessAccounting = dashboardRoleCodes.some((role) => role === "super_admin" || role === "admin" || role === "finance");
+  const allowedDashboardItems = useMemo(() => new Set<string>([
+    ...allowedDashboardTabs,
+    ...(canAccessAccounting ? accountingModuleIds : []),
+  ]), [allowedDashboardTabs, canAccessAccounting]);
+  const adminRoleCodes = useMemo(() => resolveAdminRoleCodes(currentUser?.roles), [currentUser]);
+  const allowedAdminViews = useMemo(() => getAllowedAdminViews(adminRoleCodes), [adminRoleCodes]);
+  const crmRoleCodes = useMemo(() => resolveCrmRoleCodes(currentUser?.roles), [currentUser]);
+  const allowedCrmTabs = useMemo(() => getAllowedCrmTabs(crmRoleCodes), [crmRoleCodes]);
 
   async function loadDashboardNotifications() {
     try {
@@ -672,6 +693,7 @@ export default function Dashboard() {
       try {
         const [user, profile] = await Promise.all([getCurrentUser(), getCurrentProfile()]);
         if (!isMounted) return;
+        setCurrentUser(user);
         setUserProfile(userToProfile(user, profile));
         setIsAuthChecking(false);
         void loadDashboardNotifications();
@@ -722,19 +744,52 @@ export default function Dashboard() {
     { label: "Support Desk", department: "support", items: [{ id: "support", label: "Support Desk", icon: HelpCircle }] }
   ];
 
+  const filteredMenuGroups = menuGroups
+    .map((group) =>
+      ({
+        ...group,
+        items:
+          group.department === "administration"
+            ? group.items.filter((item) => allowedAdminViews.includes(item.id as AdminView))
+            : group.items.filter((item) => allowedDashboardItems.has(item.id)),
+      }),
+    )
+    .filter((group) => group.department === "overview" || group.items.length > 0);
+
   const getSidebarGroups = () => {
     if (activeTab === "overview") return menuGroups.filter(g => g.department === "overview");
-    const currentGroup = menuGroups.find(group => group.department === activeTab || group.items.some(item => item.id === activeTab));
+    const currentGroup = filteredMenuGroups.find(group => group.department === activeTab || group.items.some(item => item.id === activeTab));
     return currentGroup ? [currentGroup] : [];
   };
 
   const sidebarGroups = getSidebarGroups();
   const isMarketingTab = marketingTabs.includes(activeTab as MarketingView);
-  const isAdminTab = adminTabs.includes(activeTab as AdminView);
+  const isAdminTab = allowedAdminViews.includes(activeTab as AdminView);
   const isProjectTab = projectTabs.includes(activeTab);
   const openTab = (tab: string) => {
+    if (!allowedDashboardItems.has(tab)) {
+      setActiveTab(getDefaultDashboardTab(dashboardRoleCodes));
+      setShowNotif(false);
+      setShowProfile(false);
+      setShowProfileDrawer(false);
+      return;
+    }
+    if (isCrmTabId(tab) && !allowedCrmTabs.includes(tab)) {
+      setActiveTab(getDefaultCrmTab(crmRoleCodes));
+      setShowNotif(false);
+      setShowProfile(false);
+      setShowProfileDrawer(false);
+      return;
+    }
+    if (tab === "roles" && !canAccessAdminView(adminRoleCodes, "roles")) {
+      setActiveTab(getDefaultAdminView(adminRoleCodes));
+      setShowNotif(false);
+      setShowProfile(false);
+      setShowProfileDrawer(false);
+      return;
+    }
     if (tab !== "overview") {
-      const matchingGroup = menuGroups.find((group) => group.department === tab || group.items.some((item) => item.id === tab));
+      const matchingGroup = filteredMenuGroups.find((group) => group.department === tab || group.items.some((item) => item.id === tab));
       setLastVisitedModule(matchingGroup?.department || tab);
     }
     setActiveTab(tab);
@@ -742,6 +797,30 @@ export default function Dashboard() {
     setShowProfile(false);
     setShowProfileDrawer(false);
   };
+
+  useEffect(() => {
+    if (activeTab === "overview") return;
+    if (allowedDashboardItems.has(activeTab)) return;
+    queueMicrotask(() => {
+      setActiveTab(getDefaultDashboardTab(dashboardRoleCodes));
+    });
+  }, [activeTab, allowedDashboardItems, dashboardRoleCodes]);
+
+  useEffect(() => {
+    if (!isCrmTabId(activeTab)) return;
+    if (allowedCrmTabs.includes(activeTab)) return;
+    queueMicrotask(() => {
+      setActiveTab(getDefaultCrmTab(crmRoleCodes));
+    });
+  }, [activeTab, allowedCrmTabs, crmRoleCodes]);
+
+  useEffect(() => {
+    if (activeTab !== "roles") return;
+    if (canAccessAdminView(adminRoleCodes, "roles")) return;
+    queueMicrotask(() => {
+      setActiveTab(getDefaultAdminView(adminRoleCodes));
+    });
+  }, [activeTab, adminRoleCodes]);
 
   if (isAuthChecking) {
     return (
@@ -755,6 +834,7 @@ export default function Dashboard() {
   }
 
   return (
+    <CrmAccessProvider roleCodes={crmRoleCodes}>
     <div className="relative flex min-h-screen overflow-x-hidden bg-[#F8FAFC]">
       <aside className={`bg-[#0F172A] text-white flex flex-col fixed inset-y-0 left-0 z-50 shadow-2xl transition-all duration-500 ease-in-out ${isSidebarVisible ? "w-[19rem] translate-x-0" : "w-0 -translate-x-full overflow-hidden"}`}>
         <div className="p-10 flex items-center gap-4 whitespace-nowrap min-w-[19rem]">
@@ -854,13 +934,15 @@ export default function Dashboard() {
                         </div>
                       ) : null}
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => openTab("support")}
-                      className="mt-3 flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-primary text-xs font-black uppercase tracking-widest text-white"
-                    >
-                      <MessageSquare size={15} /> Open Support Desk
-                    </button>
+                    {allowedDashboardItems.has("support") ? (
+                      <button
+                        type="button"
+                        onClick={() => openTab("support")}
+                        className="mt-3 flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-primary text-xs font-black uppercase tracking-widest text-white"
+                      >
+                        <MessageSquare size={15} /> Open Support Desk
+                      </button>
+                    ) : null}
                   </div>
                 ) : null}
               </div>
@@ -899,9 +981,9 @@ export default function Dashboard() {
                           setShowProfileDrawer(true);
                         }}
                       />
-                      <ProfileAction icon={ShieldCheck} label="Approval Center" onClick={() => openTab("approvals")} />
-                      <ProfileAction icon={Settings} label="System Settings" onClick={() => openTab("settings")} />
-                      <ProfileAction icon={HelpCircle} label="Support Desk" onClick={() => openTab("support")} />
+                      {allowedDashboardItems.has("approvals") ? <ProfileAction icon={ShieldCheck} label="Approval Center" onClick={() => openTab("approvals")} /> : null}
+                      {allowedDashboardItems.has("settings") ? <ProfileAction icon={Settings} label="System Settings" onClick={() => openTab("settings")} /> : null}
+                      {allowedDashboardItems.has("support") ? <ProfileAction icon={HelpCircle} label="Support Desk" onClick={() => openTab("support")} /> : null}
                     </div>
                     <button
                       type="button"
@@ -917,7 +999,7 @@ export default function Dashboard() {
         </header>
         <main className="w-full min-w-0 flex-1 p-6 xl:p-12">
             <div className="mx-auto w-full max-w-[1600px]">
-                {activeTab === "overview" && <DashboardOverview activeModule={lastVisitedModule} setActiveTab={openTab} />}
+                {activeTab === "overview" && <DashboardOverview activeModule={lastVisitedModule} setActiveTab={openTab} allowedTabs={allowedDashboardItems} />}
                 {activeTab === "leads" && <LeadHub />}
                 {activeTab === "lead-assign" && <LeadAssign />}
                 {activeTab === "telecaller" && <TelecallerDesk />}
@@ -931,16 +1013,17 @@ export default function Dashboard() {
                 {activeTab === "leave" && <HRMSHub activeView="leave" />}
                 {activeTab === "payroll" && <HRMSHub activeView="payroll" />}
                 {activeTab === "exit" && <HRMSHub activeView="exit" />}
-                {activeTab === "accounting" && <AccountingWizard onSelectModule={openTab} />}
-                {isAccountingModule(activeTab) && <AccountingWizard activeModule={activeTab} onSelectModule={openTab} />}
+                {activeTab === "accounting" && <AccountingWizard roleCodes={currentUser?.roles.map((role) => role.code)} onSelectModule={openTab} />}
+                {isAccountingModule(activeTab) && <AccountingWizard roleCodes={currentUser?.roles.map((role) => role.code)} activeModule={activeTab} onSelectModule={openTab} />}
                 {(activeTab === "marketing" || isMarketingTab) && <MarketingHub activeView={isMarketingTab ? activeTab as MarketingView : "campaigns"} />}
                 {isProjectTab && (activeTab === "performance" ? <EmployeePerformance /> : <ProjectHub activeView={activeTab} />)}
-                {(activeTab === "administration" || isAdminTab) && <AdministrationHub activeView={isAdminTab ? activeTab as AdminView : "users"} />}
-                {activeTab === "support" && <SupportHub />}
+                {(activeTab === "administration" || isAdminTab) && <AdministrationHub roleCodes={currentUser?.roles.map((role) => role.code)} activeView={isAdminTab ? activeTab as AdminView : "users"} />}
+                {activeTab === "support" && <SupportHub roleCodes={currentUser?.roles.map((role) => role.code)} />}
             </div>
         </main>
       </div>
       <ProfileDrawer open={showProfileDrawer} profile={userProfile} onSave={handleSaveProfile} onClose={() => setShowProfileDrawer(false)} />
     </div>
+    </CrmAccessProvider>
   );
 }

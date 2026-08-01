@@ -27,6 +27,7 @@ import Step14Approvals from './Step14Approvals';
 import Step15AuditLogs from './Step15AuditLogs';
 import Step16Access from './Step16Access';
 import Step17BankDetails from './Step17BankDetails';
+import { hasAccountingShellAccess, resolveAccountingRole } from './AccessControlContext';
 
 export type AccountingModuleId =
   | 'accounting-clients'
@@ -78,15 +79,28 @@ export const ACCOUNTING_MODULES: AccountingModule[] = [
 type AccountingWizardProps = {
   activeModule?: AccountingModuleId;
   onSelectModule?: (moduleId: AccountingModuleId) => void;
+  roleCodes?: string[] | null;
 };
 
-export default function AccountingWizard({ activeModule, onSelectModule }: AccountingWizardProps) {
+export default function AccountingWizard({ activeModule, onSelectModule, roleCodes }: AccountingWizardProps) {
   const selectedModule = ACCOUNTING_MODULES.find((module) => module.id === activeModule);
+  const role = resolveAccountingRole(roleCodes);
+
+  if (!hasAccountingShellAccess(roleCodes) || !role) {
+    return (
+      <div className="flex min-h-[40vh] items-center justify-center rounded-[2rem] border border-slate-100 bg-white p-8 shadow-sm">
+        <div className="max-w-md text-center">
+          <h2 className="text-2xl font-black text-[#0F172A]">Access Denied</h2>
+          <p className="mt-2 text-sm font-medium text-slate-500">Finance Control is restricted to finance and system roles.</p>
+        </div>
+      </div>
+    );
+  }
 
   if (selectedModule) {
     const SelectedComponent = selectedModule.component;
     return (
-      <AuthProvider>
+      <AuthProvider role={role}>
         <ProtectedModule moduleId={selectedModule.id}>
           <div className='animate-in fade-in duration-500'>
             <SelectedComponent />
@@ -98,7 +112,9 @@ export default function AccountingWizard({ activeModule, onSelectModule }: Accou
 
   return (
     <div className='animate-in fade-in duration-500'>
-      <AccountingDashboard onSelectModule={onSelectModule || (() => {})} />
+      <AuthProvider role={role}>
+        <AccountingDashboard onSelectModule={onSelectModule || (() => {})} />
+      </AuthProvider>
     </div>
   );
 }

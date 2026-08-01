@@ -7,6 +7,7 @@ from django.contrib.auth.hashers import check_password, make_password
 from django.contrib.auth.models import update_last_login
 from django.db import transaction
 from django.utils import timezone
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.exceptions import AuthenticationFailed, ValidationError
 from rest_framework_simplejwt.tokens import RefreshToken
 
@@ -33,6 +34,7 @@ SIGNUP_DEPARTMENT_ROLES = {
     "Growth Marketing": ("marketing", "Marketing Executive"),
     "Delivery Projects": ("project_manager", "Project Executive"),
     "Admin Control": ("admin", "Admin Executive"),
+    "Support Desk": ("support", "Support Executive"),
 }
 
 
@@ -322,6 +324,9 @@ class AccountAdminService:
     @staticmethod
     @transaction.atomic
     def update_role(*, role, data, actor, request=None):
+        if role.is_system_role and not getattr(actor, "is_superuser", False):
+            raise PermissionDenied("Protected system roles can only be updated by a super admin.")
+
         old_values = {
             "name": role.name,
             "description": role.description,

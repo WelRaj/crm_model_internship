@@ -4,6 +4,7 @@ from rest_framework.views import APIView
 
 from apps.core.responses import success_response
 from apps.support.models import SupportTicket
+from apps.support.permissions import require_support_access, require_support_action_access
 from apps.support.selectors import apply_search, tickets_queryset
 from apps.support.serializers import (
     SupportTicketCommentCreateSerializer,
@@ -17,6 +18,8 @@ from apps.support.services import SupportService
 
 class SupportOverviewView(APIView):
     def get(self, request):
+        require_support_access(request.user)
+        require_support_action_access(request.user, "view")
         queryset = tickets_queryset()
         return success_response(
             data={
@@ -30,6 +33,8 @@ class SupportOverviewView(APIView):
 
 class SupportTicketListCreateView(APIView):
     def get(self, request):
+        require_support_access(request.user)
+        require_support_action_access(request.user, "view")
         queryset = tickets_queryset()
         search = request.query_params.get("search")
         status_filter = request.query_params.get("status")
@@ -47,6 +52,8 @@ class SupportTicketListCreateView(APIView):
         return success_response(data=SupportTicketSerializer(queryset[:200], many=True).data)
 
     def post(self, request):
+        require_support_access(request.user)
+        require_support_action_access(request.user, "create")
         serializer = SupportTicketWriteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         ticket = SupportService.create_ticket(data=serializer.validated_data, actor=request.user, request=request)
@@ -59,10 +66,14 @@ class SupportTicketListCreateView(APIView):
 
 class SupportTicketDetailView(APIView):
     def get(self, request, ticket_id):
+        require_support_access(request.user)
+        require_support_action_access(request.user, "view")
         ticket = get_object_or_404(tickets_queryset(), id=ticket_id)
         return success_response(data=SupportTicketSerializer(ticket).data)
 
     def patch(self, request, ticket_id):
+        require_support_access(request.user)
+        require_support_action_access(request.user, "edit")
         ticket = get_object_or_404(tickets_queryset(), id=ticket_id)
         serializer = SupportTicketWriteSerializer(data=request.data, partial=True, context={"ticket": ticket})
         serializer.is_valid(raise_exception=True)
@@ -72,10 +83,14 @@ class SupportTicketDetailView(APIView):
 
 class SupportTicketCommentListCreateView(APIView):
     def get(self, request, ticket_id):
+        require_support_access(request.user)
+        require_support_action_access(request.user, "comment")
         ticket = get_object_or_404(tickets_queryset(), id=ticket_id)
         return success_response(data=SupportTicketCommentSerializer(ticket.comments.all(), many=True).data)
 
     def post(self, request, ticket_id):
+        require_support_access(request.user)
+        require_support_action_access(request.user, "comment")
         ticket = get_object_or_404(tickets_queryset(), id=ticket_id)
         serializer = SupportTicketCommentCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)

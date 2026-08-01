@@ -155,6 +155,16 @@ class HRMSApiButtonFlowTests(APITestCase):
         self.actor = User.objects.create_superuser(email="api-admin@example.com", mobile="9111111111", password="Admin@12345")
         self.client.force_authenticate(self.actor)
 
+    def test_non_hr_user_is_blocked_from_hrms_module(self):
+        blocked = User.objects.create_user(email="blocked.hr@example.com", mobile="9111111222", password="User@12345")
+        self.client.force_authenticate(blocked)
+
+        overview = self.client.get("/api/v1/hrms/employees/")
+        self.assertEqual(overview.status_code, status.HTTP_403_FORBIDDEN)
+
+        create = self.client.post("/api/v1/hrms/employees/", self.employee_payload("299"), format="json")
+        self.assertEqual(create.status_code, status.HTTP_403_FORBIDDEN)
+
     def employee_payload(self, suffix="201"):
         return {
             "employee_id": f"EMP-{suffix}",

@@ -53,6 +53,7 @@ import {
   type RolePayload,
   type UpdateUserPayload,
 } from "@/services/accounts-api";
+import { canAccessAdminView, getDefaultAdminView, resolveAdminRoleCodesFromCodes } from "@/components/dashboard/administration/admin-access";
 
 type AdminView = "users" | "roles" | "logs" | "approvals" | "settings";
 type Tone = "blue" | "green" | "amber" | "red" | "purple" | "slate" | "cyan";
@@ -2083,7 +2084,20 @@ function SettingsView() {
   );
 }
 
-export default function AdministrationHub({ activeView }: { activeView: AdminView }) {
+export default function AdministrationHub({ activeView, roleCodes }: { activeView: AdminView; roleCodes?: string[] | null }) {
+  const adminRoleCodes = useMemo(() => resolveAdminRoleCodesFromCodes(roleCodes), [roleCodes]);
+  if (!canAccessAdminView(adminRoleCodes, activeView)) {
+    const fallback = getDefaultAdminView(adminRoleCodes);
+    return (
+      <div className="rounded-2xl border border-amber-200 bg-amber-50 p-6 text-amber-900 shadow-sm">
+        <p className="text-sm font-black uppercase tracking-widest">Access restricted</p>
+        <p className="mt-2 text-sm font-medium leading-6">
+          This admin page is not available for the current role. Open {fallback === "users" ? "User Management" : fallback} instead.
+        </p>
+      </div>
+    );
+  }
+
   const title =
     activeView === "users"
       ? "User Management"

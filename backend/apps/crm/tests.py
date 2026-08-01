@@ -25,6 +25,8 @@ class LeadApiTests(APITestCase):
             status=EmployeeHRProfile.Status.ACTIVE,
             kyc_status=EmployeeHRProfile.KycStatus.COMPLETE,
         )
+        crm_role, _ = Role.objects.get_or_create(code="crm_admin", defaults={"name": "CRM Admin"})
+        UserRole.objects.get_or_create(user=self.user, role=crm_role, defaults={"assigned_by": self.user})
         self.client.force_authenticate(user=self.user)
 
     def test_user_can_create_and_list_leads(self):
@@ -421,7 +423,7 @@ class LeadApiTests(APITestCase):
         Lead.objects.create(
             lead_number="LEAD-00061",
             lead_type=Lead.LeadType.PROJECT,
-            status=Lead.LeadStatus.WON,
+            status=Lead.LeadStatus.CONTACTED,
             contact_name="Won Buyer",
             mobile="9876543008",
             email="won@example.com",
@@ -430,6 +432,21 @@ class LeadApiTests(APITestCase):
             estimated_value="550000.00",
             created_by=self.user,
         )
+
+        lead = Lead.objects.get(lead_number="LEAD-00061")
+        LeadFollowUp.objects.create(
+            lead=lead,
+            channel=LeadFollowUp.Channel.CALL,
+            outcome=LeadFollowUp.Outcome.DONE,
+            note="Follow-up completed before closing project lead.",
+            created_by=self.user,
+        )
+        outcome_response = self.client.post(
+            f"/api/v1/leads/{lead.id}/outcome/",
+            {"status": "won", "note": "Won project lead is ready for client conversion."},
+            format="json",
+        )
+        self.assertEqual(outcome_response.status_code, 200)
 
         response = self.client.get("/api/v1/project-clients/")
 
@@ -446,6 +463,26 @@ class LeadApiTests(APITestCase):
             },
         )
         self.assertEqual(response.data["data"][0]["source_lead_detail"]["lead_number"], "LEAD-00061")
+
+    def test_project_clients_list_does_not_create_missing_records(self):
+        Lead.objects.create(
+            lead_number="LEAD-00062",
+            lead_type=Lead.LeadType.PROJECT,
+            status=Lead.LeadStatus.WON,
+            contact_name="List Only Buyer",
+            mobile="9876543010",
+            email="list.only@example.com",
+            company_name="List Only Co",
+            requirement_summary="Project lead already won",
+            estimated_value="350000.00",
+            created_by=self.user,
+        )
+
+        response = self.client.get("/api/v1/project-clients/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(ProjectClient.objects.count(), 0)
+        self.assertEqual(ClientContact.objects.count(), 0)
 
     def test_outcome_requires_completed_follow_up_and_is_idempotent(self):
         lead = Lead.objects.create(

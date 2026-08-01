@@ -97,7 +97,7 @@ export default function SignupForm() {
         <Select 
           label="Department Category" 
           required 
-          options={["Client Operations", "People Operations", "Finance Control", "Growth Marketing", "Delivery Projects", "Admin Control"]} 
+          options={["Client Operations", "People Operations", "Finance Control", "Growth Marketing", "Delivery Projects", "Admin Control", "Support Desk"]} 
           onChange={(e) => setFormData({...formData, category: e.target.value})}
         />
 

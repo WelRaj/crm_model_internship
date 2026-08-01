@@ -13,6 +13,7 @@ import {
   type ProjectClientRecord,
   type ProjectHandoffRecord,
 } from "@/services/leads-api";
+import { canCrmAction, useCrmAccess } from "./crm-access";
 
 type ContactRole = "Decision Maker" | "Technical" | "Finance" | "Daily Coordinator";
 type ProjectStatus = "Discovery" | "Development" | "UAT" | "Agreement Pending";
@@ -219,6 +220,11 @@ function makeBlankProjectForm(client?: ProjectClient): CreateProjectForm {
 }
 
 export default function ClientsContacts() {
+  const { roleCodes } = useCrmAccess();
+  const canCreateClient = canCrmAction(roleCodes, "create", "clients");
+  const canEditClient = canCrmAction(roleCodes, "edit", "clients");
+  const canExportClients = canCrmAction(roleCodes, "export", "clients");
+  const canViewClient = canCrmAction(roleCodes, "view", "clients");
   const [clients, setClients] = useState<ProjectClient[]>([]);
   const [selectedClientId, setSelectedClientId] = useState("");
   const [roleFilter, setRoleFilter] = useState<"All" | ContactRole>("All");
@@ -528,10 +534,10 @@ export default function ClientsContacts() {
           </p>
         </div>
         <div className="flex flex-wrap gap-3">
-          <button onClick={openCreateProject} className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-xs font-black uppercase tracking-widest text-white shadow-sm hover:bg-primary/90">
+          <button onClick={openCreateProject} disabled={!canCreateClient} className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-xs font-black uppercase tracking-widest text-white shadow-sm hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50">
             <Rocket size={16} /> Add New Project
           </button>
-          <button onClick={exportContacts} className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs font-black uppercase tracking-widest text-primary shadow-sm hover:border-primary">
+          <button onClick={exportContacts} disabled={!canExportClients} className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs font-black uppercase tracking-widest text-primary shadow-sm hover:border-primary disabled:cursor-not-allowed disabled:opacity-50">
             <Download size={16} /> Export Contacts
           </button>
         </div>
@@ -713,7 +719,7 @@ export default function ClientsContacts() {
                 </label>
               </div>
               <div className="mt-4 flex flex-wrap gap-3">
-                <button onClick={createProjectFromSelectedClient} className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-primary px-5 text-xs font-black uppercase tracking-widest text-white">
+                <button onClick={createProjectFromSelectedClient} disabled={!canCreateClient} className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-primary px-5 text-xs font-black uppercase tracking-widest text-white disabled:cursor-not-allowed disabled:opacity-50">
                   <Rocket size={15} /> {editingProjectId ? "Update Project" : "Save Project"}
                 </button>
                 <button onClick={() => { setShowCreateProject(false); setEditingProjectId(""); }} className="h-11 rounded-xl border border-border bg-white px-5 text-xs font-black uppercase tracking-widest text-primary">
@@ -749,7 +755,7 @@ export default function ClientsContacts() {
                     <button onClick={() => openProjectDetail(project)} className="rounded-xl border border-border bg-white px-3 py-2 text-[10px] font-black uppercase tracking-widest text-primary hover:bg-slate-50">
                       Open
                     </button>
-                    <button onClick={() => openProjectEdit(project)} className="rounded-xl bg-primary px-3 py-2 text-[10px] font-black uppercase tracking-widest text-white hover:bg-primary/90">
+                    <button onClick={() => openProjectEdit(project)} disabled={!canEditClient} className="rounded-xl bg-primary px-3 py-2 text-[10px] font-black uppercase tracking-widest text-white hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50">
                       Edit
                     </button>
                   </div>
@@ -795,10 +801,10 @@ export default function ClientsContacts() {
               <p className="mt-1 text-sm font-semibold text-secondary">{activeProject.company} | {activeProject.projectId} | {activeProject.sourceLeadId}</p>
             </div>
             <div className="flex flex-wrap gap-2">
-              <button onClick={() => openProjectEdit(activeProject)} className="rounded-xl bg-primary px-4 py-3 text-xs font-black uppercase tracking-widest text-white">
+              <button onClick={() => openProjectEdit(activeProject)} disabled={!canEditClient} className="rounded-xl bg-primary px-4 py-3 text-xs font-black uppercase tracking-widest text-white disabled:cursor-not-allowed disabled:opacity-50">
                 Edit Project
               </button>
-              <button onClick={() => { setShowContactForm((current) => !current); setContactForm(makeBlankContactForm()); }} className="rounded-xl border border-border bg-white px-4 py-3 text-xs font-black uppercase tracking-widest text-primary hover:bg-slate-50">
+              <button onClick={() => { setShowContactForm((current) => !current); setContactForm(makeBlankContactForm()); }} disabled={!canCreateClient} className="rounded-xl border border-border bg-white px-4 py-3 text-xs font-black uppercase tracking-widest text-primary hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50">
                 Add Contact
               </button>
             </div>
@@ -849,7 +855,7 @@ export default function ClientsContacts() {
                     <input value={contactForm.responsibility} onChange={(event) => setContactForm((current) => ({ ...current, responsibility: event.target.value }))} placeholder="Responsibility" className="h-11 rounded-xl border border-border px-3 text-sm font-semibold outline-none focus:ring-4 focus:ring-primary/10" />
                   </div>
                   <div className="mt-4 flex flex-wrap gap-3">
-                    <button onClick={addContactToSelectedClient} className="h-11 rounded-xl bg-primary px-5 text-xs font-black uppercase tracking-widest text-white">
+                    <button onClick={addContactToSelectedClient} disabled={!canCreateClient} className="h-11 rounded-xl bg-primary px-5 text-xs font-black uppercase tracking-widest text-white disabled:cursor-not-allowed disabled:opacity-50">
                       Save Contact
                     </button>
                     <button onClick={() => setShowContactForm(false)} className="h-11 rounded-xl border border-border bg-white px-5 text-xs font-black uppercase tracking-widest text-primary">
@@ -923,7 +929,7 @@ export default function ClientsContacts() {
                   <td className="px-5 py-4 text-sm font-bold text-secondary">{row.phone}</td>
                   <td className="px-5 py-4 text-sm font-semibold text-secondary">{row.responsibility}</td>
                   <td className="px-5 py-4">
-                    <button onClick={() => setSelectedClientId(row.client.clientId)} className="rounded-xl border border-border bg-white px-3 py-2 text-[10px] font-black uppercase tracking-widest text-primary hover:bg-slate-50">
+                    <button onClick={() => setSelectedClientId(row.client.clientId)} disabled={!canViewClient} className="rounded-xl border border-border bg-white px-3 py-2 text-[10px] font-black uppercase tracking-widest text-primary hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50">
                       Open Project Client
                     </button>
                   </td>

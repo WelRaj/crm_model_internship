@@ -5,6 +5,7 @@ from rest_framework.views import APIView
 
 from apps.core.responses import success_response
 from apps.projects.models import EmployeePerformanceReview, ProjectDeadline, ProjectMilestone, ProjectTask, ProjectTeamAssignment
+from apps.projects.permissions import require_project_access, require_project_action_access
 from apps.projects.selectors import get_delivery_projects_queryset
 from apps.projects.serializers import (
     DeliveryProjectCreateSerializer,
@@ -26,6 +27,8 @@ from apps.projects.services import DeliveryProjectService, EmployeePerformanceRe
 
 class DeliveryProjectListCreateView(APIView):
     def get(self, request):
+        require_project_access(request.user)
+        require_project_action_access(request.user, "view")
         queryset = get_delivery_projects_queryset()
         search = request.query_params.get("search")
         status = request.query_params.get("status")
@@ -36,6 +39,8 @@ class DeliveryProjectListCreateView(APIView):
         return success_response(data=DeliveryProjectSerializer(queryset[:200], many=True).data)
 
     def post(self, request):
+        require_project_access(request.user)
+        require_project_action_access(request.user, "create")
         serializer = DeliveryProjectCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         project = DeliveryProjectService.create_project_from_handoff(
@@ -52,10 +57,14 @@ class DeliveryProjectListCreateView(APIView):
 
 class DeliveryProjectDetailView(APIView):
     def get(self, request, project_id):
+        require_project_access(request.user)
+        require_project_action_access(request.user, "view")
         project = get_object_or_404(get_delivery_projects_queryset(), id=project_id)
         return success_response(data=DeliveryProjectSerializer(project).data)
 
     def put(self, request, project_id):
+        require_project_access(request.user)
+        require_project_action_access(request.user, "edit")
         project = get_object_or_404(get_delivery_projects_queryset(), id=project_id)
         serializer = DeliveryProjectUpdateSerializer(data=request.data, context={"project": project}, partial=True)
         serializer.is_valid(raise_exception=True)
@@ -70,6 +79,8 @@ class DeliveryProjectDetailView(APIView):
 
 class ProjectTeamAssignmentCreateView(APIView):
     def post(self, request, project_id):
+        require_project_access(request.user)
+        require_project_action_access(request.user, "assign")
         project = get_object_or_404(get_delivery_projects_queryset(), id=project_id)
         serializer = ProjectTeamAssignmentWriteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -88,6 +99,8 @@ class ProjectTeamAssignmentCreateView(APIView):
 
 class ProjectTeamAssignmentDetailView(APIView):
     def delete(self, request, assignment_id):
+        require_project_access(request.user)
+        require_project_action_access(request.user, "delete")
         assignment = get_object_or_404(
             ProjectTeamAssignment.objects.filter(is_deleted=False).select_related("project", "user"),
             id=assignment_id,
@@ -102,6 +115,8 @@ class ProjectTeamAssignmentDetailView(APIView):
 
 class ProjectMilestoneCreateView(APIView):
     def post(self, request, project_id):
+        require_project_access(request.user)
+        require_project_action_access(request.user, "create")
         project = get_object_or_404(get_delivery_projects_queryset(), id=project_id)
         serializer = ProjectMilestoneWriteSerializer(data=request.data, context={"project": project})
         serializer.is_valid(raise_exception=True)
@@ -120,6 +135,8 @@ class ProjectMilestoneCreateView(APIView):
 
 class ProjectMilestoneDetailView(APIView):
     def put(self, request, milestone_id):
+        require_project_access(request.user)
+        require_project_action_access(request.user, "edit")
         milestone = get_object_or_404(ProjectMilestone.objects.filter(is_deleted=False).select_related("project"), id=milestone_id)
         serializer = ProjectMilestoneWriteSerializer(data=request.data, context={"milestone": milestone}, partial=True)
         serializer.is_valid(raise_exception=True)
@@ -134,6 +151,8 @@ class ProjectMilestoneDetailView(APIView):
 
 class ProjectTaskCreateView(APIView):
     def post(self, request, project_id):
+        require_project_access(request.user)
+        require_project_action_access(request.user, "create")
         project = get_object_or_404(get_delivery_projects_queryset(), id=project_id)
         serializer = ProjectTaskWriteSerializer(data=request.data, context={"project": project})
         serializer.is_valid(raise_exception=True)
@@ -152,6 +171,8 @@ class ProjectTaskCreateView(APIView):
 
 class ProjectTaskDetailView(APIView):
     def put(self, request, task_id):
+        require_project_access(request.user)
+        require_project_action_access(request.user, "edit")
         task = get_object_or_404(ProjectTask.objects.filter(is_deleted=False).select_related("project", "milestone", "assigned_to"), id=task_id)
         serializer = ProjectTaskWriteSerializer(data=request.data, context={"task": task}, partial=True)
         serializer.is_valid(raise_exception=True)
@@ -164,6 +185,8 @@ class ProjectTaskDetailView(APIView):
         return success_response(data=ProjectTaskSerializer(updated_task).data, message="Project task updated successfully")
 
     def delete(self, request, task_id):
+        require_project_access(request.user)
+        require_project_action_access(request.user, "delete")
         task = get_object_or_404(ProjectTask.objects.filter(is_deleted=False).select_related("project", "milestone", "assigned_to"), id=task_id)
         DeliveryProjectService.delete_task(
             task=task,
@@ -175,6 +198,8 @@ class ProjectTaskDetailView(APIView):
 
 class ProjectDeadlineCreateView(APIView):
     def post(self, request, project_id):
+        require_project_access(request.user)
+        require_project_action_access(request.user, "create")
         project = get_object_or_404(get_delivery_projects_queryset(), id=project_id)
         serializer = ProjectDeadlineWriteSerializer(data=request.data, context={"project": project})
         serializer.is_valid(raise_exception=True)
@@ -193,6 +218,8 @@ class ProjectDeadlineCreateView(APIView):
 
 class ProjectDeadlineDetailView(APIView):
     def put(self, request, deadline_id):
+        require_project_access(request.user)
+        require_project_action_access(request.user, "edit")
         deadline = get_object_or_404(ProjectDeadline.objects.filter(is_deleted=False).select_related("project", "milestone"), id=deadline_id)
         serializer = ProjectDeadlineWriteSerializer(data=request.data, context={"deadline": deadline}, partial=True)
         serializer.is_valid(raise_exception=True)
@@ -207,6 +234,8 @@ class ProjectDeadlineDetailView(APIView):
 
 class EmployeePerformanceReviewListCreateView(APIView):
     def get(self, request):
+        require_project_access(request.user)
+        require_project_action_access(request.user, "view")
         queryset = EmployeePerformanceReview.objects.filter(is_deleted=False).select_related("employee", "manager").order_by("-updated_at")
         search = request.query_params.get("search")
         status_filter = request.query_params.get("status")
@@ -230,6 +259,8 @@ class EmployeePerformanceReviewListCreateView(APIView):
         return success_response(data=EmployeePerformanceReviewSerializer(queryset[:200], many=True).data)
 
     def post(self, request):
+        require_project_access(request.user)
+        require_project_action_access(request.user, "create")
         serializer = EmployeePerformanceReviewWriteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         review = EmployeePerformanceReviewService.create_review(
@@ -246,6 +277,8 @@ class EmployeePerformanceReviewListCreateView(APIView):
 
 class EmployeePerformanceReviewDetailView(APIView):
     def put(self, request, review_id):
+        require_project_access(request.user)
+        require_project_action_access(request.user, "edit")
         review = get_object_or_404(
             EmployeePerformanceReview.objects.filter(is_deleted=False).select_related("employee", "manager"),
             id=review_id,

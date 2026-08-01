@@ -16,6 +16,7 @@ import {
 import { type AuthUser } from "@/services/auth-api";
 import { listHrmsEmployees } from "@/services/hrms-api";
 import { assignLead as assignBackendLead, listLeadFollowUps, listLeads, type LeadFollowUpRecord, type LeadRecord } from "@/services/leads-api";
+import { canCrmAction, useCrmAccess } from "./crm-access";
 
 type LeadKind = "Project Lead" | "Trading Lead";
 type AssignmentStatus = "Waiting Assignment" | "Assigned" | "Reassigned" | "Escalated" | "Done";
@@ -146,6 +147,11 @@ function formatHistoryTime(value: string) {
 }
 
 export default function LeadAssign() {
+  const { roleCodes } = useCrmAccess();
+  const canAssignLead = canCrmAction(roleCodes, "assign", "lead-assign");
+  const canEditAssignment = canCrmAction(roleCodes, "edit", "lead-assign");
+  const canApproveAssignment = canCrmAction(roleCodes, "approve", "lead-assign");
+  const canExportAssignment = canCrmAction(roleCodes, "export", "lead-assign");
   const [rows, setRows] = useState<AssignmentRow[]>([]);
   const [selectedLeadId, setSelectedLeadId] = useState("");
   const [selectedLeadHistory, setSelectedLeadHistory] = useState<LeadFollowUpRecord[]>([]);
@@ -440,7 +446,7 @@ export default function LeadAssign() {
           </p>
         </div>
 
-        <button onClick={exportAssignments} className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs font-black uppercase tracking-widest text-primary shadow-sm transition-all hover:border-primary">
+        <button onClick={exportAssignments} disabled={!canExportAssignment} className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs font-black uppercase tracking-widest text-primary shadow-sm transition-all hover:border-primary disabled:cursor-not-allowed disabled:opacity-50">
           <Download size={16} /> Export
         </button>
       </div>
@@ -674,13 +680,13 @@ export default function LeadAssign() {
               </Field>
 
               <div className="grid gap-3 sm:grid-cols-3">
-                <button onClick={assignLead} disabled={!form.assignedUserId || isSavingAssignment} className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-xs font-black uppercase tracking-widest text-white transition-all disabled:cursor-not-allowed disabled:bg-slate-300">
+                <button onClick={assignLead} disabled={!form.assignedUserId || isSavingAssignment || !canAssignLead} className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-xs font-black uppercase tracking-widest text-white transition-all disabled:cursor-not-allowed disabled:bg-slate-300">
                   <UserCheck size={16} /> {isSavingAssignment ? "Saving" : "Assign"}
                 </button>
-                <button onClick={markEscalated} className="inline-flex items-center justify-center gap-2 rounded-xl border border-rose-100 bg-rose-50 px-4 py-3 text-xs font-black uppercase tracking-widest text-rose-700 transition-all hover:border-rose-200">
+                <button onClick={markEscalated} disabled={!canEditAssignment} className="inline-flex items-center justify-center gap-2 rounded-xl border border-rose-100 bg-rose-50 px-4 py-3 text-xs font-black uppercase tracking-widest text-rose-700 transition-all hover:border-rose-200 disabled:cursor-not-allowed disabled:opacity-50">
                   <AlertTriangle size={16} /> Escalate
                 </button>
-                <button onClick={markDone} className="inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-xs font-black uppercase tracking-widest text-emerald-700 transition-all hover:border-emerald-200">
+                <button onClick={markDone} disabled={!canApproveAssignment} className="inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-xs font-black uppercase tracking-widest text-emerald-700 transition-all hover:border-emerald-200 disabled:cursor-not-allowed disabled:opacity-50">
                   <CheckCircle2 size={16} /> Done
                 </button>
               </div>
@@ -746,12 +752,13 @@ export default function LeadAssign() {
                     <p>Quality: {member.quality}</p>
                   </div>
 
-                  <button
-                    onClick={() => setForm((current) => ({ ...current, telecallerId: member.id, assignedUserId: member.backendUserId, telecallerEmployeeId: member.employeeId, telecallerName: member.name }))}
-                    className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-white px-4 py-3 text-xs font-black uppercase tracking-widest text-primary transition-all hover:bg-primary hover:text-white"
-                  >
-                    <UserCheck size={15} /> Use For Assign
-                  </button>
+                    <button
+                      onClick={() => setForm((current) => ({ ...current, telecallerId: member.id, assignedUserId: member.backendUserId, telecallerEmployeeId: member.employeeId, telecallerName: member.name }))}
+                      disabled={!canAssignLead}
+                      className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-white px-4 py-3 text-xs font-black uppercase tracking-widest text-primary transition-all hover:bg-primary hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <UserCheck size={15} /> Use For Assign
+                    </button>
                 </div>
               ))}
             </div>

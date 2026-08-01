@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Briefcase, Check, ChevronDown, Eye, Headphones, Target, X } from "lucide-react";
 import { type AuthUser } from "@/services/auth-api";
+import { canCrmAction, useCrmAccess } from "@/components/dashboard/crm/crm-access";
 import { listHrmsEmployees } from "@/services/hrms-api";
 import {
   assignLead,
@@ -65,6 +66,10 @@ const emptyFollowUpForm: FollowUpFormState = {
 };
 
 export default function LeadHub() {
+  const { roleCodes } = useCrmAccess();
+  const canCreateLead = canCrmAction(roleCodes, "create", "leads");
+  const canEditLead = canCrmAction(roleCodes, "edit", "leads");
+  const canCreateFollowUp = canCrmAction(roleCodes, "create", "followups");
   const [mode, setMode] = useState<CreateMode>("home");
   const [backendLeads, setBackendLeads] = useState<BackendLeadRecord[]>([]);
   const [activeUsers, setActiveUsers] = useState<AuthUser[]>([]);
@@ -285,7 +290,12 @@ export default function LeadHub() {
       {isLoadingLeads ? <div className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm font-bold text-blue-700">Loading backend leads...</div> : null}
 
       <div className="grid gap-5 lg:grid-cols-2">
-        <button onClick={() => setMode("project")} className="rounded-[2rem] border border-border bg-white p-8 text-left shadow-sm transition-all hover:border-primary hover:shadow-xl">
+        <button
+          type="button"
+          onClick={() => setMode("project")}
+          disabled={!canCreateLead}
+          className="rounded-[2rem] border border-border bg-white p-8 text-left shadow-sm transition-all hover:border-primary hover:shadow-xl disabled:cursor-not-allowed disabled:opacity-50"
+        >
           <div className="mb-6 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary text-white">
             <Briefcase size={26} />
           </div>
@@ -294,7 +304,12 @@ export default function LeadHub() {
           <div className="mt-5 rounded-xl bg-slate-50 px-4 py-3 text-xs font-black uppercase tracking-widest text-slate-500">Project Leads: {project.length}</div>
         </button>
 
-        <button onClick={() => setMode("trading")} className="rounded-[2rem] border border-border bg-white p-8 text-left shadow-sm transition-all hover:border-primary hover:shadow-xl">
+        <button
+          type="button"
+          onClick={() => setMode("trading")}
+          disabled={!canCreateLead}
+          className="rounded-[2rem] border border-border bg-white p-8 text-left shadow-sm transition-all hover:border-primary hover:shadow-xl disabled:cursor-not-allowed disabled:opacity-50"
+        >
           <div className="mb-6 flex h-14 w-14 items-center justify-center rounded-2xl bg-accent text-slate-950">
             <Headphones size={26} />
           </div>
@@ -328,6 +343,8 @@ export default function LeadHub() {
           error={drawerError}
           saving={isSavingLead}
           savingFollowUp={isSavingFollowUp}
+          canEditLead={canEditLead}
+          canCreateFollowUp={canCreateFollowUp}
           onClose={() => setSelectedLeadId(null)}
           onChange={setDrawerState}
           onFollowUpChange={setFollowUpForm}
@@ -506,6 +523,8 @@ function LeadDrawer({
   error,
   saving,
   savingFollowUp,
+  canEditLead,
+  canCreateFollowUp,
   onClose,
   onChange,
   onFollowUpChange,
@@ -520,6 +539,8 @@ function LeadDrawer({
   error: string;
   saving: boolean;
   savingFollowUp: boolean;
+  canEditLead: boolean;
+  canCreateFollowUp: boolean;
   onClose: () => void;
   onChange: (state: LeadDrawerState) => void;
   onFollowUpChange: (state: FollowUpFormState) => void;
@@ -605,7 +626,7 @@ function LeadDrawer({
                 />
               </div>
               <div className="md:col-span-2">
-                <button type="button" onClick={onAddFollowUp} disabled={savingFollowUp} className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-primary/10 bg-white px-4 text-xs font-black uppercase tracking-widest text-primary hover:bg-primary hover:text-white disabled:opacity-60">
+                <button type="button" onClick={onAddFollowUp} disabled={savingFollowUp || !canCreateFollowUp} className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-primary/10 bg-white px-4 text-xs font-black uppercase tracking-widest text-primary hover:bg-primary hover:text-white disabled:opacity-60">
                   {savingFollowUp ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" /> : <Check size={14} />}
                   Add Follow-up
                 </button>
@@ -637,7 +658,7 @@ function LeadDrawer({
         {error ? <div className="mx-6 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">{error}</div> : null}
 
         <div className="mt-auto border-t border-slate-100 px-6 py-5">
-          <button type="button" onClick={onSave} disabled={saving} className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-primary px-5 text-xs font-black uppercase tracking-widest text-white hover:bg-primary/90 disabled:opacity-60">
+          <button type="button" onClick={onSave} disabled={saving || !canEditLead} className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-primary px-5 text-xs font-black uppercase tracking-widest text-white hover:bg-primary/90 disabled:opacity-60">
             {saving ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" /> : <Check size={15} />}
             Save Changes
           </button>

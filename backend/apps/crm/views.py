@@ -6,8 +6,22 @@ from rest_framework.views import APIView
 
 from apps.core.pagination import StandardPagination
 from apps.core.responses import success_response
-from apps.crm.models import Lead, LeadFollowUp
+from apps.crm.models import Lead, LeadFollowUp, ProjectAgreement, ProjectClient, ProjectHandoff
 from apps.crm.selectors import get_leads_queryset, get_project_agreements_queryset, get_project_clients_queryset, get_project_handoffs_queryset
+from apps.crm.permissions import (
+    crm_action_access,
+    require_crm_action_access,
+    require_crm_page_access,
+    require_lead_access,
+    require_project_agreement_access,
+    require_project_client_access,
+    require_project_handoff_access,
+    scope_followups_queryset,
+    scope_leads_queryset,
+    scope_project_agreements_queryset,
+    scope_project_clients_queryset,
+    scope_project_handoffs_queryset,
+)
 from apps.crm.serializers import (
     ClientContactCreateSerializer,
     ClientContactSerializer,
@@ -30,7 +44,9 @@ from apps.crm.services import LeadService, ProjectAgreementService, ProjectClien
 
 class LeadListCreateView(APIView):
     def get(self, request):
-        queryset = get_leads_queryset()
+        require_crm_page_access(request.user, "leads")
+        require_crm_action_access(request.user, "view", "leads")
+        queryset = scope_leads_queryset(request.user, get_leads_queryset())
         search = request.query_params.get("search")
         lead_status = request.query_params.get("status")
         lead_type = request.query_params.get("lead_type")
@@ -53,6 +69,8 @@ class LeadListCreateView(APIView):
         return paginator.get_paginated_response(LeadSerializer(page, many=True).data)
 
     def post(self, request):
+        require_crm_page_access(request.user, "leads")
+        require_crm_action_access(request.user, "create", "leads")
         serializer = LeadCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         lead = LeadService.create_lead(data=serializer.validated_data, actor=request.user, request=request)
@@ -65,11 +83,17 @@ class LeadListCreateView(APIView):
 
 class LeadDetailView(APIView):
     def get(self, request, lead_id):
-        lead = get_object_or_404(get_leads_queryset(), id=lead_id)
+        require_crm_page_access(request.user, "leads")
+        require_crm_action_access(request.user, "view", "leads")
+        lead = get_object_or_404(Lead, id=lead_id, is_deleted=False)
+        require_lead_access(request.user, lead)
         return success_response(data=LeadSerializer(lead).data)
 
     def put(self, request, lead_id):
+        require_crm_page_access(request.user, "leads")
+        require_crm_action_access(request.user, "edit", "leads")
         lead = get_object_or_404(Lead, id=lead_id)
+        require_lead_access(request.user, lead)
         serializer = LeadUpdateSerializer(data=request.data, context={"lead": lead}, partial=True)
         serializer.is_valid(raise_exception=True)
         updated_lead = LeadService.update_lead(
@@ -83,7 +107,10 @@ class LeadDetailView(APIView):
 
 class LeadAssignView(APIView):
     def post(self, request, lead_id):
+        require_crm_page_access(request.user, "lead-assign")
+        require_crm_action_access(request.user, "assign", "lead-assign")
         lead = get_object_or_404(Lead, id=lead_id)
+        require_lead_access(request.user, lead)
         serializer = LeadAssignSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         assigned_lead = LeadService.assign_lead(
@@ -97,7 +124,10 @@ class LeadAssignView(APIView):
 
 class LeadOutcomeView(APIView):
     def post(self, request, lead_id):
+        require_crm_page_access(request.user, "lead-outcomes")
+        require_crm_action_access(request.user, "approve", "lead-outcomes")
         lead = get_object_or_404(Lead, id=lead_id, is_deleted=False)
+        require_lead_access(request.user, lead)
         serializer = LeadOutcomeSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         updated_lead = LeadService.close_outcome(
@@ -112,12 +142,18 @@ class LeadOutcomeView(APIView):
 
 class LeadFollowUpListCreateView(APIView):
     def get(self, request, lead_id):
+        require_crm_page_access(request.user, "followups")
+        require_crm_action_access(request.user, "view", "followups")
         lead = get_object_or_404(Lead, id=lead_id, is_deleted=False)
+        require_lead_access(request.user, lead)
         follow_ups = LeadFollowUp.objects.filter(lead=lead, is_deleted=False).select_related("created_by").order_by("-created_at")
         return success_response(data=LeadFollowUpSerializer(follow_ups, many=True).data)
 
     def post(self, request, lead_id):
+        require_crm_page_access(request.user, "followups")
+        require_crm_action_access(request.user, "create", "followups")
         lead = get_object_or_404(Lead, id=lead_id, is_deleted=False)
+        require_lead_access(request.user, lead)
         serializer = LeadFollowUpCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         follow_up = LeadService.create_follow_up(
@@ -135,7 +171,12 @@ class LeadFollowUpListCreateView(APIView):
 
 class FollowUpQueueView(APIView):
     def get(self, request):
-        queryset = LeadFollowUp.objects.filter(is_deleted=False).select_related("lead", "lead__assigned_to", "created_by").order_by("-created_at")
+        require_crm_page_access(request.user, "followups")
+        require_crm_action_access(request.user, "view", "followups")
+        queryset = scope_followups_queryset(
+            request.user,
+            LeadFollowUp.objects.filter(is_deleted=False).select_related("lead", "lead__assigned_to", "created_by").order_by("-created_at"),
+        )
         due_status = request.query_params.get("due_status")
         lead_type = request.query_params.get("lead_type")
         owner_id = request.query_params.get("owner_id")
@@ -168,8 +209,9 @@ class FollowUpQueueView(APIView):
 
 class ProjectClientListCreateView(APIView):
     def get(self, request):
-        ProjectClientService.sync_won_project_leads(actor=request.user)
-        queryset = get_project_clients_queryset()
+        require_crm_page_access(request.user, "clients")
+        require_crm_action_access(request.user, "view", "clients")
+        queryset = scope_project_clients_queryset(request.user, get_project_clients_queryset())
         search = request.query_params.get("search")
         if search:
             queryset = queryset.filter(
@@ -181,6 +223,8 @@ class ProjectClientListCreateView(APIView):
         return success_response(data=ProjectClientSerializer(queryset[:200], many=True).data)
 
     def post(self, request):
+        require_crm_page_access(request.user, "clients")
+        require_crm_action_access(request.user, "create", "clients")
         serializer = ProjectClientCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         client = ProjectClientService.create_client(
@@ -197,7 +241,10 @@ class ProjectClientListCreateView(APIView):
 
 class ClientContactCreateView(APIView):
     def post(self, request, client_id):
-        client = get_object_or_404(get_project_clients_queryset(), id=client_id)
+        require_crm_page_access(request.user, "clients")
+        require_crm_action_access(request.user, "create", "clients")
+        client = get_object_or_404(ProjectClient, id=client_id, is_deleted=False)
+        require_project_client_access(request.user, client)
         serializer = ClientContactCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         contact = ProjectClientService.create_contact(
@@ -215,16 +262,21 @@ class ClientContactCreateView(APIView):
 
 class ProjectHandoffListCreateView(APIView):
     def get(self, request):
-        queryset = get_project_handoffs_queryset()
+        require_crm_page_access(request.user, "agreements")
+        require_crm_action_access(request.user, "view", "agreements")
+        queryset = scope_project_handoffs_queryset(request.user, get_project_handoffs_queryset())
         client_id = request.query_params.get("client_id")
         if client_id:
             queryset = queryset.filter(client_id=client_id)
         return success_response(data=ProjectHandoffSerializer(queryset[:200], many=True).data)
 
     def post(self, request):
+        require_crm_page_access(request.user, "agreements")
+        require_crm_action_access(request.user, "create", "agreements")
         serializer = ProjectHandoffCreateUpdateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        client = get_object_or_404(get_project_clients_queryset(), id=serializer.validated_data["client_id"])
+        client = get_object_or_404(scope_project_clients_queryset(request.user, get_project_clients_queryset()), id=serializer.validated_data["client_id"])
+        require_project_client_access(request.user, client)
         project = ProjectClientService.create_or_update_project_handoff(
             client=client,
             data=serializer.validated_data,
@@ -240,10 +292,14 @@ class ProjectHandoffListCreateView(APIView):
 
 class ProjectHandoffDetailView(APIView):
     def put(self, request, project_id):
-        project = get_object_or_404(get_project_handoffs_queryset(), id=project_id)
+        require_crm_page_access(request.user, "agreements")
+        require_crm_action_access(request.user, "edit", "agreements")
+        project = get_object_or_404(ProjectHandoff, id=project_id, is_deleted=False)
+        require_project_handoff_access(request.user, project)
         serializer = ProjectHandoffCreateUpdateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        client = get_object_or_404(get_project_clients_queryset(), id=serializer.validated_data["client_id"])
+        client = get_object_or_404(ProjectClient, id=serializer.validated_data["client_id"], is_deleted=False)
+        require_project_client_access(request.user, client)
         updated_project = ProjectClientService.create_or_update_project_handoff(
             project=project,
             client=client,
@@ -256,7 +312,9 @@ class ProjectHandoffDetailView(APIView):
 
 class ProjectAgreementListCreateView(APIView):
     def get(self, request):
-        queryset = get_project_agreements_queryset()
+        require_crm_page_access(request.user, "agreements")
+        require_crm_action_access(request.user, "view", "agreements")
+        queryset = scope_project_agreements_queryset(request.user, get_project_agreements_queryset())
         client_id = request.query_params.get("client_id")
         project_handoff_id = request.query_params.get("project_handoff_id")
         search = request.query_params.get("search")
@@ -270,16 +328,20 @@ class ProjectAgreementListCreateView(APIView):
                 | Q(client__company_name__icontains=search)
                 | Q(project_handoff__project_code__icontains=search)
                 | Q(attachment_name__icontains=search)
-            )
+        )
         return success_response(data=ProjectAgreementSerializer(queryset[:200], many=True).data)
 
     def post(self, request):
+        require_crm_page_access(request.user, "agreements")
+        require_crm_action_access(request.user, "create", "agreements")
         serializer = ProjectAgreementCreateUpdateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        client = get_object_or_404(get_project_clients_queryset(), id=serializer.validated_data["client_id"])
+        client = get_object_or_404(ProjectClient, id=serializer.validated_data["client_id"], is_deleted=False)
+        require_project_client_access(request.user, client)
         project_handoff = None
         if serializer.validated_data.get("project_handoff_id"):
-            project_handoff = get_object_or_404(get_project_handoffs_queryset(), id=serializer.validated_data["project_handoff_id"])
+            project_handoff = get_object_or_404(ProjectHandoff, id=serializer.validated_data["project_handoff_id"], is_deleted=False)
+            require_project_handoff_access(request.user, project_handoff)
         agreement = ProjectAgreementService.create_or_update_agreement(
             client=client,
             project_handoff=project_handoff,
@@ -296,13 +358,18 @@ class ProjectAgreementListCreateView(APIView):
 
 class ProjectAgreementDetailView(APIView):
     def put(self, request, agreement_id):
-        agreement = get_object_or_404(get_project_agreements_queryset(), id=agreement_id)
+        require_crm_page_access(request.user, "agreements")
+        require_crm_action_access(request.user, "edit", "agreements")
+        agreement = get_object_or_404(ProjectAgreement, id=agreement_id, is_deleted=False)
+        require_project_agreement_access(request.user, agreement)
         serializer = ProjectAgreementCreateUpdateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        client = get_object_or_404(get_project_clients_queryset(), id=serializer.validated_data["client_id"])
+        client = get_object_or_404(ProjectClient, id=serializer.validated_data["client_id"], is_deleted=False)
+        require_project_client_access(request.user, client)
         project_handoff = None
         if serializer.validated_data.get("project_handoff_id"):
-            project_handoff = get_object_or_404(get_project_handoffs_queryset(), id=serializer.validated_data["project_handoff_id"])
+            project_handoff = get_object_or_404(ProjectHandoff, id=serializer.validated_data["project_handoff_id"], is_deleted=False)
+            require_project_handoff_access(request.user, project_handoff)
         updated_agreement = ProjectAgreementService.create_or_update_agreement(
             agreement=agreement,
             client=client,

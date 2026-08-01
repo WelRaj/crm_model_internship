@@ -24,6 +24,7 @@ import {
   type LeadFollowUpRecord,
   type LeadRecord,
 } from "@/services/leads-api";
+import { canCrmAction, useCrmAccess } from "./crm-access";
 
 type LeadKind = "Project Lead" | "Trading Lead";
 type CallOutcome = "Connected" | "No Answer" | "Busy" | "Callback Requested" | "Interested" | "Not Interested" | "Issue Resolved";
@@ -191,6 +192,10 @@ function defaultForm(lead?: TelecallerLead): CallLogForm {
 }
 
 export default function TelecallerDesk() {
+  const { roleCodes } = useCrmAccess();
+  const canEditQueue = canCrmAction(roleCodes, "edit", "telecaller");
+  const canExportQueue = canCrmAction(roleCodes, "export", "telecaller");
+  const canApproveQueue = canCrmAction(roleCodes, "approve", "telecaller");
   const [selectedTelecaller, setSelectedTelecaller] = useState<string>("");
   const [rows, setRows] = useState<TelecallerLead[]>([]);
   const [selectedLeadId, setSelectedLeadId] = useState("");
@@ -423,7 +428,7 @@ export default function TelecallerDesk() {
           </p>
         </div>
 
-        <button onClick={exportCalls} className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs font-black uppercase tracking-widest text-primary shadow-sm transition-all hover:border-primary">
+        <button onClick={exportCalls} disabled={!canExportQueue} className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs font-black uppercase tracking-widest text-primary shadow-sm transition-all hover:border-primary disabled:cursor-not-allowed disabled:opacity-50">
           <Download size={16} /> Export Calls
         </button>
       </div>
@@ -636,13 +641,13 @@ export default function TelecallerDesk() {
             </Field>
 
             <div className="mt-4 grid gap-3 sm:grid-cols-3">
-              <button onClick={saveCallLog} disabled={isSavingLog} className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-xs font-black uppercase tracking-widest text-white disabled:cursor-not-allowed disabled:bg-slate-300">
+              <button onClick={saveCallLog} disabled={isSavingLog || !canEditQueue} className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-xs font-black uppercase tracking-widest text-white disabled:cursor-not-allowed disabled:bg-slate-300">
                 <MessageCircle size={16} /> {isSavingLog ? "Saving" : "Save Log"}
               </button>
-              <button onClick={markResolved} className="inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-xs font-black uppercase tracking-widest text-emerald-700">
+              <button onClick={markResolved} disabled={!canApproveQueue} className="inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-xs font-black uppercase tracking-widest text-emerald-700 disabled:cursor-not-allowed disabled:opacity-50">
                 <CheckCircle2 size={16} /> Resolve
               </button>
-              <button onClick={escalateToLeader} className="inline-flex items-center justify-center gap-2 rounded-xl border border-rose-100 bg-rose-50 px-4 py-3 text-xs font-black uppercase tracking-widest text-rose-700">
+              <button onClick={escalateToLeader} disabled={!canApproveQueue} className="inline-flex items-center justify-center gap-2 rounded-xl border border-rose-100 bg-rose-50 px-4 py-3 text-xs font-black uppercase tracking-widest text-rose-700 disabled:cursor-not-allowed disabled:opacity-50">
                 <ShieldAlert size={16} /> Escalate
               </button>
             </div>
