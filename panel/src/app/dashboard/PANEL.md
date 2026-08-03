@@ -10,11 +10,17 @@ Premium CRM Panel built with Next.js (App Router), TypeScript, and Tailwind CSS.
 - [x] Base API Client (Decoupled Layer)
 - [x] Auth Screens (Signup & OTP Signin)
 - [x] Dashboard Layout & Navigation
-- [x] Projects Module UI (Projects, Tasks, Milestones, Deadlines)
-- [x] Onboarding Module
-- [x] Lead Module
 - [x] Client Operations / CRM Module
-- [x] Accounting Module
+- [x] People Operations / HRMS Module
+- [x] Delivery Projects Module
+- [x] Finance Control Module
+- [x] Growth Marketing Module
+- [x] Admin Control Module
+- [x] Support Desk Module
+- [x] Notifications + Audit visibility
+- [x] RBAC page filtering and page guards
+- [x] Backend-connected central API wrappers
+- [x] Production smoke verification on seeded fake data
 
 ## Components Added
 - src/components/ui/Input.tsx: Premium reusable input.
@@ -26,6 +32,48 @@ Premium CRM Panel built with Next.js (App Router), TypeScript, and Tailwind CSS.
 - /auth/signup: User registration.
 - /auth/signin: OTP based mobile login.
 - /dashboard: Central CRM hub with module switching.
+- Dashboard tabs inside /dashboard:
+  - Lead Desk
+  - Lead Assignment
+  - Calling Desk
+  - Follow-ups
+  - Lead Outcomes
+  - Project Clients
+  - Legal Agreements
+  - Employee Onboarding
+  - Employee Directory
+  - Attendance
+  - Leave Management
+  - Payroll
+  - Exit Process
+  - Project Portfolio
+  - Team Assignment
+  - Tasks
+  - Milestones
+  - Deadlines
+  - Team Performance
+  - Client Master
+  - Vendor Master
+  - Quotations
+  - Invoices
+  - Payments
+  - Reminders
+  - Credit Notes
+  - Sales, Purchases & Expenses
+  - Budget Control
+  - Payroll Register
+  - GST Compliance
+  - TDS Compliance
+  - Finance Reports
+  - Finance Approvals
+  - Audit Logs
+  - Access Control
+  - Bank Details
+  - Campaigns
+  - ROI
+  - Lead Sources
+  - Support Desk
+  - Admin Control
 
 ## Theme (Tailwind)
 - Primary: #0f172a (Navy)
@@ -35,3 +83,8 @@ Premium CRM Panel built with Next.js (App Router), TypeScript, and Tailwind CSS.
 ## API Configuration
 - Base URL: http://localhost:8000/api
 - Client: src/lib/api-client.ts
+
+## Notes
+- Dashboard is intentionally a single-shell tab system, not separate route pages for every module.
+- All module API calls should stay centralized through the service wrappers.
+- Production focus: clean RBAC, smooth flow, no duplicate APIs, and no hidden local-only data paths.
