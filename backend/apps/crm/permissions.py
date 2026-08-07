@@ -24,7 +24,7 @@ CRM_PAGE_ACCESS = {
     "super_admin": {"overview", "leads", "lead-assign", "telecaller", "followups", "lead-outcomes", "clients", "agreements"},
     "admin": {"overview", "leads", "lead-assign", "telecaller", "followups", "lead-outcomes", "clients", "agreements"},
     "crm_admin": {"overview", "leads", "lead-assign", "telecaller", "followups", "lead-outcomes", "clients", "agreements"},
-    "team_lead": {"overview", "leads", "lead-assign", "followups", "lead-outcomes", "clients", "agreements"},
+    "team_lead": {"overview", "leads", "lead-assign", "telecaller", "followups", "lead-outcomes", "clients", "agreements"},
     "telecaller": {"overview", "leads", "telecaller", "followups"},
     "sales": {"overview", "leads", "followups", "lead-outcomes", "clients", "agreements"},
     "project_manager": {"overview", "clients", "agreements"},

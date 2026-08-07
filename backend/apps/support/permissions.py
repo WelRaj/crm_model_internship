@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+from django.db.models import Q, QuerySet
+
 from apps.accounts.models import User, UserRole
 from rest_framework.exceptions import PermissionDenied
+
+from apps.support.models import SupportTicket
 
 SUPPORT_ROLE_CODES = {"super_admin", "admin", "support"}
 SUPPORT_SUPER_ROLES = {"super_admin", "admin"}
@@ -41,3 +45,21 @@ def support_action_access(user: User | None, action: str) -> bool:
 def require_support_action_access(user: User | None, action: str) -> None:
     if not support_action_access(user, action):
         raise PermissionDenied("You are not allowed to perform this Support Desk action.")
+
+
+def user_has_support_super_access(user: User | None) -> bool:
+    return bool(set(user_support_role_codes(user)) & SUPPORT_SUPER_ROLES)
+
+
+def scope_support_tickets_queryset(user: User | None, queryset: QuerySet | None = None) -> QuerySet:
+    base_queryset = queryset if queryset is not None else SupportTicket.objects.filter(is_deleted=False)
+    if not support_page_access(user):
+        return base_queryset.none()
+    if user_has_support_super_access(user):
+        return base_queryset
+    return base_queryset.filter(
+        Q(current_owner=user)
+        | Q(created_by=user)
+        | Q(assignments__owner=user)
+        | Q(comments__author=user)
+    ).distinct()

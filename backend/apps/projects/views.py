@@ -5,7 +5,7 @@ from rest_framework.views import APIView
 
 from apps.core.responses import success_response
 from apps.projects.models import EmployeePerformanceReview, ProjectDeadline, ProjectMilestone, ProjectTask, ProjectTeamAssignment
-from apps.projects.permissions import require_project_access, require_project_action_access
+from apps.projects.permissions import require_project_access, require_project_action_access, scope_delivery_projects_queryset, scope_performance_reviews_queryset
 from apps.projects.selectors import get_delivery_projects_queryset
 from apps.projects.serializers import (
     DeliveryProjectCreateSerializer,
@@ -29,7 +29,7 @@ class DeliveryProjectListCreateView(APIView):
     def get(self, request):
         require_project_access(request.user)
         require_project_action_access(request.user, "view")
-        queryset = get_delivery_projects_queryset()
+        queryset = scope_delivery_projects_queryset(request.user, get_delivery_projects_queryset())
         search = request.query_params.get("search")
         status = request.query_params.get("status")
         if status:
@@ -59,13 +59,13 @@ class DeliveryProjectDetailView(APIView):
     def get(self, request, project_id):
         require_project_access(request.user)
         require_project_action_access(request.user, "view")
-        project = get_object_or_404(get_delivery_projects_queryset(), id=project_id)
+        project = get_object_or_404(scope_delivery_projects_queryset(request.user, get_delivery_projects_queryset()), id=project_id)
         return success_response(data=DeliveryProjectSerializer(project).data)
 
     def put(self, request, project_id):
         require_project_access(request.user)
         require_project_action_access(request.user, "edit")
-        project = get_object_or_404(get_delivery_projects_queryset(), id=project_id)
+        project = get_object_or_404(scope_delivery_projects_queryset(request.user, get_delivery_projects_queryset()), id=project_id)
         serializer = DeliveryProjectUpdateSerializer(data=request.data, context={"project": project}, partial=True)
         serializer.is_valid(raise_exception=True)
         updated_project = DeliveryProjectService.update_project(
@@ -81,7 +81,7 @@ class ProjectTeamAssignmentCreateView(APIView):
     def post(self, request, project_id):
         require_project_access(request.user)
         require_project_action_access(request.user, "assign")
-        project = get_object_or_404(get_delivery_projects_queryset(), id=project_id)
+        project = get_object_or_404(scope_delivery_projects_queryset(request.user, get_delivery_projects_queryset()), id=project_id)
         serializer = ProjectTeamAssignmentWriteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         assignment = DeliveryProjectService.assign_team_member(
@@ -102,7 +102,10 @@ class ProjectTeamAssignmentDetailView(APIView):
         require_project_access(request.user)
         require_project_action_access(request.user, "delete")
         assignment = get_object_or_404(
-            ProjectTeamAssignment.objects.filter(is_deleted=False).select_related("project", "user"),
+            ProjectTeamAssignment.objects.filter(
+                project__in=scope_delivery_projects_queryset(request.user),
+                is_deleted=False,
+            ).select_related("project", "user"),
             id=assignment_id,
         )
         DeliveryProjectService.remove_team_assignment(
@@ -117,7 +120,7 @@ class ProjectMilestoneCreateView(APIView):
     def post(self, request, project_id):
         require_project_access(request.user)
         require_project_action_access(request.user, "create")
-        project = get_object_or_404(get_delivery_projects_queryset(), id=project_id)
+        project = get_object_or_404(scope_delivery_projects_queryset(request.user, get_delivery_projects_queryset()), id=project_id)
         serializer = ProjectMilestoneWriteSerializer(data=request.data, context={"project": project})
         serializer.is_valid(raise_exception=True)
         milestone = DeliveryProjectService.create_milestone(
@@ -137,7 +140,13 @@ class ProjectMilestoneDetailView(APIView):
     def put(self, request, milestone_id):
         require_project_access(request.user)
         require_project_action_access(request.user, "edit")
-        milestone = get_object_or_404(ProjectMilestone.objects.filter(is_deleted=False).select_related("project"), id=milestone_id)
+        milestone = get_object_or_404(
+            ProjectMilestone.objects.filter(
+                project__in=scope_delivery_projects_queryset(request.user),
+                is_deleted=False,
+            ).select_related("project"),
+            id=milestone_id,
+        )
         serializer = ProjectMilestoneWriteSerializer(data=request.data, context={"milestone": milestone}, partial=True)
         serializer.is_valid(raise_exception=True)
         updated_milestone = DeliveryProjectService.update_milestone(
@@ -153,7 +162,7 @@ class ProjectTaskCreateView(APIView):
     def post(self, request, project_id):
         require_project_access(request.user)
         require_project_action_access(request.user, "create")
-        project = get_object_or_404(get_delivery_projects_queryset(), id=project_id)
+        project = get_object_or_404(scope_delivery_projects_queryset(request.user, get_delivery_projects_queryset()), id=project_id)
         serializer = ProjectTaskWriteSerializer(data=request.data, context={"project": project})
         serializer.is_valid(raise_exception=True)
         task = DeliveryProjectService.create_task(
@@ -173,7 +182,13 @@ class ProjectTaskDetailView(APIView):
     def put(self, request, task_id):
         require_project_access(request.user)
         require_project_action_access(request.user, "edit")
-        task = get_object_or_404(ProjectTask.objects.filter(is_deleted=False).select_related("project", "milestone", "assigned_to"), id=task_id)
+        task = get_object_or_404(
+            ProjectTask.objects.filter(
+                project__in=scope_delivery_projects_queryset(request.user),
+                is_deleted=False,
+            ).select_related("project", "milestone", "assigned_to"),
+            id=task_id,
+        )
         serializer = ProjectTaskWriteSerializer(data=request.data, context={"task": task}, partial=True)
         serializer.is_valid(raise_exception=True)
         updated_task = DeliveryProjectService.update_task(
@@ -187,7 +202,13 @@ class ProjectTaskDetailView(APIView):
     def delete(self, request, task_id):
         require_project_access(request.user)
         require_project_action_access(request.user, "delete")
-        task = get_object_or_404(ProjectTask.objects.filter(is_deleted=False).select_related("project", "milestone", "assigned_to"), id=task_id)
+        task = get_object_or_404(
+            ProjectTask.objects.filter(
+                project__in=scope_delivery_projects_queryset(request.user),
+                is_deleted=False,
+            ).select_related("project", "milestone", "assigned_to"),
+            id=task_id,
+        )
         DeliveryProjectService.delete_task(
             task=task,
             actor=request.user,
@@ -200,7 +221,7 @@ class ProjectDeadlineCreateView(APIView):
     def post(self, request, project_id):
         require_project_access(request.user)
         require_project_action_access(request.user, "create")
-        project = get_object_or_404(get_delivery_projects_queryset(), id=project_id)
+        project = get_object_or_404(scope_delivery_projects_queryset(request.user, get_delivery_projects_queryset()), id=project_id)
         serializer = ProjectDeadlineWriteSerializer(data=request.data, context={"project": project})
         serializer.is_valid(raise_exception=True)
         deadline = DeliveryProjectService.create_deadline(
@@ -220,7 +241,13 @@ class ProjectDeadlineDetailView(APIView):
     def put(self, request, deadline_id):
         require_project_access(request.user)
         require_project_action_access(request.user, "edit")
-        deadline = get_object_or_404(ProjectDeadline.objects.filter(is_deleted=False).select_related("project", "milestone"), id=deadline_id)
+        deadline = get_object_or_404(
+            ProjectDeadline.objects.filter(
+                project__in=scope_delivery_projects_queryset(request.user),
+                is_deleted=False,
+            ).select_related("project", "milestone"),
+            id=deadline_id,
+        )
         serializer = ProjectDeadlineWriteSerializer(data=request.data, context={"deadline": deadline}, partial=True)
         serializer.is_valid(raise_exception=True)
         updated_deadline = DeliveryProjectService.update_deadline(
@@ -236,7 +263,10 @@ class EmployeePerformanceReviewListCreateView(APIView):
     def get(self, request):
         require_project_access(request.user)
         require_project_action_access(request.user, "view")
-        queryset = EmployeePerformanceReview.objects.filter(is_deleted=False).select_related("employee", "manager").order_by("-updated_at")
+        queryset = scope_performance_reviews_queryset(
+            request.user,
+            EmployeePerformanceReview.objects.filter(is_deleted=False).select_related("employee", "manager"),
+        ).order_by("-updated_at")
         search = request.query_params.get("search")
         status_filter = request.query_params.get("status")
         cycle = request.query_params.get("review_cycle")
@@ -280,7 +310,10 @@ class EmployeePerformanceReviewDetailView(APIView):
         require_project_access(request.user)
         require_project_action_access(request.user, "edit")
         review = get_object_or_404(
-            EmployeePerformanceReview.objects.filter(is_deleted=False).select_related("employee", "manager"),
+            scope_performance_reviews_queryset(
+                request.user,
+                EmployeePerformanceReview.objects.filter(is_deleted=False).select_related("employee", "manager"),
+            ),
             id=review_id,
         )
         serializer = EmployeePerformanceReviewWriteSerializer(data=request.data, context={"review": review}, partial=True)

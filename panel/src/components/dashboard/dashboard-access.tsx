@@ -96,7 +96,7 @@ const DASHBOARD_ACCESS: Record<DashboardRoleCode, readonly DashboardTabId[]> = {
   finance: ["overview", "accounting"],
   marketing: ["overview", "marketing", "campaigns", "roi", "sources"],
   support: ["overview", "support"],
-  employee: ["overview"],
+  employee: ["overview", "employees", "payroll"],
   read_only: ["overview"],
 };
 

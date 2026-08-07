@@ -26,7 +26,6 @@ export type CrmRoleCode =
 export type CrmAction = "create" | "edit" | "assign" | "delete" | "export" | "approve" | "view";
 
 const CRM_TAB_SET = new Set<string>(CRM_TAB_IDS);
-const ALL_CRM_ACTIONS: readonly CrmAction[] = ["create", "edit", "assign", "delete", "export", "approve", "view"];
 
 const CRM_PAGE_ACCESS: Record<CrmRoleCode, readonly CrmTabId[]> = {
   super_admin: CRM_TAB_IDS,

@@ -367,6 +367,92 @@ class HRMSApiButtonFlowTests(APITestCase):
             advance_response = self.client.post(f"/api/v1/hrms/payroll-records/{payroll['id']}/action/", {"action": "advance"}, format="json")
             self.assertEqual(advance_response.data["data"]["status"], expected_status)
 
+    def test_employee_can_view_only_own_profile_and_payroll(self):
+        own_employee = self.create_employee_via_api("214")
+        other_employee = self.create_employee_via_api("215")
+        own_payroll_response = self.client.post(
+            "/api/v1/hrms/payroll-records/",
+            {
+                "employee_id": own_employee["id"],
+                "month": "2026-07",
+                "basic": "45000",
+                "hra": "15000",
+                "allowance": "3000",
+                "conveyance": "1500",
+                "bonus": "0",
+                "pf": "5400",
+                "pt": "200",
+                "tds": "1500",
+                "advance": "0",
+                "working_days": 26,
+            },
+            format="json",
+        )
+        self.assertEqual(own_payroll_response.status_code, status.HTTP_201_CREATED, own_payroll_response.content)
+        other_payroll_response = self.client.post(
+            "/api/v1/hrms/payroll-records/",
+            {
+                "employee_id": other_employee["id"],
+                "month": "2026-07",
+                "basic": "50000",
+                "hra": "18000",
+                "allowance": "3000",
+                "conveyance": "1500",
+                "bonus": "0",
+                "pf": "6000",
+                "pt": "200",
+                "tds": "1800",
+                "advance": "0",
+                "working_days": 26,
+            },
+            format="json",
+        )
+        self.assertEqual(other_payroll_response.status_code, status.HTTP_201_CREATED, other_payroll_response.content)
+
+        own_profile = EmployeeHRProfile.objects.get(id=own_employee["id"])
+        self.client.force_authenticate(own_profile.user)
+
+        employees_response = self.client.get("/api/v1/hrms/employees/")
+        self.assertEqual(employees_response.status_code, status.HTTP_200_OK)
+        self.assertEqual([row["id"] for row in employees_response.data["data"]], [own_employee["id"]])
+
+        own_detail_response = self.client.get(f"/api/v1/hrms/employees/{own_employee['id']}/")
+        self.assertEqual(own_detail_response.status_code, status.HTTP_200_OK)
+
+        other_detail_response = self.client.get(f"/api/v1/hrms/employees/{other_employee['id']}/")
+        self.assertEqual(other_detail_response.status_code, status.HTTP_404_NOT_FOUND)
+
+        payroll_list_response = self.client.get("/api/v1/hrms/payroll-records/")
+        self.assertEqual(payroll_list_response.status_code, status.HTTP_200_OK)
+        self.assertEqual([row["id"] for row in payroll_list_response.data["data"]], [own_payroll_response.data["data"]["id"]])
+
+        create_payroll_response = self.client.post(
+            "/api/v1/hrms/payroll-records/",
+            {
+                "employee_id": own_employee["id"],
+                "month": "2026-08",
+                "basic": "45000",
+                "hra": "15000",
+                "allowance": "3000",
+                "conveyance": "1500",
+                "bonus": "0",
+                "pf": "5400",
+                "pt": "200",
+                "tds": "1500",
+                "advance": "0",
+                "working_days": 26,
+            },
+            format="json",
+        )
+        self.assertEqual(create_payroll_response.status_code, status.HTTP_403_FORBIDDEN)
+
+        payroll_action_response = self.client.post(
+            f"/api/v1/hrms/payroll-records/{own_payroll_response.data['data']['id']}/action/",
+            {"action": "advance"},
+            format="json",
+        )
+        self.assertEqual(payroll_action_response.status_code, status.HTTP_403_FORBIDDEN)
+
     def test_exit_buttons_start_checklist_cancel_and_complete(self):
         employee = self.create_employee_via_api("205")
         exit_response = self.client.post(

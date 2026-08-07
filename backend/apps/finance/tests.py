@@ -5,7 +5,7 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from apps.accounts.models import User
+from apps.accounts.models import Role, User, UserRole
 from apps.audit.models import AuditLog
 from apps.crm.models import ClientContact, ProjectClient
 from apps.finance.models import ApprovalPolicy, ApprovalRequest, BankAccount, Budget, BudgetRevision, FinanceAccessPolicy, FinanceClient, FinancePayrollRecord, GSTReturn, Invoice, LedgerEntry, Payment
@@ -61,6 +61,47 @@ class FinanceApiFlowTests(APITestCase):
             format="json",
         )
         self.assertEqual(client_response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_finance_user_cannot_manage_finance_governance_policies(self):
+        finance_role = Role.objects.create(
+            code="finance",
+            name="Finance",
+            description="Finance module access.",
+            is_system_role=True,
+        )
+        finance_user = User.objects.create_user(
+            email="finance.user@example.com",
+            mobile="9000012233",
+            password="Finance@12345",
+            first_name="Finance",
+            employee_id="EMP-FIN-001",
+            department="Finance Control",
+            designation="Finance Executive",
+        )
+        UserRole.objects.create(user=finance_user, role=finance_role, assigned_by=self.actor)
+        self.client.force_authenticate(user=finance_user)
+
+        overview_response = self.client.get("/api/v1/finance/overview/")
+        self.assertEqual(overview_response.status_code, status.HTTP_200_OK)
+
+        access_policy_list_response = self.client.get("/api/v1/finance/access-policies/")
+        self.assertEqual(access_policy_list_response.status_code, status.HTTP_403_FORBIDDEN)
+
+        approval_policy_create_response = self.client.post(
+            "/api/v1/finance/approval-policies/",
+            {
+                "name": "Blocked Approval Policy",
+                "module": "Expense",
+                "min_amount": "1.00",
+                "max_amount": "1000.00",
+                "approver_role": "Finance Manager",
+                "second_approver_role": "",
+                "sla_hours": 8,
+                "is_enabled": True,
+            },
+            format="json",
+        )
+        self.assertEqual(approval_policy_create_response.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_project_client_sync_creates_single_finance_client(self):
         response = self.client.post(f"/api/v1/finance/clients/sync-project-client/{self.project_client.id}/", {}, format="json")

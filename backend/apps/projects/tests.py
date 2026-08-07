@@ -440,3 +440,79 @@ class DeliveryProjectModelTests(APITestCase):
             format="json",
         )
         self.assertEqual(create.status_code, 403)
+
+    def test_project_manager_is_scoped_to_assigned_delivery_projects(self):
+        self.create_active_agreement()
+        own_project = DeliveryProjectService.create_project(
+            data={
+                "source_handoff": self.handoff,
+                "client": self.client_record,
+                "name": "Assigned Delivery Project",
+                "description": "Project assigned to current project manager.",
+                "project_manager": self.user,
+                "start_date": date.today(),
+                "target_end_date": date.today() + timedelta(days=45),
+                "billing_model": "Fixed",
+                "delivery_method": "Agile",
+            },
+            actor=self.user,
+        )
+
+        other_user = User.objects.create_user(email="other.pm@example.com", mobile="9811111333", password="User@12345")
+        other_user.employee_id = "EMP-PROJECT-OTHER"
+        other_user.department = "Product Engineering"
+        other_user.designation = "Project Manager"
+        other_user.save(update_fields=["employee_id", "department", "designation"])
+        EmployeeHRProfile.objects.create(
+            user=other_user,
+            role="Project Manager",
+            team="Other Team",
+            status=EmployeeHRProfile.Status.ACTIVE,
+            kyc_status=EmployeeHRProfile.KycStatus.COMPLETE,
+        )
+        other_client = ProjectClient.objects.create(
+            client_number="ACC-TEST-OTHER",
+            company_name="Other Delivery Client",
+            project_name="Other CRM",
+            value="150000.00",
+            created_by=other_user,
+        )
+        other_project = DeliveryProject.objects.create(
+            project_number="PRJ-OTHER-001",
+            client=other_client,
+            name="Unassigned Delivery Project",
+            description="Current project manager must not access this project.",
+            project_manager=other_user,
+            start_date=date.today(),
+            target_end_date=date.today() + timedelta(days=30),
+            created_by=other_user,
+        )
+        ProjectTeamAssignment.objects.create(
+            project=other_project,
+            user=other_user,
+            role=ProjectTeamAssignment.Role.PROJECT_MANAGER,
+            created_by=other_user,
+        )
+
+        list_response = self.client.get("/api/v1/projects/")
+        self.assertEqual(list_response.status_code, 200)
+        project_ids = {row["id"] for row in list_response.data["data"]}
+        self.assertIn(str(own_project.id), project_ids)
+        self.assertNotIn(str(other_project.id), project_ids)
+
+        own_detail = self.client.get(f"/api/v1/projects/{own_project.id}/")
+        self.assertEqual(own_detail.status_code, 200)
+
+        other_detail = self.client.get(f"/api/v1/projects/{other_project.id}/")
+        self.assertEqual(other_detail.status_code, 404)
+
+        other_assignment = self.client.post(
+            f"/api/v1/projects/{other_project.id}/team/",
+            {
+                "user_id": str(self.user.id),
+                "role": "developer",
+                "allocation_percent": 50,
+            },
+            format="json",
+        )
+        self.assertEqual(other_assignment.status_code, 404)

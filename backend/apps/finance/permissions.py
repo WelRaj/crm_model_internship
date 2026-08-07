@@ -36,6 +36,9 @@ FINANCE_RESOURCE_PAGE_MAP = {
     "approval-requests": "approval-requests",
 }
 
+FINANCE_SUPER_ONLY_PAGES = {"access-policies"}
+FINANCE_SUPER_ONLY_MUTATION_PAGES = {"access-policies", "approval-policies"}
+
 FINANCE_METHOD_ACTIONS = {
     "GET": "view",
     "HEAD": "view",
@@ -68,6 +71,8 @@ def finance_page_access(user: User | None, page: str) -> bool:
         return False
     if set(user_finance_role_codes(user)) & FINANCE_SUPER_ROLES:
         return True
+    if page in FINANCE_SUPER_ONLY_PAGES:
+        return False
     return page in FINANCE_PAGE_CODES
 
 
@@ -81,6 +86,8 @@ def finance_action_access(user: User | None, action: str, page: str | None = Non
         return False
     if set(user_finance_role_codes(user)) & FINANCE_SUPER_ROLES:
         return True
+    if page in FINANCE_SUPER_ONLY_MUTATION_PAGES and action != "view":
+        return False
     return action in {"view", "create", "edit", "delete", "approve", "export"}
 
 

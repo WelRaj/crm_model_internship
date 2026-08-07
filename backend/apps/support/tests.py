@@ -23,6 +23,20 @@ class SupportApiTests(APITestCase):
         UserRole.objects.get_or_create(user=self.user, role=support_role, defaults={"assigned_by": self.user})
         self.client.force_authenticate(self.user)
 
+    def _create_other_support_user(self):
+        other = User.objects.create_user(
+            email="other.support@example.com",
+            mobile="9000000002",
+            first_name="Other",
+            last_name="Support",
+            password="Support@12345",
+            is_active=True,
+            is_verified=True,
+        )
+        support_role = Role.objects.get(code="support")
+        UserRole.objects.create(user=other, role=support_role, assigned_by=self.user)
+        return other
+
     def test_non_support_user_is_blocked_from_support_desk(self):
         blocked = User.objects.create_user(
             email="blocked.support@example.com",
@@ -78,6 +92,54 @@ class SupportApiTests(APITestCase):
         self.assertEqual(update_response.status_code, 200)
         self.assertEqual(update_response.data["data"]["status"], SupportTicket.Status.IN_PROGRESS)
         self.assertTrue(AuditLog.objects.filter(module="support", action="update").exists())
+
+    def test_support_user_only_accesses_scoped_tickets(self):
+        other = self._create_other_support_user()
+        own_ticket = SupportTicket.objects.create(
+            ticket_number="SUP-SCOPE-001",
+            subject="Own ticket",
+            module="Support Desk",
+            requester="Support User",
+            priority="Medium",
+            status="Open",
+            channel="Internal",
+            current_owner=self.user,
+            description="Owned by current support user.",
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        other_ticket = SupportTicket.objects.create(
+            ticket_number="SUP-SCOPE-002",
+            subject="Other ticket",
+            module="Finance Control",
+            requester="Other Support",
+            priority="High",
+            status="Open",
+            channel="Internal",
+            current_owner=other,
+            description="Owned by another support user.",
+            created_by=other,
+            updated_by=other,
+        )
+
+        list_response = self.client.get("/api/v1/support/tickets/")
+        self.assertEqual(list_response.status_code, 200)
+        ticket_numbers = {ticket["ticket_number"] for ticket in list_response.data["data"]}
+        self.assertIn(own_ticket.ticket_number, ticket_numbers)
+        self.assertNotIn(other_ticket.ticket_number, ticket_numbers)
+
+        own_detail_response = self.client.get(f"/api/v1/support/tickets/{own_ticket.id}/")
+        self.assertEqual(own_detail_response.status_code, 200)
+
+        other_detail_response = self.client.get(f"/api/v1/support/tickets/{other_ticket.id}/")
+        self.assertEqual(other_detail_response.status_code, 404)
+
+        other_comment_response = self.client.post(
+            f"/api/v1/support/tickets/{other_ticket.id}/comments/",
+            {"message": "Should not reach unrelated ticket.", "is_internal": True},
+            format="json",
+        )
+        self.assertEqual(other_comment_response.status_code, 404)
 
     def test_support_ticket_comment(self):
         ticket = SupportTicket.objects.create(

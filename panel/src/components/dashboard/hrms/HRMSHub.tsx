@@ -514,7 +514,7 @@ function FieldGroup({ label, children }: { label: string; children: ReactNode })
 
 const inputClass = "h-11 w-full rounded-xl border border-border bg-slate-50 px-3 text-sm font-bold text-primary outline-none focus:ring-4 focus:ring-primary/10";
 
-function EmployeeProfile({ employee, onClose, onEdit }: { employee: EmployeeRecord; onClose: () => void; onEdit: (employee: EmployeeRecord) => void }) {
+function EmployeeProfile({ employee, onClose, onEdit }: { employee: EmployeeRecord; onClose: () => void; onEdit?: (employee: EmployeeRecord) => void }) {
   return (
     <div className="fixed inset-0 z-[100] flex justify-end bg-slate-900/40 backdrop-blur-sm">
       <div className="h-full w-full max-w-3xl overflow-y-auto bg-white p-8 shadow-2xl">
@@ -528,7 +528,7 @@ function EmployeeProfile({ employee, onClose, onEdit }: { employee: EmployeeReco
             </div>
           </div>
           <div className="flex gap-2">
-            <ActionButton icon={Edit3} label="Edit" onClick={() => onEdit(employee)} />
+            {onEdit ? <ActionButton icon={Edit3} label="Edit" onClick={() => onEdit(employee)} /> : null}
             <ActionButton icon={X} label="Close" onClick={onClose} />
           </div>
         </div>
@@ -607,7 +607,7 @@ function EmployeeForm({
   );
 }
 
-export default function HRMSHub({ activeView, onAddEmployee }: { activeView: HRMSView; onAddEmployee?: () => void }) {
+export default function HRMSHub({ activeView, onAddEmployee, roleCodes }: { activeView: HRMSView; onAddEmployee?: () => void; roleCodes?: string[] | null }) {
   const [employees, setEmployees] = useState<EmployeeRecord[]>([]);
   const [attendance, setAttendance] = useState<AttendanceRecord[]>([]);
   const [leaves, setLeaves] = useState<LeaveRecord[]>([]);
@@ -635,6 +635,10 @@ export default function HRMSHub({ activeView, onAddEmployee }: { activeView: HRM
   const [showExitForm, setShowExitForm] = useState(false);
   const [exitError, setExitError] = useState("");
   const [exitForm, setExitForm] = useState({ employeeId: "", exitType: "Resignation" as ExitType, resignationDate: "2026-06-24", lastDay: "", handoverOwner: "", reason: "", risk: "Low" as ExitRisk });
+  const canManageHrms = useMemo(() => {
+    const normalized = new Set((roleCodes || []).map((role) => role.trim().toLowerCase()));
+    return normalized.has("super_admin") || normalized.has("admin") || normalized.has("hr");
+  }, [roleCodes]);
 
   const loadHrmsData = async () => {
     try {
@@ -1082,19 +1086,21 @@ export default function HRMSHub({ activeView, onAddEmployee }: { activeView: HRM
         <div className="flex flex-wrap gap-3">
           <ActionButton icon={Download} label="Export" onClick={exportRows} />
           <ActionButton icon={Filter} label="Clear Filters" onClick={clearFilters} />
-          <ActionButton
-            icon={Plus}
-            variant="accent"
-            onClick={() => {
-              if (activeView === "employees") openEmployeeForm();
-              if (activeView === "attendance") openAttendanceForm();
-              if (activeView === "leave") { setLeaveError(""); setShowLeaveForm(true); }
-              if (activeView === "payroll") { setPayrollError(""); setShowPayrollForm(true); }
-              if (activeView === "exit") { setExitError(""); setShowExitForm(true); }
-            }}
-          >
-            {activeView === "employees" ? "Add Employee" : activeView === "attendance" ? "Regularize" : activeView === "leave" ? "Apply Leave" : activeView === "payroll" ? "New Payroll" : "Start Exit"}
-          </ActionButton>
+          {canManageHrms ? (
+            <ActionButton
+              icon={Plus}
+              variant="accent"
+              onClick={() => {
+                if (activeView === "employees") openEmployeeForm();
+                if (activeView === "attendance") openAttendanceForm();
+                if (activeView === "leave") { setLeaveError(""); setShowLeaveForm(true); }
+                if (activeView === "payroll") { setPayrollError(""); setShowPayrollForm(true); }
+                if (activeView === "exit") { setExitError(""); setShowExitForm(true); }
+              }}
+            >
+              {activeView === "employees" ? "Add Employee" : activeView === "attendance" ? "Regularize" : activeView === "leave" ? "Apply Leave" : activeView === "payroll" ? "New Payroll" : "Start Exit"}
+            </ActionButton>
+          ) : null}
         </div>
       </div>
 
@@ -1122,7 +1128,7 @@ export default function HRMSHub({ activeView, onAddEmployee }: { activeView: HRM
             <MetricCard label="KYC Pending" value={String(employees.filter((employee) => employee.kycStatus === "Pending").length)} helper="Compliance queue" icon={ShieldCheck} tone="red" />
             <MetricCard label="On Notice" value={String(employees.filter((employee) => employee.status === "On Notice").length)} helper="Exit linked" icon={UserMinus} tone="purple" />
           </div>
-          {showEmployeeForm ? <EmployeeForm form={employeeForm} error={employeeError} editing={Boolean(editingEmployeeId)} onField={(field, value) => setEmployeeForm((current) => ({ ...current, [field]: value }))} onSave={saveEmployee} onCancel={() => setShowEmployeeForm(false)} /> : null}
+          {showEmployeeForm && canManageHrms ? <EmployeeForm form={employeeForm} error={employeeError} editing={Boolean(editingEmployeeId)} onField={(field, value) => setEmployeeForm((current) => ({ ...current, [field]: value }))} onSave={saveEmployee} onCancel={() => setShowEmployeeForm(false)} /> : null}
           <section className="rounded-2xl border border-border bg-white p-6 shadow-sm">
             <DataTable columns={["Employee", "Role / Team", "Manager", "Location", "Type", "KYC", "HR Health", "Status", "Actions"]}>
               {filteredEmployees.map((employee) => (
@@ -1135,7 +1141,7 @@ export default function HRMSHub({ activeView, onAddEmployee }: { activeView: HRM
                   <td className="px-4 py-5"><Badge tone={employee.kycStatus === "Complete" ? "green" : "amber"}>{employee.kycStatus}</Badge></td>
                   <td className="px-4 py-5 min-w-32"><ProgressBar value={employee.score} tone={employee.score >= 85 ? "green" : employee.score >= 75 ? "blue" : "amber"} /></td>
                   <td className="px-4 py-5"><Badge tone={statusTone(employee.status)}>{employee.status}</Badge></td>
-                  <td className="px-4 py-5"><div className="flex flex-wrap gap-2"><ActionButton icon={Eye} label="View" onClick={() => setSelectedEmployee(employee)} /><ActionButton icon={Edit3} label="Edit" onClick={() => openEmployeeForm(employee)} /><ActionButton icon={UserMinus} label="Offboard" onClick={() => offboardEmployee(employee)} disabled={employee.status === "Exited" || employee.status === "Archived"} /><ActionButton label="Archive" onClick={() => archiveEmployee(employee)} disabled={employee.status === "Archived"} /></div></td>
+                  <td className="px-4 py-5"><div className="flex flex-wrap gap-2"><ActionButton icon={Eye} label="View" onClick={() => setSelectedEmployee(employee)} />{canManageHrms ? <><ActionButton icon={Edit3} label="Edit" onClick={() => openEmployeeForm(employee)} /><ActionButton icon={UserMinus} label="Offboard" onClick={() => offboardEmployee(employee)} disabled={employee.status === "Exited" || employee.status === "Archived"} /><ActionButton label="Archive" onClick={() => archiveEmployee(employee)} disabled={employee.status === "Archived"} /></> : null}</div></td>
                 </tr>
               ))}
             </DataTable>
@@ -1151,7 +1157,7 @@ export default function HRMSHub({ activeView, onAddEmployee }: { activeView: HRM
             <MetricCard label="Payroll Review" value={String(attendance.filter((row) => row.payrollImpact === "Review").length)} helper="Salary lock blockers" icon={Calendar} tone="red" />
             <MetricCard label="Billable Hours" value={attendance.reduce((sum, row) => sum + row.billableHours, 0).toFixed(1)} helper={`${attendance.reduce((sum, row) => sum + row.overtimeHours, 0).toFixed(1)} OT hours`} icon={BriefcaseBusiness} tone="blue" />
           </div>
-          {showAttendanceForm ? (
+          {showAttendanceForm && canManageHrms ? (
             <FormPanel title={editingAttendanceId ? "Update Attendance Regularization" : "Regularize Attendance"} error={attendanceError} onCancel={() => { setShowAttendanceForm(false); setEditingAttendanceId(null); }} onSave={submitAttendance}>
               <FieldGroup label="Employee"><select value={attendanceForm.employeeId} disabled={Boolean(editingAttendanceId)} onChange={(event) => setAttendanceForm((current) => ({ ...current, employeeId: event.target.value }))} className={inputClass}><option value="">Select Employee...</option>{employees.map((employee) => <option key={employee.id} value={employee.id}>{employee.code || employee.id} - {employee.name}</option>)}</select></FieldGroup>
               <FieldGroup label="Date"><input type="date" value={attendanceForm.date} onChange={(event) => setAttendanceForm((current) => ({ ...current, date: event.target.value }))} className={inputClass} /></FieldGroup>
@@ -1175,7 +1181,7 @@ export default function HRMSHub({ activeView, onAddEmployee }: { activeView: HRM
                   <td className="px-4 py-5 font-black text-primary">{row.billableHours}h<br/><span className="text-[10px] text-slate-400">OT {row.overtimeHours}h</span></td>
                   <td className="px-4 py-5 max-w-xs">{row.note}</td>
                   <td className="px-4 py-5">
-                    <div className="flex flex-wrap gap-2">
+                    {canManageHrms ? <div className="flex flex-wrap gap-2">
                       <ActionButton
                         icon={Edit3}
                         label="Regularize"
@@ -1198,7 +1204,7 @@ export default function HRMSHub({ activeView, onAddEmployee }: { activeView: HRM
                         }}
                         disabled={["Rejected", "Approved", "Auto Approved"].includes(row.approvalStatus)}
                       />
-                    </div>
+                    </div> : null}
                   </td>
                 </tr>
               ))}
@@ -1208,18 +1214,18 @@ export default function HRMSHub({ activeView, onAddEmployee }: { activeView: HRM
       ) : null}
 
       {activeView === "leave" ? (
-        <LeaveSection leaves={filteredLeaves} allLeaves={leaves} employees={employees} showForm={showLeaveForm} leaveForm={leaveForm} error={leaveError} setLeaveForm={setLeaveForm} setShowForm={setShowLeaveForm} submitLeave={submitLeave} updateLeaveStatus={updateLeaveStatus} />
+        <LeaveSection leaves={filteredLeaves} allLeaves={leaves} employees={employees} showForm={showLeaveForm && canManageHrms} leaveForm={leaveForm} error={leaveError} setLeaveForm={setLeaveForm} setShowForm={setShowLeaveForm} submitLeave={submitLeave} updateLeaveStatus={updateLeaveStatus} canManage={canManageHrms} />
       ) : null}
 
       {activeView === "payroll" ? (
-        <PayrollSection payroll={filteredPayroll} allPayroll={payroll} employees={employees} showForm={showPayrollForm} payrollForm={payrollForm} error={payrollError} setPayrollForm={setPayrollForm} setShowForm={setShowPayrollForm} submitPayroll={submitPayroll} updatePayrollStatus={updatePayrollStatus} />
+        <PayrollSection payroll={filteredPayroll} allPayroll={payroll} employees={employees} showForm={showPayrollForm && canManageHrms} payrollForm={payrollForm} error={payrollError} setPayrollForm={setPayrollForm} setShowForm={setShowPayrollForm} submitPayroll={submitPayroll} updatePayrollStatus={updatePayrollStatus} canManage={canManageHrms} />
       ) : null}
 
       {activeView === "exit" ? (
-        <ExitSection exits={filteredExits} allExits={exits} employees={employees} showForm={showExitForm} exitForm={exitForm} error={exitError} setExitForm={setExitForm} setShowForm={setShowExitForm} submitExit={submitExit} updateExitControl={updateExitControl} completeExit={completeExit} cancelExit={cancelExit} />
+        <ExitSection exits={filteredExits} allExits={exits} employees={employees} showForm={showExitForm && canManageHrms} exitForm={exitForm} error={exitError} setExitForm={setExitForm} setShowForm={setShowExitForm} submitExit={submitExit} updateExitControl={updateExitControl} completeExit={completeExit} cancelExit={cancelExit} canManage={canManageHrms} />
       ) : null}
 
-      {selectedEmployee ? <EmployeeProfile employee={selectedEmployee} onClose={() => setSelectedEmployee(null)} onEdit={(employee) => { setSelectedEmployee(null); openEmployeeForm(employee); }} /> : null}
+      {selectedEmployee ? <EmployeeProfile employee={selectedEmployee} onClose={() => setSelectedEmployee(null)} onEdit={canManageHrms ? (employee) => { setSelectedEmployee(null); openEmployeeForm(employee); } : undefined} /> : null}
 
       <section className="rounded-2xl border border-border bg-primary p-6 text-white shadow-sm">
         <div className="flex items-center gap-3"><ShieldCheck className="text-accent" size={24} /><h3 className="text-lg font-black">People Operations Controls</h3></div>
@@ -1247,7 +1253,7 @@ function FormPanel({ title, error, children, onCancel, onSave }: { title: string
   );
 }
 
-function LeaveSection({ leaves, allLeaves, employees, showForm, leaveForm, error, setLeaveForm, setShowForm, submitLeave, updateLeaveStatus }: { leaves: LeaveRecord[]; allLeaves: LeaveRecord[]; employees: EmployeeRecord[]; showForm: boolean; leaveForm: { employeeId: string; type: LeaveRecord["type"]; startDate: string; endDate: string; duration: LeaveDuration; reason: string }; error: string; setLeaveForm: React.Dispatch<React.SetStateAction<{ employeeId: string; type: LeaveRecord["type"]; startDate: string; endDate: string; duration: LeaveDuration; reason: string }>>; setShowForm: (value: boolean) => void; submitLeave: () => void; updateLeaveStatus: (id: string, action: "advance" | "reject" | "cancel") => void }) {
+function LeaveSection({ leaves, allLeaves, employees, showForm, leaveForm, error, setLeaveForm, setShowForm, submitLeave, updateLeaveStatus, canManage }: { leaves: LeaveRecord[]; allLeaves: LeaveRecord[]; employees: EmployeeRecord[]; showForm: boolean; leaveForm: { employeeId: string; type: LeaveRecord["type"]; startDate: string; endDate: string; duration: LeaveDuration; reason: string }; error: string; setLeaveForm: React.Dispatch<React.SetStateAction<{ employeeId: string; type: LeaveRecord["type"]; startDate: string; endDate: string; duration: LeaveDuration; reason: string }>>; setShowForm: (value: boolean) => void; submitLeave: () => void; updateLeaveStatus: (id: string, action: "advance" | "reject" | "cancel") => void; canManage: boolean }) {
   const approvedDays = allLeaves.filter((leave) => leave.status === "Approved" && leave.type !== "Work From Home").reduce((sum, leave) => sum + leave.days, 0);
   return (
     <div className="space-y-6">
@@ -1278,11 +1284,11 @@ function LeaveSection({ leaves, allLeaves, employees, showForm, leaveForm, error
               <td className="px-4 py-5"><Badge tone={statusTone(leave.payrollImpact)}>{leave.payrollImpact}</Badge></td>
               <td className="px-4 py-5"><Badge tone={statusTone(leave.status)}>{leave.status}</Badge></td>
               <td className="px-4 py-5">
-                <div className="flex flex-wrap gap-2">
+                {canManage ? <div className="flex flex-wrap gap-2">
                   <ActionButton label={leave.status === "Manager Review" || leave.status === "Pending" ? "Manager Approve" : "HR Approve"} onClick={() => updateLeaveStatus(leave.id, "advance")} disabled={!["Pending", "Manager Review", "HR Review"].includes(leave.status)} />
                   <ActionButton label="Reject" onClick={() => updateLeaveStatus(leave.id, "reject")} disabled={!["Pending", "Manager Review", "HR Review"].includes(leave.status)} />
                   <ActionButton label="Cancel" onClick={() => updateLeaveStatus(leave.id, "cancel")} disabled={["Approved", "Rejected", "Cancelled"].includes(leave.status)} />
-                </div>
+                </div> : null}
               </td>
             </tr>
           ))}
@@ -1292,7 +1298,7 @@ function LeaveSection({ leaves, allLeaves, employees, showForm, leaveForm, error
   );
 }
 
-function PayrollSection({ payroll, allPayroll, employees, showForm, payrollForm, error, setPayrollForm, setShowForm, submitPayroll, updatePayrollStatus }: { payroll: PayrollRecord[]; allPayroll: PayrollRecord[]; employees: EmployeeRecord[]; showForm: boolean; payrollForm: { employeeId: string; month: string; basic: number; hra: number; allowance: number; conveyance: number; bonus: number; pf: number; pt: number; tds: number; advance: number; workingDays: number }; error: string; setPayrollForm: React.Dispatch<React.SetStateAction<{ employeeId: string; month: string; basic: number; hra: number; allowance: number; conveyance: number; bonus: number; pf: number; pt: number; tds: number; advance: number; workingDays: number }>>; setShowForm: (value: boolean) => void; submitPayroll: () => void; updatePayrollStatus: (id: string, action: "advance" | "hold" | "release" | "recheck") => void }) {
+function PayrollSection({ payroll, allPayroll, employees, showForm, payrollForm, error, setPayrollForm, setShowForm, submitPayroll, updatePayrollStatus, canManage }: { payroll: PayrollRecord[]; allPayroll: PayrollRecord[]; employees: EmployeeRecord[]; showForm: boolean; payrollForm: { employeeId: string; month: string; basic: number; hra: number; allowance: number; conveyance: number; bonus: number; pf: number; pt: number; tds: number; advance: number; workingDays: number }; error: string; setPayrollForm: React.Dispatch<React.SetStateAction<{ employeeId: string; month: string; basic: number; hra: number; allowance: number; conveyance: number; bonus: number; pf: number; pt: number; tds: number; advance: number; workingDays: number }>>; setShowForm: (value: boolean) => void; submitPayroll: () => void; updatePayrollStatus: (id: string, action: "advance" | "hold" | "release" | "recheck") => void; canManage: boolean }) {
   const totals = allPayroll.reduce((sum, row) => {
     const payrollTotal = payrollTotals(row);
     return { gross: sum.gross + payrollTotal.gross, deductions: sum.deductions + payrollTotal.deductions, net: sum.net + payrollTotal.net };
@@ -1327,7 +1333,7 @@ function PayrollSection({ payroll, allPayroll, employees, showForm, payrollForm,
                 <td className="px-4 py-5"><Badge tone={statusTone(row.readiness)}>{row.readiness}</Badge>{row.holdReason ? <p className="mt-2 max-w-44 text-[10px] font-bold leading-4 text-slate-400">{row.holdReason}</p> : null}</td>
                 <td className="px-4 py-5"><Badge tone={statusTone(row.status)}>{row.status}</Badge></td>
                 <td className="px-4 py-5">
-                  <div className="flex flex-wrap gap-2">
+                  {canManage ? <div className="flex flex-wrap gap-2">
                     <ActionButton label={nextLabel} onClick={() => updatePayrollStatus(row.id, "advance")} disabled={row.status === "Hold" || row.status === "Paid" || row.readiness !== "Ready"} />
                     {row.status === "Hold"
                       ? <>
@@ -1335,7 +1341,7 @@ function PayrollSection({ payroll, allPayroll, employees, showForm, payrollForm,
                           <ActionButton label="Release" onClick={() => updatePayrollStatus(row.id, "release")} disabled={row.readiness !== "Ready"} />
                         </>
                       : <ActionButton label="Hold" onClick={() => updatePayrollStatus(row.id, "hold")} disabled={row.status === "Paid"} />}
-                  </div>
+                  </div> : null}
                 </td>
               </tr>
             );
@@ -1346,7 +1352,7 @@ function PayrollSection({ payroll, allPayroll, employees, showForm, payrollForm,
   );
 }
 
-function ExitSection({ exits, allExits, employees, showForm, exitForm, error, setExitForm, setShowForm, submitExit, updateExitControl, completeExit, cancelExit }: { exits: ExitRecord[]; allExits: ExitRecord[]; employees: EmployeeRecord[]; showForm: boolean; exitForm: { employeeId: string; exitType: ExitType; resignationDate: string; lastDay: string; handoverOwner: string; reason: string; risk: ExitRisk }; error: string; setExitForm: React.Dispatch<React.SetStateAction<{ employeeId: string; exitType: ExitType; resignationDate: string; lastDay: string; handoverOwner: string; reason: string; risk: ExitRisk }>>; setShowForm: (value: boolean) => void; submitExit: () => void; updateExitControl: (id: string, payload: Parameters<typeof updateHrmsExit>[1]) => void; completeExit: (id: string) => void; cancelExit: (id: string) => void }) {
+function ExitSection({ exits, allExits, employees, showForm, exitForm, error, setExitForm, setShowForm, submitExit, updateExitControl, completeExit, cancelExit, canManage }: { exits: ExitRecord[]; allExits: ExitRecord[]; employees: EmployeeRecord[]; showForm: boolean; exitForm: { employeeId: string; exitType: ExitType; resignationDate: string; lastDay: string; handoverOwner: string; reason: string; risk: ExitRisk }; error: string; setExitForm: React.Dispatch<React.SetStateAction<{ employeeId: string; exitType: ExitType; resignationDate: string; lastDay: string; handoverOwner: string; reason: string; risk: ExitRisk }>>; setShowForm: (value: boolean) => void; submitExit: () => void; updateExitControl: (id: string, payload: Parameters<typeof updateHrmsExit>[1]) => void; completeExit: (id: string) => void; cancelExit: (id: string) => void; canManage: boolean }) {
   const toggleAsset = (exit: ExitRecord, asset: keyof ExitRecord["assets"]) => {
     const payload = asset === "laptop"
       ? { laptop_recovered: !exit.assets.laptop }
@@ -1397,23 +1403,23 @@ function ExitSection({ exits, allExits, employees, showForm, exitForm, error, se
                     <p className="mt-1 text-[10px] font-bold uppercase text-slate-400">Manager {exit.manager} - Handover to {exit.handoverOwner}</p>
                     <div className="mt-3 flex flex-wrap gap-2"><Badge tone={statusTone(exit.risk)}>{exit.risk} Risk</Badge><Badge tone={statusTone(exit.lifecycleStatus)}>{exit.lifecycleStatus}</Badge><Badge tone={statusTone(exit.ffStatus)}>F&F {exit.ffStatus}</Badge></div>
                   </div>
-                  <div className="flex flex-wrap gap-2">
+                  {canManage ? <div className="flex flex-wrap gap-2">
                     <ActionButton label="Cancel Exit" onClick={() => cancelExit(exit.id)} disabled={locked} />
                     <ActionButton label={exit.lifecycleStatus === "Completed" ? "Exit Completed" : exit.lifecycleStatus === "Cancelled" ? "Exit Cancelled" : "Complete Exit"} onClick={() => completeExit(exit.id)} disabled={!ready || locked} />
-                  </div>
+                  </div> : null}
                 </div>
                 <div className="mt-5 grid grid-cols-1 gap-5 lg:grid-cols-3">
                   <div className="rounded-xl bg-white p-4">
                     <p className="mb-3 text-xs font-black uppercase tracking-widest text-primary">Assets & Access</p>
-                    {(["laptop", "idCard", "email"] as const).map((asset) => <button key={asset} type="button" disabled={locked} onClick={() => toggleAsset(exit, asset)} className="mb-2 flex w-full items-center justify-between rounded-lg border border-slate-100 px-3 py-2 text-xs font-bold text-slate-600 disabled:cursor-not-allowed"><span>{asset === "email" ? "System access" : asset}</span><span>{exit.assets[asset] ? (asset === "email" ? "Revoked" : "Recovered") : "Pending"}</span></button>)}
+                    {(["laptop", "idCard", "email"] as const).map((asset) => <button key={asset} type="button" disabled={locked || !canManage} onClick={() => toggleAsset(exit, asset)} className="mb-2 flex w-full items-center justify-between rounded-lg border border-slate-100 px-3 py-2 text-xs font-bold text-slate-600 disabled:cursor-not-allowed"><span>{asset === "email" ? "System access" : asset}</span><span>{exit.assets[asset] ? (asset === "email" ? "Revoked" : "Recovered") : "Pending"}</span></button>)}
                   </div>
                   <div className="rounded-xl bg-white p-4">
                     <p className="mb-3 text-xs font-black uppercase tracking-widest text-primary">Department Clearances</p>
-                    {(["manager", "hr", "finance", "it"] as const).map((clearance) => <button key={clearance} type="button" disabled={locked} onClick={() => toggleClearance(exit, clearance)} className="mb-2 flex w-full items-center justify-between rounded-lg border border-slate-100 px-3 py-2 text-xs font-bold text-slate-600 disabled:cursor-not-allowed"><span>{clearance.toUpperCase()}</span><span>{exit.clearances[clearance] ? "Cleared" : "Pending"}</span></button>)}
+                    {(["manager", "hr", "finance", "it"] as const).map((clearance) => <button key={clearance} type="button" disabled={locked || !canManage} onClick={() => toggleClearance(exit, clearance)} className="mb-2 flex w-full items-center justify-between rounded-lg border border-slate-100 px-3 py-2 text-xs font-bold text-slate-600 disabled:cursor-not-allowed"><span>{clearance.toUpperCase()}</span><span>{exit.clearances[clearance] ? "Cleared" : "Pending"}</span></button>)}
                   </div>
                   <div className="rounded-xl bg-white p-4">
                     <div className="mb-2 flex justify-between text-xs font-black uppercase tracking-widest text-slate-500"><span>Handover</span><span>{exit.handover}%</span></div>
-                    <input type="range" min={0} max={100} step={5} disabled={locked} value={exit.handover} onChange={(event) => updateHandover(exit.id, Number(event.target.value))} className="w-full accent-primary disabled:cursor-not-allowed" />
+                    <input type="range" min={0} max={100} step={5} disabled={locked || !canManage} value={exit.handover} onChange={(event) => updateHandover(exit.id, Number(event.target.value))} className="w-full accent-primary disabled:cursor-not-allowed" />
                     <ProgressBar value={exit.handover} tone={exit.handover === 100 ? "green" : "amber"} />
                     <p className="mt-4 text-xs font-bold text-slate-500">Reason: {exit.reason}</p>
                     <p className="mt-2 text-[10px] font-bold text-slate-400">Initiated {exit.resignationDate}{exit.completedAt ? ` - Completed ${new Date(exit.completedAt).toLocaleDateString("en-IN")}` : ""}</p>

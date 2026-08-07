@@ -37,6 +37,8 @@ SIGNUP_DEPARTMENT_ROLES = {
     "Support Desk": ("support", "Support Executive"),
 }
 
+PROTECTED_ROLE_CODES = {"super_admin", "admin"}
+
 
 def _hash_token(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
@@ -67,6 +69,22 @@ def _next_employee_id():
 
 def _role_code_from_name(name: str) -> str:
     return "_".join(name.strip().lower().split())
+
+
+def _can_manage_protected_roles(user):
+    if not user or not user.is_authenticated:
+        return False
+    if getattr(user, "is_superuser", False):
+        return True
+    return UserRole.objects.filter(user=user, role__code="super_admin", role__is_active=True).exists()
+
+
+def _assert_protected_role_change_allowed(*, actor, current_role_codes=None, requested_role_codes=None):
+    current_codes = set(current_role_codes or [])
+    requested_codes = set(requested_role_codes or [])
+    protected_changed = bool((current_codes ^ requested_codes) & PROTECTED_ROLE_CODES)
+    if protected_changed and not _can_manage_protected_roles(actor):
+        raise PermissionDenied("Only super admins can assign or remove protected system roles.")
 
 
 def _generate_otp() -> str:
@@ -373,6 +391,7 @@ class AccountAdminService:
     @transaction.atomic
     def create_user(*, data, actor, request=None):
         role_codes = data.get("role_codes") or ["employee"]
+        _assert_protected_role_change_allowed(actor=actor, requested_role_codes=role_codes)
         user = User.objects.create_user(
             email=data["email"],
             mobile=data["mobile"],
@@ -470,6 +489,11 @@ class AccountAdminService:
     @transaction.atomic
     def assign_roles(*, user, role_codes, actor, request=None):
         old_roles = list(UserRole.objects.filter(user=user).values_list("role__code", flat=True))
+        _assert_protected_role_change_allowed(
+            actor=actor,
+            current_role_codes=old_roles,
+            requested_role_codes=role_codes,
+        )
         roles = list(Role.objects.filter(code__in=role_codes))
 
         UserRole.objects.filter(user=user).delete()

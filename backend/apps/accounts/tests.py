@@ -305,6 +305,67 @@ class AccountAdminApiTests(APITestCase):
         )
         self.assertEqual(role_detail_response.status_code, 403)
 
+    def test_staff_admin_cannot_assign_or_remove_protected_roles(self):
+        employee = User.objects.create_user(
+            email="protected.employee@example.com",
+            mobile="9876543218",
+            password="Employee@123",
+            first_name="Protected",
+        )
+        UserRole.objects.create(user=employee, role=self.employee_role, assigned_by=self.admin)
+        self.client.force_authenticate(user=self.staff_admin)
+
+        create_response = self.client.post(
+            "/api/v1/accounts/users/",
+            {
+                "first_name": "Role",
+                "last_name": "Escalation",
+                "email": "role.escalation@example.com",
+                "mobile": "9876543217",
+                "department": "Admin Control",
+                "designation": "Admin Executive",
+                "password": "StrongPass@123",
+                "role_codes": ["admin"],
+            },
+            format="json",
+        )
+        self.assertEqual(create_response.status_code, 403)
+
+        assign_response = self.client.post(
+            f"/api/v1/accounts/users/{employee.id}/roles/",
+            {"role_codes": ["admin"]},
+            format="json",
+        )
+        self.assertEqual(assign_response.status_code, 403)
+        self.assertTrue(UserRole.objects.filter(user=employee, role=self.employee_role).exists())
+
+        remove_response = self.client.post(
+            f"/api/v1/accounts/users/{self.staff_admin.id}/roles/",
+            {"role_codes": ["employee"]},
+            format="json",
+        )
+        self.assertEqual(remove_response.status_code, 403)
+        self.assertTrue(UserRole.objects.filter(user=self.staff_admin, role=self.admin_role).exists())
+
+    def test_superuser_can_manage_protected_user_roles(self):
+        employee = User.objects.create_user(
+            email="super.assign@example.com",
+            mobile="9876543216",
+            password="Employee@123",
+            first_name="Super",
+        )
+        UserRole.objects.create(user=employee, role=self.employee_role, assigned_by=self.admin)
+        self.client.force_authenticate(user=self.admin)
+
+        assign_response = self.client.post(
+            f"/api/v1/accounts/users/{employee.id}/roles/",
+            {"role_codes": ["admin"]},
+            format="json",
+        )
+
+        self.assertEqual(assign_response.status_code, 200)
+        self.assertTrue(UserRole.objects.filter(user=employee, role=self.admin_role).exists())
+
     def test_admin_can_revoke_user_sessions(self):
         employee = User.objects.create_user(
             email="session.user@example.com",

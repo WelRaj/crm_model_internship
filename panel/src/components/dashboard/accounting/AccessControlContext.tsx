@@ -1,9 +1,10 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext } from 'react';
 import { Lock } from 'lucide-react';
 
 type UserRole = 'Admin' | 'Director' | 'Finance Manager' | 'Accountant' | 'HR Manager' | 'Sales';
+export type AccountingModulePermission = string;
 
 // Define permissions map: Role -> Array of Module IDs allowed
 const ROLE_PERMISSIONS: Record<UserRole, string[]> = {
@@ -34,12 +35,14 @@ export function hasAccountingShellAccess(roleCodes?: string[] | null) {
   return normalized.has("super_admin") || normalized.has("admin") || normalized.has("finance");
 }
 
+export function getAllowedAccountingModules(roleCodes?: string[] | null): AccountingModulePermission[] {
+  const role = resolveAccountingRole(roleCodes);
+  if (!role) return [];
+  return ROLE_PERMISSIONS[role];
+}
+
 export const AuthProvider = ({ children, role }: { children: React.ReactNode; role: UserRole }) => {
-  const [currentRole, setRole] = useState<UserRole>(role);
-  useEffect(() => {
-    setRole(role);
-  }, [role]);
-  return <AuthContext.Provider value={{ role: currentRole, setRole }}>{children}</AuthContext.Provider>;
+  return <AuthContext.Provider value={{ role, setRole: () => {} }}>{children}</AuthContext.Provider>;
 };
 
 export const useAuth = () => useContext(AuthContext);

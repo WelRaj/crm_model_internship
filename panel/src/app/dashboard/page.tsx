@@ -23,6 +23,7 @@ import MarketingHub from "@/components/dashboard/marketing/MarketingHub";
 import ProjectHub from "@/components/dashboard/projects/ProjectHub";
 import SupportHub from "@/components/dashboard/support/SupportHub";
 import AccountingWizard, { ACCOUNTING_MODULES, type AccountingModuleId } from "@/components/dashboard/accounting/AccountingWizard";
+import { getAllowedAccountingModules } from "@/components/dashboard/accounting/AccessControlContext";
 import { changePassword, clearAuthSession, getCurrentUser, logout, type AuthUser } from "@/services/auth-api";
 import { getStoredAuthTokens } from "@/lib/api-client";
 import {
@@ -655,10 +656,14 @@ export default function Dashboard() {
   const dashboardRoleCodes = useMemo(() => resolveDashboardRoleCodes(currentUser?.roles), [currentUser]);
   const allowedDashboardTabs = useMemo(() => getAllowedDashboardTabs(dashboardRoleCodes), [dashboardRoleCodes]);
   const canAccessAccounting = dashboardRoleCodes.some((role) => role === "super_admin" || role === "admin" || role === "finance");
+  const allowedAccountingModules = useMemo(() => {
+    const modules = getAllowedAccountingModules(currentUser?.roles.map((role) => role.code));
+    return modules.includes("*") ? accountingModuleIds : modules;
+  }, [currentUser]);
   const allowedDashboardItems = useMemo(() => new Set<string>([
     ...allowedDashboardTabs,
-    ...(canAccessAccounting ? accountingModuleIds : []),
-  ]), [allowedDashboardTabs, canAccessAccounting]);
+    ...(canAccessAccounting ? allowedAccountingModules : []),
+  ]), [allowedDashboardTabs, allowedAccountingModules, canAccessAccounting]);
   const adminRoleCodes = useMemo(() => resolveAdminRoleCodes(currentUser?.roles), [currentUser]);
   const allowedAdminViews = useMemo(() => getAllowedAdminViews(adminRoleCodes), [adminRoleCodes]);
   const crmRoleCodes = useMemo(() => resolveCrmRoleCodes(currentUser?.roles), [currentUser]);
@@ -1008,11 +1013,11 @@ export default function Dashboard() {
                 {activeTab === "clients" && <ClientsContacts />}
                 {activeTab === "agreements" && <ProjectAgreement />}
                 {activeTab === "onboarding" && <OnboardingWizard />}
-                {activeTab === "employees" && <HRMSHub activeView="employees" />}
-                {activeTab === "attendance" && <HRMSHub activeView="attendance" />}
-                {activeTab === "leave" && <HRMSHub activeView="leave" />}
-                {activeTab === "payroll" && <HRMSHub activeView="payroll" />}
-                {activeTab === "exit" && <HRMSHub activeView="exit" />}
+                {activeTab === "employees" && <HRMSHub activeView="employees" roleCodes={currentUser?.roles.map((role) => role.code)} />}
+                {activeTab === "attendance" && <HRMSHub activeView="attendance" roleCodes={currentUser?.roles.map((role) => role.code)} />}
+                {activeTab === "leave" && <HRMSHub activeView="leave" roleCodes={currentUser?.roles.map((role) => role.code)} />}
+                {activeTab === "payroll" && <HRMSHub activeView="payroll" roleCodes={currentUser?.roles.map((role) => role.code)} />}
+                {activeTab === "exit" && <HRMSHub activeView="exit" roleCodes={currentUser?.roles.map((role) => role.code)} />}
                 {activeTab === "accounting" && <AccountingWizard roleCodes={currentUser?.roles.map((role) => role.code)} onSelectModule={openTab} />}
                 {isAccountingModule(activeTab) && <AccountingWizard roleCodes={currentUser?.roles.map((role) => role.code)} activeModule={activeTab} onSelectModule={openTab} />}
                 {(activeTab === "marketing" || isMarketingTab) && <MarketingHub activeView={isMarketingTab ? activeTab as MarketingView : "campaigns"} />}
