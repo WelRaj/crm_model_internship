@@ -48,13 +48,10 @@ class Command(BaseCommand):
         parser.add_argument("--admin-mobile", default=os.getenv("CRM_ADMIN_MOBILE", "9999999999"))
         parser.add_argument("--admin-first-name", default=os.getenv("CRM_ADMIN_FIRST_NAME", "CRM"))
         parser.add_argument("--admin-last-name", default=os.getenv("CRM_ADMIN_LAST_NAME", "Admin"))
+        parser.add_argument("--skip-admin", action="store_true", help="Seed roles and permissions without creating or updating the admin user.")
 
     @transaction.atomic
     def handle(self, *args, **options):
-        admin_password = options["admin_password"]
-        if not admin_password:
-            raise CommandError("Provide --admin-password or set CRM_ADMIN_PASSWORD.")
-
         roles = {}
         for code, name, description in DEFAULT_ROLES:
             role, _ = Role.objects.update_or_create(
@@ -85,6 +82,16 @@ class Command(BaseCommand):
         super_admin_role = roles["super_admin"]
         for permission in permissions:
             RolePermission.objects.get_or_create(role=super_admin_role, permission=permission)
+
+        if options["skip_admin"]:
+            self.stdout.write(self.style.SUCCESS("Foundation roles and permissions seeded. Admin user skipped."))
+            self.stdout.write(f"Roles: {Role.objects.count()}")
+            self.stdout.write(f"Permissions: {Permission.objects.count()}")
+            return
+
+        admin_password = options["admin_password"]
+        if not admin_password:
+            raise CommandError("Provide --admin-password or set CRM_ADMIN_PASSWORD, or use --skip-admin.")
 
         admin_email = options["admin_email"]
         admin_user, created = User.objects.get_or_create(
